@@ -1,0 +1,30 @@
+{
+  "debug_log": {
+    "type": "switch",
+    "name": "Debug logging",
+    "default": false,
+    "hint": "Write scheduler and request lifecycle details to the KiraAI log. No schedule content is logged.",
+    "locales": {"zh": {"name": "调试日志", "hint": "记录调度与请求生命周期，不记录日程正文。"}}
+  },
+  "weather_contact": {
+    "type": "string",
+    "name": "Weather User-Agent contact",
+    "default": "",
+    "hint": "Optional website or contact used by MET Norway and US NWS. Do not use a random identity.",
+    "locales": {"zh": {"name": "天气服务联系标识", "hint": "MET Norway / NWS 使用的站点或联系方式，不要填写虚假身份。"}}
+  },
+  "weather_credentials": {
+    "type": "section",
+    "name": "Registered weather providers",
+    "collapsed": true,
+    "hint": "Keys are managed by the KiraAI sensitive-field configuration and are never returned by the KRD API.",
+    "fields": {
+      "weatherapi_key": {"type": "sensitive", "name": "WeatherAPI key", "default": ""},
+      "visualcrossing_key": {"type": "sensitive", "name": "Visual Crossing key", "default": ""},
+      "qweather_key": {"type": "sensitive", "name": "QWeather key", "default": ""},
+      "weatherbit_key": {"type": "sensitive", "name": "Weatherbit key", "default": ""},
+      "openweather_key": {"type": "sensitive", "name": "OpenWeather key", "default": ""}
+    },
+    "locales": {"zh": {"name": "注册天气服务密钥", "hint": "由框架敏感字段管理，KRD API、WebSocket、日志和导出均不会返回。"}}
+  }
+}

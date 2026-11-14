@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+
+def main(root: Path):
+    manifest = json.loads((root / "manifest.json").read_text())
+    assert manifest["plugin_id"] == "kira_rhythm_Date"
+    assert manifest["core_version"] == ">=3.1.2"
+    python_files = list((root / "krd").glob("*.py")) + [root / "main.py"]
+    source = "\n".join(path.read_text() for path in python_files)
+    for banned in ("time.sleep(", "asyncio.run(", "auth=False", "message_types", "fetch_memory", "write_memory", "read_memory"):
+        assert banned not in source, banned
+    assert "ctx.get_plugin_data_dir()" in (root / "main.py").read_text()
+    assert 'extra={"krd":' in source and "system_krd" in source
+    assert "persist=False" in source
+    assert 'name="rhythm_plan"' in (root / "main.py").read_text()
+    assert 'name="rhythm_update"' in (root / "main.py").read_text()
+    assert 'name="rhythm_view"' in (root / "main.py").read_text()
+    assert "rhythm_complete" not in (root / "main.py").read_text()
+    index = (root / "web" / "index.html").read_text()
+    assert "/plugin-bridge.js" in index and "vendor/vue.global.prod.js" in index
+    assert "http://" not in index and "https://" not in index
+    scripts = re.findall(r'<script[^>]+src="([^"]+)"', index)
+    assert not any(script.startswith(("http://", "https://", "//")) for script in scripts)
+    assert "web/preview.html" not in "\n".join(str(path) for path in root.rglob("*"))
+    frontend = "\n".join(path.read_text() for path in (root / "web" / "js").glob("*.js"))
+    assert "eval(" not in frontend and "new Function" not in frontend
+    assert "weatherapi_key" not in frontend and "openweather_key" not in frontend
+    assert "window.__krdApp = app.mount" not in frontend
+    assert "location.search.includes('debug')" in frontend
+    assert not list(root.rglob("*.pyc"))
+    views = (root / "web" / "js" / "views.js").read_text()
+    app = (root / "web" / "js" / "app.js").read_text()
+    required_bindings = {"settingsTab", "selectedDate", "selectedPlan", "dayStateEditor", "dayTypeEditor", "runs"}
+    for name in required_bindings:
+        assert re.search(rf"\b{name}\b", app), name
+    for provider in ("open_meteo", "met_norway", "nws", "bright_sky", "weatherapi", "visualcrossing", "qweather", "weatherbit", "openweather"):
+        assert provider in (root / "krd" / "weather.py").read_text(), provider
+    print("RELEASE AUDIT OK", len(python_files), "Python modules", len(scripts), "local scripts")
+
+
+if __name__ == "__main__":
+    main(Path(sys.argv[1]))

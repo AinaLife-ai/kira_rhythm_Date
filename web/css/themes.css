@@ -1,0 +1,6 @@
+[data-theme-name="starlit"] { --accent: #91a3ff; --accent-strong: #6e7fe6; --accent-soft: rgba(112, 133, 240, .14); }
+[data-theme-name="paper"] { --accent: #86bfa6; --accent-strong: #609d83; --accent-soft: rgba(104, 168, 135, .13); }
+[data-theme-name="rain"] { --accent: #8bc6df; --accent-strong: #5b9fbc; --accent-soft: rgba(112, 177, 203, .13); }
+[data-theme-name="paper"][data-theme="dark"] { --bg: #1c1d1b; --bg-soft: #252723; --panel: rgba(38, 40, 35, .76); }
+[data-theme-name="rain"][data-theme="dark"] { --bg: #111a20; --bg-soft: #18252c; --panel: rgba(26, 39, 47, .76); }
+[data-theme-name="starlit"][data-theme="dark"] { --bg: #0e1120; --bg-soft: #171b2d; --panel: rgba(28, 32, 53, .76); }
