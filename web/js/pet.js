@@ -178,6 +178,7 @@ export const PetCompanion = {
       walking: false,
       walkMode: null,
       stickyAction: false,
+      interactionLockUntil: 0,
       walkFrame: 0,
       walkAnimTimer: null,
       dragging: false,
@@ -235,9 +236,9 @@ export const PetCompanion = {
   },
   watch: {
     nextItem() { this.chooseAction(true) },
-    weather() { this.chooseAction(true) },
-    phase() { this.chooseAction(true) },
-    event() { this.chooseAction(true) },
+    weather() { this.chooseAction(false) },
+    phase() { this.chooseAction(false) },
+    event() { this.chooseAction(false) },
     activity() { this.chooseAction(true) },
   },
   mounted() {
@@ -291,6 +292,7 @@ export const PetCompanion = {
     chooseAction(force) {
       if (this.dragging || Date.now() < this.actionLockUntil) return
       if (this.stickyAction && !force) return
+      if (!force && Date.now() < this.interactionLockUntil) return
       if (this.walking && this.walkMode === 'random') this.stopWalking()
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
@@ -369,6 +371,7 @@ export const PetCompanion = {
     },
     wander() {
       if (this.dragging || this.walking || this.lift > 0 || this.panel || this.stickyAction) return
+      if (Date.now() < this.interactionLockUntil) return
       if (this.weather === 'rain' || this.weather === 'snow') return
       if (!['idle', 'look', 'phone', 'read', 'eat', 'drink'].includes(this.action)) return
       if (Math.random() < 0.22) this.startJump()
@@ -435,6 +438,7 @@ export const PetCompanion = {
       this.mood = Math.min(100, this.mood + 2)
       this.action = 'happy'
       this.stickyAction = false
+      this.interactionLockUntil = 0
       this.setSpeech(this.speechFor('pat'))
       setTimeout(() => { this.hearts = 0 }, 900)
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
@@ -443,25 +447,31 @@ export const PetCompanion = {
       this.stopWalking()
       this.fullness = Math.min(100, this.fullness + 10)
       this.setAction('eat', this.speechFor('eat'), false)
+      this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     giveDrink() {
       this.stopWalking()
       this.setAction('drink', this.speechFor('drink'), false)
+      this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     talk() {
       this.stopWalking()
       this.setAction('phone', this.speechFor('phone'), false)
+      this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     rest() {
       this.stopWalking()
-      this.setAction('sleep', this.speechFor('sleep'), false)
+      this.setAction('sleep', this.speechFor('sleep'), true)
+      this.interactionLockUntil = 0
       this.panel = false
     },
     startDrag(event) {
       this.stopWalking()
+      this.stickyAction = false
+      this.interactionLockUntil = 0
       const shell = this.$el.closest('.app-shell') || this.$el.parentElement
       const rect = shell.getBoundingClientRect()
       const startedAt = performance.now()
