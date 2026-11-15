@@ -57,6 +57,7 @@
 | 时间精度 | 当前时间显示到秒；计划时间/日期在秒数非零时自动显示秒 |
 | 秒级调度 | exact at、window start/end、规划时刻、禁止/安静/必需覆盖时段、随机间隔和检查间隔 `interval_seconds` 均实测；LLM 可读时间含秒，前端 `type=time step=1` |
 | 图标与作者 | `manifest.json` author=`znq19`，icon=`assets/icon.svg`，文件存在且 SVG 可解析 |
+| 头像/图标分离 | `icon.svg` 仅作插件图标并透明化；`avatar.svg` 为问号默认生活头像；WebUI 未设置/失败仍显示问号 |
 | 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.0`；上传资产内容哈希 + immutable |
 | 性能/token | 动态 Prompt 仍为尾部 persist=False；静态工具区稳定；首屏不等待 Remote 头像/天气；日历远程刷新后台化 |
 
