@@ -116,7 +116,7 @@ KiraAI/
 
 这与主动唤醒 v2.5.0 和 QQ增强 v1.4.6 的边界一致：系统来源标记正常保存，附加动态上下文使用尾部非持久 Prompt。静态工具说明进入 `tools` system 区。
 
-页面 HTML 和前端 API GET 请求使用 no-store；内置 CSS/JS、主题和桌宠资源带 `?v=1.2.0` 版本键；上传资源使用内容哈希和 immutable 缓存。这样既不会拿旧静态文件，也不会让动态 API 被中间缓存污染。
+页面 HTML 和前端 API GET 请求使用 no-store；内置 CSS/JS、主题和桌宠资源带 `?v=1.2.1` 版本键；上传资源使用内容哈希和 immutable 缓存。这样既不会拿旧静态文件，也不会让动态 API 被中间缓存污染。
 
 ## 权限与安全
 
@@ -131,7 +131,7 @@ KiraAI/
 
 详细命令与结果见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)。核心测试覆盖：
 
-- 双版本各 93 项领域/并发/调度/缓存/导入导出/天气/资源测试；
+- 双版本各 94 项领域/并发/调度/缓存/导入导出/天气/资源测试；
 - 精确时间、时间窗、禁止/安静/必需覆盖时段、随机间隔与检查间隔支持秒级；LLM 工具与 WebUI 同步支持 `HH:MM[:SS]`。
 - 真实 PluginManager 加载、3 工具、36 条鉴权 API/页面/静态路由、WS 与热更新；
 - 真实 HTTP API 与真实 Chromium → 生产前端 → API → SQLite 闭环；

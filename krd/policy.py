@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import random
 
 from core.adapter import IMCapability
@@ -14,10 +15,30 @@ class SessionPolicy:
         self.ctx = ctx
         self.rng = random.Random()
 
+    async def _im_sessions(self) -> list:
+        getter = self.ctx.session_mgr.get_sessions
+        try:
+            parameters = inspect.signature(getter).parameters.values()
+            supports_kind = any(param.name == "kind" or param.kind is inspect.Parameter.VAR_KEYWORD
+                                for param in parameters)
+        except (TypeError, ValueError):
+            supports_kind = False
+        if supports_kind:
+            sessions = await getter(include_content=False, kind="im")
+        else:
+            # KiraAI 3.1.2 has get_sessions(*, include_content=True) only.
+            sessions = await getter(include_content=False)
+        result = []
+        for session in sessions:
+            parts = str(getattr(session, "sid", "")).split(":", 2)
+            if len(parts) == 3 and parts[1] in {"dm", "gm"}:
+                result.append(session)
+        return result
+
     async def session_options(self, persona_id: str, kind: str = "execution", *,
                               config: dict | None = None) -> list[dict[str, str]]:
         config = config or await self.store.get_config(persona_id)
-        sessions = await self.ctx.session_mgr.get_sessions(include_content=False, kind="im")
+        sessions = await self._im_sessions()
         access = config["session_access"]
         listed = {str(v) for v in access.get("sessions", [])}
         pool = config[f"{kind}_pool"].get("sessions", [])
