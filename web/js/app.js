@@ -719,7 +719,6 @@ const app = Vue.createApp({
     clearTimeout(this.bootTimer)
     for (const cleanup of this.deviceCleanup || []) cleanup()
     clearInterval(this.clockTimer)
-    clearInterval(this.clockTimer)
   },
 })
 
