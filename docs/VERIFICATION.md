@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **92 passed** |
-| KiraAI 3.1.2 同一套测试 | **92 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **93 passed** |
+| KiraAI 3.1.2 同一套测试 | **93 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、36 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -42,7 +42,7 @@
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **92 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **93 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -56,6 +56,10 @@
 | 陪伴面板 | 使用真实日程：今日完成/总数、进度条、下一项标题/时间/倒计时；不再使用假饱腹/心情 |
 | 时间精度 | 当前时间显示到秒；计划时间/日期在秒数非零时自动显示秒 |
 | 秒级调度 | exact at、window start/end、规划时刻、禁止/安静/必需覆盖时段、随机间隔和检查间隔 `interval_seconds` 均实测；LLM 可读时间含秒，前端 `type=time step=1` |
+| 图标与作者 | `manifest.json` author=`znq19`，icon=`assets/icon.svg`，文件存在且 SVG 可解析 |
+| 头像/图标分离 | `icon.svg` 仅作插件图标并透明化；`avatar.svg` 为问号默认生活头像；WebUI 未设置/失败仍显示问号 |
+| 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.0`；上传资产内容哈希 + immutable |
+| 性能/token | 动态 Prompt 仍为尾部 persist=False；静态工具区稳定；首屏不等待 Remote 头像/天气；日历远程刷新后台化 |
 
 真实页面验收使用 `TemporaryDirectory` 与测试人格/会话适配器，但业务数据、插件 API、SQLite 事务、WebSocket 与前端资源均为真实链路；不是业务 mock。
 

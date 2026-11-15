@@ -81,6 +81,7 @@ def framework_test(framework: Path, plugin_root: Path):
         avatar_response = Response()
         avatar = await instance.api_avatar(avatar_response, persona="default", refresh=True)
         assert avatar["source"] == "builtin"
+        assert avatar["url"].endswith("/assets/avatar.svg"), avatar["url"]
         assert avatar_response.headers["cache-control"] == "no-store, max-age=0"
         changed = await instance.api_update_config({"patch": {"max_items": 13}, "expected_revision": 0}, persona="default")
         assert changed["config"]["max_items"] == 13 and changed["revision"] == 1

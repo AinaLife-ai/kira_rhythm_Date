@@ -10,6 +10,13 @@ def main(root: Path):
     manifest = json.loads((root / "manifest.json").read_text())
     assert manifest["plugin_id"] == "kira_rhythm_Date"
     assert manifest["core_version"] == ">=3.1.2"
+    assert manifest["author"] == "znq19"
+    assert manifest["icon"] == "assets/icon.svg"
+    assert (root / manifest["icon"]).is_file()
+    icon_svg = (root / manifest["icon"]).read_text()
+    assert "#080a10" not in icon_svg and "#07090e" not in icon_svg
+    assert "viewBox=\"0 0 160 160\"" in (root / "assets" / "avatar.svg").read_text()
+    assert "fill=\"#fff\"" in icon_svg
     python_files = list((root / "krd").glob("*.py")) + [root / "main.py"]
     source = "\n".join(path.read_text() for path in python_files)
     for banned in ("time.sleep(", "asyncio.run(", "auth=False", "message_types", "fetch_memory", "write_memory", "read_memory"):
@@ -38,6 +45,7 @@ def main(root: Path):
     app = (root / "web" / "js" / "app.js").read_text()
     assert "second: '2-digit'" in app
     assert "includeSeconds" in (root / "web" / "js" / "store.js").read_text()
+    assert "ASSET_VERSION" in app and "?v=1.2.0" in index
     views = (root / "web" / "js" / "views.js").read_text()
     assert views.count('type="time" step="1"') >= 4
     assert "interval_seconds" in views

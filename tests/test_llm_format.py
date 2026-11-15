@@ -12,8 +12,8 @@ def test_humanize_nested_timestamps():
         'timezone': 'Asia/Shanghai',
     }
     cleaned = humanize_timestamps(payload, 'Asia/Shanghai')
-    assert cleaned['scheduled_at'] == '2026-11-15 10:36:00'
-    assert cleaned['nested'][0]['created_at'] == '2026-11-15 10:36:00'
+    assert cleaned['scheduled_at'] == '2026-11-15 10:36'
+    assert cleaned['nested'][0]['created_at'] == '2026-11-15 10:36'
     assert cleaned['nested'][0]['title'] == '随意走走'
     assert isinstance(payload['scheduled_at'], float)
 
@@ -37,3 +37,9 @@ def test_prepare_payload_compacts_noise():
         {'timezone': 'Asia/Tokyo', 'title': 'x'}, 'Asia/Tokyo', 'Asia/Shanghai'
     )
     assert cleaned == {'timezone': 'Asia/Tokyo', 'title': 'x'}
+
+
+def test_humanize_schedule_seconds_when_nonzero():
+    ts = datetime(2026, 11, 15, 10, 36, 17, tzinfo=ZoneInfo('Asia/Shanghai')).timestamp()
+    cleaned = humanize_timestamps({'scheduled_at': ts}, 'Asia/Shanghai')
+    assert cleaned['scheduled_at'] == '2026-11-15 10:36:17'
