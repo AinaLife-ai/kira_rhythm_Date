@@ -69,6 +69,8 @@ export const PetCompanion = {
       idleTimer: null,
       speechTimer: null,
       wanderTimer: null,
+      walkTimer: null,
+      walking: false,
       dragging: false,
       dragStart: 0,
       dragStartY: 0,
@@ -132,11 +134,12 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
-    this.wanderTimer = setInterval(() => this.wander(), 7600)
+    this.wanderTimer = setInterval(() => this.wander(), 4500)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
     clearInterval(this.wanderTimer)
+    clearTimeout(this.walkTimer)
     clearTimeout(this.speechTimer)
     clearTimeout(this.labelTimer)
     clearTimeout(this.careTimer)
@@ -171,7 +174,8 @@ export const PetCompanion = {
       return ''
     },
     chooseAction(force) {
-      if (this.dragging || this.lift > 0 || Date.now() < this.actionLockUntil) return
+      if (this.dragging || Date.now() < this.actionLockUntil) return
+      if (this.walking && !['walk', 'run'].includes(this.action)) this.stopWalking()
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
       if (this.event === 'imminent') {
@@ -221,18 +225,45 @@ export const PetCompanion = {
         look: '今天的城市看起来有点不一样。', stretch: '伸个懒腰，再继续。', dance: '心情不错，跳两下。',
       })[action] || '我在。'
     },
+    stopWalking() {
+      clearTimeout(this.walkTimer)
+      this.walkTimer = null
+      this.walking = false
+    },
     wander() {
-      if (this.dragging || this.lift > 0 || this.panel || this.event === 'imminent') return
-      if (!['idle', 'look', 'walk', 'phone'].includes(this.action)) return
+      if (this.dragging || this.walking || this.lift > 0 || this.panel || this.event === 'imminent') return
+      if (!['idle', 'look', 'phone', 'walk'].includes(this.action)) return
       let next = window.innerWidth >= 1100 ? 64 + Math.random() * 24 : 20 + Math.random() * 58
       if (Math.abs(next - this.x) < 12) next = next > this.x ? Math.min(94, this.x + 16) : Math.max(16, this.x - 16)
-      this.facing = next > this.x ? 1 : -1
-      this.x = next
-      if (Math.random() > 0.45) this.setAction('walk', '')
-      setTimeout(() => { if (this.action === 'walk') this.action = 'idle' }, 2800)
+      this.startWalking(next)
+    },
+    startWalking(target) {
+      const shell = this.$el.closest('.app-shell') || this.$el.parentElement
+      const width = Math.max(260, shell?.getBoundingClientRect().width || window.innerWidth)
+      this.stopWalking()
+      this.walking = true
+      this.lift = 0
+      this.facing = target > this.x ? 1 : -1
+      this.action = 'walk'
+      const step = () => {
+        if (!this.walking || this.dragging) { this.walking = false; this.walkTimer = null; return }
+        const diff = target - this.x
+        if (Math.abs(diff) < 0.35) {
+          this.x = target
+          this.walking = false
+          this.walkTimer = null
+          this.action = 'idle'
+          return
+        }
+        const stepPct = (1.7 / width) * 100
+        this.x += Math.sign(diff) * Math.min(Math.abs(diff), stepPct)
+        this.walkTimer = setTimeout(step, 40)
+      }
+      step()
     },
     pat() {
-      if (this.dragging || this.suppressClick || this.lift > 0) return
+      if (this.dragging || this.suppressClick) return
+      this.stopWalking()
       this.showLabel(false)
       this.showCare()
       this.hearts = 4
@@ -243,19 +274,23 @@ export const PetCompanion = {
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
     feed() {
+      this.stopWalking()
       this.fullness = Math.min(100, this.fullness + 10)
       this.setAction('eat', '谢谢，我会好好吃完的。')
       this.panel = false
     },
     talk() {
+      this.stopWalking()
       this.setAction('phone', '你说，我在听。')
       this.panel = false
     },
     rest() {
+      this.stopWalking()
       this.setAction('sleep', '好，我靠着你休息一会儿。')
       this.panel = false
     },
     startDrag(event) {
+      this.stopWalking()
       const shell = this.$el.closest('.app-shell') || this.$el.parentElement
       const rect = shell.getBoundingClientRect()
       const startedAt = performance.now()
@@ -294,12 +329,12 @@ export const PetCompanion = {
           this.suppressClick = true
           this.actionLockUntil = Date.now() + 2400
           this.setAction('thrown', '哇——我要飞起来了！')
-          setTimeout(() => { this.lift = 0; this.setAction('land', '安全着陆。'); this.mood = Math.min(100, this.mood + 1) }, 420)
+          setTimeout(() => { this.lift = 10 + Math.random() * 34; this.setAction('land', '安全着陆。'); this.mood = Math.min(100, this.mood + 1) }, 420)
           setTimeout(() => { this.setAction('dizzy', '世界还在转……') }, 820)
           setTimeout(() => { if (this.action === 'dizzy') this.action = 'idle' }, 2100)
         } else if (this.moved || heldLong) {
           this.suppressClick = true
-          this.lift = 0
+          this.lift = this.lift > 6 ? 8 + Math.random() * 20 : 0
           this.setAction('land', '放我下来啦。')
           setTimeout(() => { if (this.action === 'land') this.action = 'idle' }, 900)
         } else {
@@ -317,7 +352,7 @@ export const PetCompanion = {
     },
   },
   template: `
-  <div class="pet-companion" :class="[petClass, 'pet-action-' + action, { 'pet-large': large, 'pet-panel-open': panel, 'pet-left': x < 45, 'pet-dragging': dragging }]" :style="petStyle">
+  <div class="pet-companion" :class="[petClass, 'pet-action-' + action, { 'pet-large': large, 'pet-panel-open': panel, 'pet-left': x < 45, 'pet-dragging': dragging, 'pet-facing-left': facing < 0 }]" :style="petStyle">
     <transition name="pet-bubble">
       <div v-if="speech" class="pet-bubble" @click="openPanel">{{ speech }}<i></i></div>
     </transition>

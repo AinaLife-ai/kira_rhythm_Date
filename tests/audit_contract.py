@@ -45,7 +45,7 @@ def main(root: Path):
     assert not list(root.rglob("*.pyc"))
     assert not any(ord(char) > 0x1F000 for char in frontend), "emoji is forbidden in frontend"
     themes = (
-        "tomato_rain", "tomato_greenhouse", "tomato_archive",
+        "tomato_rain", "tomato_greenhouse", "tomato_rose",
         "mint_coast", "mint_soda", "mint_arcade",
         "garnet_dusk", "garnet_alley", "garnet_pool",
         "xun_street", "xun_diner", "xun_rooftop",

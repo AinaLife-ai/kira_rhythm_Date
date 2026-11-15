@@ -38,3 +38,5 @@
 [data-theme-name="hathor_garage"]{--bg:#061416;--bg-soft:#0a2527;--panel:rgba(8,29,32,.9);--panel-solid:#0c2d30;--accent:#58e1d1;--accent-strong:#26a99e;--accent-soft:rgba(88,225,209,.14);--line:rgba(205,255,250,.14);--text:#f0fffd;--text-soft:#acd8d5;}
 [data-theme-name="hathor_roof"]{--bg:#070f1a;--bg-soft:#0d1c2d;--panel:rgba(11,25,40,.92);--panel-solid:#102738;--accent:#64b8ff;--accent-strong:#3285c9;--accent-soft:rgba(100,184,255,.14);--line:rgba(205,230,255,.14);--text:#f4faff;--text-soft:#b4c9dc;}
 [data-theme-name="hathor_store"]{--bg:#071410;--bg-soft:#0e241e;--panel:rgba(10,31,25,.9);--panel-solid:#0f2c24;--accent:#7bffd1;--accent-strong:#35bd91;--accent-soft:rgba(123,255,209,.14);--line:rgba(205,255,235,.14);--text:#f2fff9;--text-soft:#b0d8c8;}
+
+[data-theme-name="tomato_rose"]{--bg:#160b17;--bg-soft:#241326;--panel:rgba(34,18,36,.82);--panel-solid:#2c192f;--accent:#e06486;--accent-strong:#b83c60;--accent-soft:rgba(224,100,134,.14);--line:rgba(255,220,230,.14);--text:#fff7fb;--text-soft:#d9c3cf;}

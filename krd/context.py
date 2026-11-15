@@ -89,12 +89,13 @@ class ContextBuilder:
                          "holiday": calendar.get("holiday"), "solar_term": calendar.get("solar_term")},
             "appearance": state.get("current_appearance", ""), "mood": state.get("current_mood", ""),
             "activity": state.get("current_activity", ""), "note": state.get("current_note", ""),
-            "next": next_item
+            "next": next_item,
+            "source": "KRD current self narrative; update through rhythm_update when life changes"
         }
         host_tz = self.host_timezone_name()
         if host_tz != tz_name:
             payload["timezone"] = tz_name
-        payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
+        payload = prepare_llm_payload(payload, tz_name, host_tz)
         return "[KRD DayState · request only]\n" + self._bounded(payload, 1200)
 
     async def planning_prompt(self, metadata: dict[str, Any]) -> str:

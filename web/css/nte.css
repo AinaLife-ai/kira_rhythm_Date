@@ -966,3 +966,8 @@ body { background:#08090c; }
 .pet-action-sleep .pet-sprite { background-position:-168px 0; }
 .pet-action-read .pet-sprite { background-position:-84px 0; }
 .pet-action-phone .pet-sprite { background-position:-252px 0; }
+
+.pet-companion { transition:transform .36s cubic-bezier(.2,.8,.2,1) !important; }
+.pet-action-walk,.pet-action-run { transition:transform .36s cubic-bezier(.2,.8,.2,1) !important; }
+.pet-sprite { transform-origin:center bottom; }
+.pet-facing-left .pet-sprite { transform:scaleX(-1); }
