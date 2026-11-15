@@ -156,6 +156,7 @@ const app = Vue.createApp({
     },
   },
   methods: {
+    assetUrl(path) { return window.__KRD_INLINE_ASSETS__?.[path] || `${assetBase}/${path}` },
     async setView(view) {
       state.view = view
       const epoch = ++this.viewEpoch
@@ -422,8 +423,8 @@ const app = Vue.createApp({
       const root = document.documentElement.style
       const customBackground = this.data.background?.url
       if (customBackground || theme.art) {
-        root.setProperty('--theme-art', `url("${customBackground || `${assetBase}/themes/${theme.art}.webp`}")`)
-        root.setProperty('--pixel-sprite', `url("${assetBase}/pixels/${theme.art}.png")`)
+        root.setProperty('--theme-art', `url("${customBackground || this.assetUrl(`themes/${theme.art}.webp`)}")`)
+        root.setProperty('--pixel-sprite', `url("${this.assetUrl(`pixels/${theme.art}.png`)}")`)
       } else {
         root.removeProperty('--theme-art')
         root.removeProperty('--pixel-sprite')
