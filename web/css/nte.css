@@ -740,17 +740,6 @@ body { background:#08090c; }
 .pet-action-scarf .pet-arm-left { transform:rotate(7deg); transform-origin:21px 45px; }
 
 /* Action motion language */
-.pet-action-walk .pet-figure { animation:pet-walk-bob .48s steps(2) infinite; }
-.pet-action-walk .pet-leg-left { animation:pet-step .48s steps(2) infinite; transform-origin:29px 81px; }
-.pet-action-walk .pet-leg-right { animation:pet-step .48s steps(2) infinite reverse; transform-origin:43px 81px; }
-.pet-action-walk .pet-arm-left { animation:pet-arm .48s steps(2) infinite reverse; transform-origin:21px 45px; }
-.pet-action-walk .pet-arm-right { animation:pet-arm .48s steps(2) infinite; transform-origin:51px 45px; }
-.pet-action-run .pet-figure { animation:pet-walk-bob .25s steps(2) infinite,pet-run-lean .25s steps(2) infinite; }
-.pet-action-run .pet-leg-left { animation:pet-step .25s steps(2) infinite; transform-origin:29px 81px; }
-.pet-action-run .pet-leg-right { animation:pet-step .25s steps(2) infinite reverse; transform-origin:43px 81px; }
-.pet-action-run .pet-arm-left { animation:pet-arm .25s steps(2) infinite; transform-origin:21px 45px; }
-.pet-action-run .pet-arm-right { animation:pet-arm .25s steps(2) infinite reverse; transform-origin:51px 45px; }
-.pet-action-run .pet-bubble { border-color:#ff9eb4; }
 .pet-action-read .pet-arm-left { transform:rotate(28deg) translate(0,5px); transform-origin:21px 45px; }
 .pet-action-read .pet-arm-right { transform:rotate(-28deg) translate(0,5px); transform-origin:51px 45px; }
 .pet-action-read .pet-head { transform:rotate(5deg) translateY(1px); transform-origin:36px 36px; }
@@ -777,8 +766,6 @@ body { background:#08090c; }
 .pet-action-held .pet-figure { animation:pet-dangle .55s ease-in-out infinite alternate; transform-origin:50% 18%; }
 .pet-action-held .pet-arm-left { transform:rotate(-25deg); transform-origin:21px 45px; }
 .pet-action-held .pet-arm-right { transform:rotate(25deg); transform-origin:51px 45px; }
-.pet-action-held .pet-leg-left { transform:rotate(10deg); transform-origin:29px 81px; }
-.pet-action-held .pet-leg-right { transform:rotate(-10deg); transform-origin:43px 81px; }
 .pet-action-thrown .pet-figure { animation:pet-spin .52s linear infinite; }
 .pet-action-land .pet-figure { animation:pet-squash .34s ease-out; transform-origin:50% 100%; }
 .pet-action-dizzy .pet-head { animation:pet-dizzy 1.8s ease-in-out infinite; transform-origin:36px 36px; }
@@ -792,10 +779,6 @@ body { background:#08090c; }
 .pet-action-idle .pet-head { animation:pet-blink 5.2s steps(1) infinite; transform-origin:36px 36px; }
 .pet-notes text,.pet-zzz text { font:8px "Arial Narrow",sans-serif; fill:#ffd25e; animation:pet-float 1.8s ease-in-out infinite; }
 .pet-zzz text { fill:#a8e9ff; }
-@keyframes pet-walk-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
-@keyframes pet-run-lean { 50%{transform:translateY(-2px) rotate(4deg)} }
-@keyframes pet-step { 50%{transform:rotate(19deg)} }
-@keyframes pet-arm { 50%{transform:rotate(16deg)} }
 @keyframes pet-idle-breathe { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1.5px)} }
 @keyframes pet-blink { 0%,48%,52%,100%{transform:scaleY(1)} 50%{transform:scaleY(.82)} }
 @keyframes pet-read-breathe { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
@@ -908,11 +891,6 @@ body { background:#08090c; }
 /* Sprite-sheet companion */
 .pet-figure { position:relative; width:84px; height:150px; }
 .pet-sprite { position:absolute; inset:0; background-repeat:no-repeat; background-size:400% 100%; background-position:-168px 0; image-rendering:auto; }
-.pet-action-walk .pet-sprite { animation:pet-sprite-walk .58s steps(1,end) infinite; }
-.pet-action-run .pet-sprite { animation:pet-sprite-walk .30s steps(1,end) infinite; }
-.pet-action-walk { transition:left 2.7s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
-.pet-action-run { transition:left .9s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
-@keyframes pet-sprite-walk { 0%,24%{background-position:0 0}25%,49%{background-position:-84px 0}50%,74%{background-position:-168px 0}75%,100%{background-position:-252px 0} }
 .pet-action-thrown .pet-figure { animation:pet-toss .46s ease-out !important; }
 .pet-action-dizzy .pet-head { animation:none !important; }
 .pet-action-dizzy .pet-figure { animation:pet-dizzy-shake .3s steps(2) infinite !important; }
@@ -968,7 +946,6 @@ body { background:#08090c; }
 .pet-action-phone .pet-sprite { background-position:-252px 0; }
 
 .pet-companion { transition:transform .36s cubic-bezier(.2,.8,.2,1) !important; }
-.pet-action-walk,.pet-action-run { transition:transform .36s cubic-bezier(.2,.8,.2,1) !important; }
 .pet-sprite { transform-origin:center bottom; }
 .pet-facing-left .pet-sprite { transform:scaleX(-1); }
 .pet-hit { left:-80px; width:160px; height:162px; }
@@ -996,7 +973,6 @@ body { background:#08090c; }
 .pet-action-jump .pet-figure { animation:pet-jump-hop .5s ease-out; }
 @keyframes pet-jump-hop { 0%,100%{transform:translateY(0)} 45%{transform:translateY(-10px) scaleY(1.04)} 70%{transform:translateY(0) scaleY(.95)} }
 
-.pet-action-walk .pet-figure { animation:none !important; }
 
 /* RD monogram: fixed tomato-red badge, not theme-tinted. */
 .brand-mark { background:linear-gradient(145deg,#ff647d 0,#e8435f 58%,#b92442 100%) !important; color:#080a10 !important; }

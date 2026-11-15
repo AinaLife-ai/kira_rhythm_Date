@@ -5,6 +5,7 @@ import { planTemplates, themeTemplates } from './templates.js'
 import { PetCompanion } from './pet.js'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+const MIN_REFRESH_SPIN_MS = 420
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -300,6 +301,7 @@ const app = Vue.createApp({
     async refresh({ persona = state.selectedPersona, reset = false, entry = true } = {}) {
       if (this.refreshing) { this.refreshQueued = true; return }
       this.refreshing = true
+      const refreshStartedAt = performance.now()
       try {
       const epoch = ++this.refreshEpoch
       const data = await loadBootstrap(persona, { reset })
@@ -327,6 +329,8 @@ const app = Vue.createApp({
         this.loadWeather(data.persona_id).catch(() => {})
       }
       } finally {
+        const remaining = MIN_REFRESH_SPIN_MS - (performance.now() - refreshStartedAt)
+        if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining))
         this.refreshing = false
         if (this.refreshQueued) {
           this.refreshQueued = false

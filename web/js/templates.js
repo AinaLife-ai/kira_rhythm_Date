@@ -13,7 +13,7 @@ export const planTemplates = [
         ] },
         { title: '傍晚与夜里', items: [
           { title: '随意走走', intent: '换一换节奏', instruction: '感受天气和周围的事物，有想分享的再说，没有也可以安静。', schedule: { type: 'window', start: '18:00', end: '19:00' }, execution_probability: 0.8, interaction: 'auto', target: '' },
-          { title: '整理今天', intent: '让今天完整地收尾', instruction: '回顾今天真正值得记住的一点，必要时更新 DayState。', schedule: { type: 'exact', at: '22:20' }, interaction: 'auto', target: '' },
+          { title: '整理今天', intent: '让今天完整地收尾', instruction: '回顾今天真正值得留下的一点，必要时更新 DayState。', schedule: { type: 'exact', at: '22:20' }, interaction: 'auto', target: '' },
         ] },
       ],
     },
@@ -34,7 +34,7 @@ export const planTemplates = [
   },
   {
     id: 'slow_holiday', name: '慢生活假日', icon: 'flower', tone: 'green',
-    description: '天气、散步、阅读和随心所欲的陪伴。',
+    description: '天气、运动、阅读和随心所欲的陪伴。',
     plan: {
       title: '慢生活假日', overview: '没有必须完成的清单，跟随天气和心情慢慢生活。',
       planned_appearance: '方便出门的休闲装和一顶帽子', planned_mood: '松弛，期待一点偶然',

@@ -28,7 +28,13 @@ def main(root: Path):
     assert not any(script.startswith(("http://", "https://", "//")) for script in scripts)
     assert "web/preview.html" not in "\n".join(str(path) for path in root.rglob("*"))
     frontend = "\n".join(path.read_text() for path in (root / "web" / "js").glob("*.js"))
+    css = "\n".join(path.read_text() for path in (root / "web" / "css").glob("*.css"))
+    assert "pet-action-walk" not in frontend and "pet-action-walk" not in css
+    assert "pixel-walk" not in css and "boot-walker" not in css
+    assert "jump: '运动中'" in frontend
     app = (root / "web" / "js" / "app.js").read_text()
+    assert "MIN_REFRESH_SPIN_MS" in app
+    assert not list((root / "assets" / "pets").glob("*_walk*.webp"))
     assert "eval(" not in frontend and "new Function" not in frontend
     assert "weatherapi_key" not in frontend and "openweather_key" not in frontend
     assert "window.__krdApp = app.mount" not in frontend

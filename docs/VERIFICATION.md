@@ -1,14 +1,14 @@
 # KRD 验证记录
 
-验证日期：2026-11-15（Asia/Shanghai）。
+验证日期：2026-11-16（Asia/Shanghai）。
 
 ## 测试结论
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **73 passed** |
-| KiraAI 3.1.2 同一套测试 | **73 passed** |
-| 3.2 真实 PluginManager 生命周期 | 通过：3 工具、34 条鉴权 API/页面/静态路由、WS |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **85 passed** |
+| KiraAI 3.1.2 同一套测试 | **85 passed** |
+| 3.2 真实 PluginManager 生命周期 | 通过：3 工具、36 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
 | 3.1.2 真实 IM 工作流 E2E | 同上，通过；含 `resolve_session` 特征回退 |
@@ -35,6 +35,28 @@
 ## 第二轮完整审计（v1.0.1）
 
 本轮未使用子代理。除上述双版本测试外，执行了以下额外验收：
+
+## 第三轮完整审计（v1.2.0 收尾，2026-11-16）
+
+本轮同样未使用子代理，基于真实 PluginManager、真实 FastAPI HTTP/WS、真实 SQLite 和真实 Chromium 页面完成。
+
+| 验收 | 真实结果 |
+|---|---|
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **85 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
+| 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
+| 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
+| API 全路由探测 | 真实 HTTP 路由通过计划/日历/DayState/配置 revision/模板/资产上传与保护/导出导入/头像/诊断；缺失资产返回结构化错误 |
+| WebSocket | 真实 WS ready、ping/pong、config_changed 均到达页面 |
+| 刷新按钮 | 真实 API 响应过快时仍保证 ≥420ms 的刷新旋转可见窗口 |
+| 响应式 | 1440px 桌面和 390px 手机五视图、五设置页签实际渲染；`scrollWidth == innerWidth`，零 JS 异常 |
+| 单文件预览 | `KRD-1.2.0-preview.html` 零外部资源请求、零 JS 错误、启动和页面渲染正常 |
+| 长稳 | 31 秒空闲 `data_version 2→2`、零新事件、调度器存活 |
+
+真实页面验收使用 `TemporaryDirectory` 与测试人格/会话适配器，但业务数据、插件 API、SQLite 事务、WebSocket 与前端资源均为真实链路；不是业务 mock。
+
+### 本轮外部服务边界
+
 
 | 验收 | 真实结果 |
 |---|---|
