@@ -45,15 +45,19 @@ def main(root: Path):
     app = (root / "web" / "js" / "app.js").read_text()
     assert "second: '2-digit'" in app
     assert "includeSeconds" in (root / "web" / "js" / "store.js").read_text()
-    assert "ASSET_VERSION" in app and "?v=1.2.1" in index
+    assert "ASSET_VERSION" in app and "?v=1.2.2" in index
     views = (root / "web" / "js" / "views.js").read_text()
     assert views.count('type="time" step="1"') >= 4
     assert "interval_seconds" in views
+    assert "TemplateEditor" in views and "copy.rules.weekdays = Array.isArray" in views
+    assert "select option" in css and "template-plan-editor" in css
+    assert "weatherCredentialFields" in app and "saveWeatherCredentials" in app
+    assert "weather/credentials" in app and "weather/credentials" in (root / "krd" / "api_methods.py").read_text()
     assert "%H:%M:%S" in (root / "krd" / "llm_format.py").read_text()
     assert "MIN_REFRESH_SPIN_MS" in app
     assert not list((root / "assets" / "pets").glob("*_walk*.webp"))
     assert "eval(" not in frontend and "new Function" not in frontend
-    assert "weatherapi_key" not in frontend and "openweather_key" not in frontend
+    assert "weatherCredentialDraft" in frontend
     assert "window.__krdApp = app.mount" not in frontend
     assert "location.search.includes('debug')" in frontend
     assert "delete payload.schema_version" in app and "delete payload.per_persona" in app

@@ -1,4 +1,4 @@
-import { fmt } from './store.js?v=1.2.1'
+import { fmt } from './store.js?v=1.2.2'
 
 const VOICE = {
   tomato: {

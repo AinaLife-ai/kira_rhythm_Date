@@ -129,6 +129,15 @@ body {
 p { color:var(--nte-dim); }
 h1,h2,h3,h4 { color:var(--nte-ink); font-weight:700; }
 select,input,textarea { border-radius:0; background:rgba(255,255,255,.055); border-color:rgba(255,255,255,.16); color:var(--nte-ink); }
+select option, select optgroup { background:#0a0d14; color:#f5f7ff; }
+select { color-scheme:dark; }
+.template-plan-editor { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px; line-height:1.55; tab-size:2; }
+.credential-panel { margin-top:14px; padding:12px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.035); }
+.credential-panel .section-heading { margin-bottom:9px; }
+.credential-panel h3 { color:#fff; font-size:12px; }
+.city-results .city-admin { flex:1; min-width:0; color:var(--nte-dim); font-size:8px; line-height:1.45; }
+.city-results button { flex-wrap:wrap; }
+.credential-panel p { margin-top:3px; color:var(--nte-dim); font-size:8px; line-height:1.5; }
 select:focus,input:focus,textarea:focus { border-color:var(--nte-pink); box-shadow:0 0 0 1px var(--nte-pink); outline:0; }
 input[type="checkbox"] { accent-color:var(--nte-pink); }
 .primary,.soft-button,.icon-button,.text-button { border-radius:0; box-shadow:none; }

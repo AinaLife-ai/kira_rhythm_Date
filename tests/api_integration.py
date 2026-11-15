@@ -88,6 +88,38 @@ def run(framework: Path, plugin_root: Path):
             assert diff.status_code == 200 and diff.json() == []
             run = await client.post(f"{base}/items/{item_id}/run")
             assert run.status_code == 400 and run.json()["detail"]["code"] == "dispatch_failed"
+            template = await client.post(f"{base}/templates", json={
+                "name": "API 模板", "prompt": "保持从容", "plan": {"title": "模板", "blocks": []},
+            })
+            assert template.status_code == 200, template.text
+            assert template.json()["prompt"] == "保持从容"
+            templates = await client.get(f"{base}/templates")
+            assert templates.status_code == 200 and any(entry["id"] == template.json()["id"] for entry in templates.json())
+            day_types = await client.get(f"{base}/day-types")
+            holiday = next(entry for entry in day_types.json() if entry["id"] == "holiday")
+            holiday["config"]["overrides"] = {"planning_prompt": "假日 API 提示"}
+            holiday["rules"]["dates"] = ["2026-12-25"]
+            saved_day_type = await client.post(f"{base}/day-types", json=holiday)
+            assert saved_day_type.status_code == 200, saved_day_type.text
+            refreshed = await client.get(f"{base}/day-types")
+            holiday = next(entry for entry in refreshed.json() if entry["id"] == "holiday")
+            assert holiday["config"]["overrides"]["planning_prompt"] == "假日 API 提示"
+            assert holiday["rules"]["dates"] == ["2026-12-25"]
+            credentials = await client.get(f"{base}/weather/credentials")
+            assert credentials.status_code == 200
+            assert credentials.json()["providers"]["weatherapi"]["weatherapi_key"] is False
+            saved_credentials = await client.put(f"{base}/weather/credentials", json={
+                "providers": {"weatherapi": {"weatherapi_key": "secret-weather-key"}},
+            })
+            assert saved_credentials.status_code == 200, saved_credentials.text
+            assert saved_credentials.json()["providers"]["weatherapi"]["weatherapi_key"] is True
+            assert "secret-weather-key" not in saved_credentials.text
+            await client.put(f"{base}/weather/credentials", json={
+                "providers": {"qweather": {"qweather_key": "second-key"}},
+            })
+            credentials = await client.get(f"{base}/weather/credentials")
+            assert credentials.json()["providers"]["weatherapi"]["weatherapi_key"] is True
+            assert credentials.json()["providers"]["qweather"]["qweather_key"] is True
         await manager.terminate(loaded)
         print("API INTEGRATION OK", framework.name, "bootstrap/config/day-state/plans/diff/dispatch")
 

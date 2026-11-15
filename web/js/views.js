@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.1'
+import { fmt } from './store.js?v=1.2.2'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.2'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -266,11 +266,11 @@ export const TemplatesView = {
   template: `
   <div class="view-stack">
     <section class="section-card glass">
-      <div class="section-heading"><div><span class="eyebrow">生活模板</span><h2>从一种节奏开始，再变成自己的</h2></div><button class="soft-button" @click="$root.saveCurrentTemplate"><ui-icon name="plus" :size="14" /> 保存当前为模板</button></div>
+      <div class="section-heading"><div><span class="eyebrow">生活模板</span><h2>从一种节奏开始，再变成自己的</h2></div><div class="template-actions"><button class="soft-button" @click="$root.newTemplate"><ui-icon name="plus" :size="14" /> 新建模板</button><button class="soft-button" @click="$root.saveCurrentTemplate">从当前计划新建</button></div></div>
       <div class="template-grid">
         <article v-for="template in $root.allPlanTemplates" :key="template.id" class="template-card" :class="'tone-' + (template.tone || 'violet')">
           <span class="template-icon"><ui-icon :name="template.icon" :size="21" /></span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
-          <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用到 {{ $root.selectedDate }}</button><button class="text-button" @click="$root.previewTemplate(template)">预览结构</button><button v-if="template.custom" class="text-button muted" @click="$root.deleteTemplate(template)">删除我的模板</button></div>
+          <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用到 {{ $root.selectedDate }}</button><button class="text-button" @click="$root.editTemplate(template)">编辑</button><button class="text-button" @click="$root.previewTemplate(template)">预览结构</button><button v-if="template.override || template.custom" class="text-button muted" @click="$root.deleteTemplate(template)">{{ template.override ? '恢复默认' : '删除我的模板' }}</button></div>
         </article>
       </div>
     </section>
@@ -293,10 +293,34 @@ export const TemplatesView = {
   </div>`,
 }
 
+export const TemplateEditor = {
+  props: ['template'],
+  data() {
+    const source = this.template ? JSON.parse(JSON.stringify(this.template)) : {
+      name: '', description: '', prompt: '', plan: { title: '', overview: '', planned_appearance: '', planned_mood: '', blocks: [] },
+    }
+    source.prompt ||= ''
+    source.plan ||= { title: '', overview: '', planned_appearance: '', planned_mood: '', blocks: [] }
+    source._plan = JSON.stringify(source.plan, null, 2)
+    return { form: source }
+  },
+  template: `
+  <div class="modal-backdrop" @click.self="$root.closeTemplateEditor"><div class="modal-card large">
+    <div class="modal-heading"><div><span class="eyebrow">生活模板</span><h2>{{ form.override || form.builtin ? '编辑内置模板' : form.custom ? '编辑我的模板' : '新建模板' }}</h2></div><button class="icon-button" @click="$root.closeTemplateEditor"><ui-icon name="close" :size="16" /></button></div>
+    <div class="form-grid">
+      <label class="wide"><span>模板名称</span><input v-model="form.name" placeholder="例如：考试周 / 雨天宅家"></label>
+      <label class="wide"><span>模板说明</span><textarea rows="2" v-model="form.description"></textarea></label>
+      <label class="wide"><span>模板引导词（应用时写入每个小项的执行 instruction）</span><textarea rows="4" v-model="form.prompt" placeholder="例如：保持松散，不把每一件事变成任务汇报；先观察天气和身体状态再行动。"></textarea><small class="field-hint">这会成为该模板所有小项的执行引导；小项自身 instruction 仍会保留。</small></label>
+      <label class="wide"><span>计划结构 JSON</span><textarea class="template-plan-editor" rows="18" v-model="form._plan" spellcheck="false"></textarea><small class="field-hint">可编辑 title、overview、blocks，以及每个 item 的 title、intent、instruction、schedule、interaction；保存时会校验。</small></label>
+    </div>
+    <div class="modal-actions"><button v-if="form.override || form.custom" class="text-button muted" @click="$root.deleteTemplate(form)">恢复默认</button><button class="soft-button" @click="$root.closeTemplateEditor">取消</button><button class="primary" @click="$root.saveTemplate(form)">保存模板</button></div>
+  </div></div>`,
+}
+
 export const SettingsView = {
   template: `
   <div class="settings-layout glass" v-if="$root.draft">
-    <aside class="settings-tabs"><button v-for="tab in [['general','规划与数量'],['time','时间与夜间'],['sessions','会话权限'],['weather','天气与地点'],['data','数据与诊断']]" :class="{active: $root.settingsTab === tab[0]}" @click="$root.settingsTab = tab[0]">{{ tab[1] }}</button></aside>
+    <aside class="settings-tabs"><button v-for="tab in [['general','规划与数量'],['time','时间与夜间'],['sessions','会话权限'],['weather','天气与地点'],['data','数据与诊断']]" :class="{active: $root.settingsTab === tab[0]}" @click="$root.selectSettingsTab(tab[0])">{{ tab[1] }}</button></aside>
     <div class="settings-content">
       <section v-if="$root.settingsTab === 'general'" class="settings-section">
         <span class="eyebrow">规划与数量</span><h2>自主，但有清晰边界</h2>
@@ -358,8 +382,14 @@ export const SettingsView = {
         <p class="field-hint">只想快速体验可选择虚拟气候；需要真实天气时再填写地点。没有注册密钥就优先使用无需账号的服务。</p>
         <div class="form-grid"><label><span>模式</span><select v-model="$root.draft.weather.mode"><option value="off">关闭</option><option value="real">真实天气</option><option value="virtual">虚拟气候</option><option value="hybrid">真实 + 虚拟</option></select></label>
           <label><span>天气服务</span><select v-model="$root.draft.weather.provider"><option value="open_meteo">Open-Meteo · 无需账号</option><option value="met_norway">MET Norway · 无需账号</option><option value="nws">US NWS · 美国</option><option value="bright_sky">Bright Sky · DWD</option><option value="weatherapi">WeatherAPI · 注册</option><option value="visualcrossing">Visual Crossing · 注册</option><option value="qweather">和风天气 · 注册</option><option value="weatherbit">Weatherbit · 注册</option><option value="openweather">OpenWeather · 注册</option></select></label></div>
-        <div class="location-editor"><input v-model="$root.cityQuery" placeholder="搜索城市，例如 上海" @keyup.enter="$root.geocode"><button class="soft-button" @click="$root.geocode">查找地点</button></div>
-        <div v-if="$root.cityResults.length" class="city-results"><button v-for="city in $root.cityResults" @click="$root.chooseCity(city)"><strong>{{ city.name }}</strong> {{ city.admin1 }} {{ city.country }}<small>{{ city.latitude }}, {{ city.longitude }}</small></button></div>
+        <div v-if="$root.weatherCredentialFields.length" class="credential-panel">
+          <div class="section-heading"><div><h3>接入凭据</h3><p>只保存在本机；切换服务不会清空其他服务的已保存信息。</p></div><span class="tag">已加密字段</span></div>
+          <div class="form-grid"><label v-for="[field, label] in $root.weatherCredentialFields" :key="field"><span>{{ label }}</span><input type="password" autocomplete="new-password" :value="$root.weatherCredentialDraft[$root.draft.weather.provider]?.[field] || ''" :placeholder="$root.weatherCredentialStatus[$root.draft.weather.provider]?.[field] ? '已保存，留空保留' : '粘贴 API Key'" @input="$root.setWeatherCredential($root.draft.weather.provider, field, $event.target.value)"><small v-if="$root.weatherCredentialStatus[$root.draft.weather.provider]?.[field]">已配置；不清空就继续使用</small></label></div>
+        </div>
+        <div v-else-if="$root.weatherNeedsContact" class="credential-panel"><div class="section-heading"><div><h3>接入联系标识</h3><p>MET Norway / NWS 要求真实可联系 User-Agent，不能填写随机身份。</p></div></div><label class="full-field"><span>站点或联系邮箱</span><input :value="$root.weatherContactDraft" placeholder="https://your.site 或 you@example.com" @input="$root.setWeatherContact($event.target.value)"><small v-if="$root.weatherCredentialStatus.contact">已保存；留空保留</small></label></div>
+        <p v-else class="field-hint">当前服务无需 API Key，保存后会直接使用无需账号的公共接口。</p>
+        <div class="location-editor"><input v-model="$root.cityQuery" placeholder="搜索城市，例如 桂林 或 桂林 广西" @keyup.enter="$root.geocode"><button class="soft-button" @click="$root.geocode">查找地点</button></div>
+        <div v-if="$root.cityResults.length" class="city-results"><button v-for="city in $root.cityResults" @click="$root.chooseCity(city)"><strong>{{ city.name }}</strong><span class="city-admin">{{ [city.country, city.admin1, city.admin2, city.admin3, city.admin4].filter(Boolean).join(' · ') }}</span><small>{{ city.latitude }}, {{ city.longitude }}</small></button></div>
         <div v-if="$root.currentLocation" class="current-location">当前地点：<strong>{{ $root.currentLocation.name }}</strong><span>{{ $root.currentLocation.latitude }}, {{ $root.currentLocation.longitude }}</span><button class="text-button" @click="$root.weatherPreview">预览天气</button></div>
         <div class="form-grid"><label><span>虚拟地点</span><input v-model="$root.draft.weather.virtual.location"></label><label><span>虚拟气候</span><select v-model="$root.draft.weather.virtual.climate"><option value="temperate">温带四季</option><option value="island">海岛</option><option value="rainforest">雨林</option><option value="snow">雪原</option><option value="desert">沙漠</option><option value="floating_city">幻想浮空城</option></select></label></div>
         <label class="full-field"><span>虚拟随机种子</span><input v-model="$root.draft.weather.virtual.seed"></label>
@@ -454,9 +484,15 @@ export const DayStateEditor = {
 export const DayTypeEditor = {
   props: ['entry'],
   data() {
-    const value = this.entry || { id: '', name: '', builtin: false, rules: { weekdays: [], dates: [], priority: 100 }, config: { color: '#9b8cff' } }
+    const value = this.entry || { id: '', name: '', builtin: false, rules: { weekdays: [], dates: [], date_ranges: [], priority: 100 }, config: { color: '#9b8cff' } }
     const copy = JSON.parse(JSON.stringify(value))
-    copy._dates = (copy.rules.dates || []).join(', ')
+    copy.rules ||= {}
+    copy.rules.weekdays = Array.isArray(copy.rules.weekdays) ? copy.rules.weekdays : []
+    copy.rules.dates = Array.isArray(copy.rules.dates) ? copy.rules.dates : []
+    copy.rules.date_ranges = Array.isArray(copy.rules.date_ranges) ? copy.rules.date_ranges : []
+    copy.rules.priority = Number.isInteger(copy.rules.priority) ? copy.rules.priority : 100
+    copy._dates = copy.rules.dates.join(', ')
+    copy._ranges = copy.rules.date_ranges.map((range) => `${range.start || ''}~${range.end || ''}`).join(', ')
     copy.config ||= { color: '#9b8cff' }
     copy.config.overrides ||= {}
     copy.config.overrides.execution_pool ||= { strategy: 'pure_random', sessions: [] }
@@ -469,6 +505,7 @@ export const DayTypeEditor = {
     <label class="full-field"><span>日型标识（创建后不可修改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>
     <label class="full-field"><span>此日型规划提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
+    <label class="full-field"><span>此日型执行提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.execution_prompt"></textarea></label>
     <div class="form-grid" style="margin-top: 17px">
       <label><span>每日最少安排</span><small>太少会显得空，推荐 2 到 4 项。</small><input type="number" min="0" max="500" v-model.number="form.config.overrides.min_items"></label>
       <label><span>每日最多安排</span><small>避免日程过密，推荐 8 到 12 项。</small><input type="number" min="1" max="500" v-model.number="form.config.overrides.max_items"></label>
@@ -476,6 +513,7 @@ export const DayTypeEditor = {
     <label class="full-field"><span>此日型执行会话策略</span><select v-model="form.config.overrides.execution_pool.strategy"><option value="pure_random">完全随机</option><option value="no_immediate_repeat">避免连续重复</option><option value="shuffle_bag">一轮内不重复</option><option value="round_robin">顺序轮换</option></select></label>
     <div class="weekday-picker"><span>周重复</span><label v-for="(name, index) in ['一','二','三','四','五','六','日']"><input type="checkbox" :checked="form.rules.weekdays.includes(index)" @change="$root.toggleDayTypeWeekday(form, index)">周{{ name }}</label></div>
     <label class="full-field"><span>指定日期（逗号分隔）</span><textarea rows="2" v-model="form._dates" placeholder="2026-11-20, 2026-12-01"></textarea></label>
+    <label class="full-field"><span>日期范围（每项 start~end，逗号或换行分隔）</span><textarea rows="2" v-model="form._ranges" placeholder="2026-02-01~2026-02-07, 2026-10-01~2026-10-07"></textarea></label>
     <label class="full-field"><span>规则优先级（数字越小越优先）</span><input type="number" v-model.number="form.rules.priority"></label>
     <div class="modal-actions"><button class="soft-button" @click="$root.dayTypeEditor = null">取消</button><button class="primary" @click="$root.saveDayType(form)">保存日型</button></div>
   </div></div>`,

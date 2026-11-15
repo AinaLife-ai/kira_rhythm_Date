@@ -1,4 +1,4 @@
-import { get, put } from './api.js?v=1.2.1'
+import { get, put } from './api.js?v=1.2.2'
 
 export const state = Vue.reactive({
   loading: true,
@@ -14,6 +14,7 @@ export const state = Vue.reactive({
   editor: null,
   dayStateEditor: false,
   dayTypeEditor: null,
+  templateEditor: null,
   settingsTab: 'general',
   theme: 'tomato_rain',
   loadError: '',

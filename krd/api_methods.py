@@ -193,16 +193,34 @@ class ApiMixin:
         return await self.runtime.weather.summary(persona_id)
 
     @register.api(method="POST", path="/v1/weather/geocode")
-    async def api_geocode(self, payload: dict):
-        return await self._call(self.runtime.weather.geocode, str(payload.get("name", "")))
+    async def api_geocode(self, payload: dict, persona: str = ""):
+        persona_id = await self._persona(persona)
+        return await self._call(self.runtime.weather.geocode, str(payload.get("name", "")), persona_id)
 
     @register.api(method="POST", path="/v1/weather/preview")
     async def api_weather_preview(self, payload: dict):
         async def preview():
             if payload.get("mode") == "virtual":
                 return self.runtime.weather.virtual(await self._persona(""), payload.get("virtual", {}))
-            return await self.runtime.weather._fetch(payload["provider"], payload["location"], 5)
+            return await self.runtime.weather._fetch(payload["provider"], payload["location"], 5, await self._persona(""))
         return await self._call(preview)
+
+    @register.api(method="GET", path="/v1/weather/credentials")
+    async def api_weather_credentials(self, persona: str = ""):
+        persona_id = await self._persona(persona)
+        return await self._call(self.runtime.weather.credential_status, persona_id)
+
+    @register.api(method="PUT", path="/v1/weather/credentials")
+    async def api_save_weather_credentials(self, payload: dict, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def save():
+            try:
+                return await self.runtime.weather.save_credentials(persona_id, payload)
+            except ValueError as exc:
+                raise KRDError("invalid_weather_credentials", str(exc)) from exc
+        result = await self._call(save)
+        await self._notify("weather_changed", persona_id, credentials=True)
+        return result
 
     @register.api(method="GET", path="/v1/avatar")
     async def api_avatar(self, response: Response, persona: str = "", refresh: bool = False):
@@ -265,8 +283,10 @@ class ApiMixin:
                 raise KRDError("invalid_template", "Template requires a name and plan")
             templates = await self.runtime.store.get_setting(f"templates:{persona_id}", [])
             entry = {"id": payload.get("id") or new_id("tpl"), "name": name,
-                     "description": str(payload.get("description", ""))[:500], "plan": plan,
-                     "custom": True, "created_at": now()}
+                     "description": str(payload.get("description", ""))[:500],
+                     "prompt": str(payload.get("prompt", ""))[:50000],
+                     "execution_prompt": str(payload.get("execution_prompt", ""))[:50000],
+                     "plan": plan, "custom": True, "created_at": now()}
             templates = [item for item in templates if item["id"] != entry["id"]]
             templates.append(entry)
             if len(templates) > 100 or len(json.dumps(templates, ensure_ascii=False)) > 2000000:
