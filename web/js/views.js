@@ -104,68 +104,100 @@ export const Timeline = {
 export const TodayView = {
   components: { Timeline },
   template: `
-  <div class="view-stack today-view">
-    <section class="hero-card glass" :style="$root.heroStyle">
-      <div class="hero-aurora"></div><div class="hero-hud"><span>KRD // {{ $root.data.persona_id }}</span><b>{{ $root.fmt.time($root.clockNow) }}</b><small>{{ $root.weatherText }}</small></div><span class="hero-rail"></span>
-      <div class="hero-person">
-        <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span></div>
-        <div class="hero-copy">
-          <span class="eyebrow">{{ $root.dayTypeName }} · {{ $root.todayCalendar?.lunar?.text || $root.data.date }}<template v-if="$root.todayHoliday"> · {{ $root.todayHoliday }}</template></span>
-          <h1>{{ $root.data.day_state.current_activity || $root.data.plan?.title || '此刻，生活正在展开' }}</h1>
-          <p>{{ $root.data.day_state.current_note || $root.data.plan?.overview || '没有安排也很好，给自己一点自由。' }}</p>
-          <div class="state-chips">
-            <span v-if="$root.data.day_state.current_appearance">{{ $root.data.day_state.current_appearance }}</span>
-            <span v-if="$root.data.day_state.current_mood"><ui-icon name="cloud" :size="13" /> {{ $root.data.day_state.current_mood }}</span>
-          </div>
-        </div>
+  <div class="nte-today">
+    <section class="scene-hero">
+      <div class="scene-noise"></div><div class="scene-scan"></div>
+      <div class="scene-topline">
+        <span class="live-tag"><i></i> LIVE PERSONA / 当前人格 <b>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '在线' }}</b></span>
+        <span class="scene-coord">35.68N / 139.76E</span>
       </div>
-      <div class="hero-side">
-        <div class="weather-orb" :class="{'is-night': $root.isNight}">
-          <ui-icon class="weather-icon" :name="$root.weatherKind" :size="34" />
-          <strong>{{ $root.weatherText }}</strong>
-          <small>{{ $root.weatherDetail }}</small>
-        </div>
-        <button class="soft-button" @click="$root.dayStateEditor = true">更新此刻状态</button>
+      <span class="scene-index">01</span>
+      <div class="scene-title">
+        <span class="kicker">DAILY NARRATIVE // 今日叙事</span>
+        <h1><small>{{ $root.dayTypeName }}</small>{{ $root.data.day_state.current_activity || $root.data.plan?.title || '生活正在展开' }}</h1>
+        <p>{{ $root.data.day_state.current_note || $root.data.plan?.overview || '没有安排也很好，让今天自然发生。' }}</p>
       </div>
+      <div class="scene-identity">
+        <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span><i></i></div>
+        <div><span class="identity-label">CURRENT PERSONA / 当前人格</span><strong>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '生活人格' }}</strong><small>{{ $root.data.day_state.current_location || '海特洛市 · 生活区' }}</small></div>
+      </div>
+      <div class="scene-status">
+        <div class="scene-weather">
+          <ui-icon :name="$root.weatherKind" :size="28" /><div><span>{{ $root.phaseLabel }}</span><strong>{{ $root.weatherText }}</strong><small>{{ $root.weatherDetail }}</small></div>
+        </div>
+        <div class="scene-tags">
+          <span v-if="$root.data.day_state.current_appearance">{{ $root.data.day_state.current_appearance }}</span>
+          <span v-if="$root.data.day_state.current_mood">情绪 / {{ $root.data.day_state.current_mood }}</span>
+          <span>{{ $root.data.date }}<template v-if="$root.todayHoliday"> · {{ $root.todayHoliday }}</template></span>
+        </div>
+        <button class="scene-action" @click="$root.dayStateEditor = true"><span>更新此刻状态</span><ui-icon name="edit" :size="15" /></button>
+      </div>
+      <div class="scene-cut" aria-hidden="true"></div>
     </section>
 
-    <section class="quick-grid">
-      <div class="next-card glass" v-if="$root.nextItem"><span class="pixel-runner" aria-hidden="true"></span><span class="pixel-platform" aria-hidden="true"></span>
-        <span class="eyebrow">下一件生活小事</span>
+    <aside class="mission-dock">
+      <div class="dock-top"><span>MISSION CONTROL <b>/ 今日任务</b></span><strong>{{ $root.planStats.done }}<small>/{{ $root.planStats.total }}</small></strong></div>
+      <div class="mission-main" v-if="$root.nextItem">
+        <div class="mission-kicker"><i></i> NEXT SIGNAL <span>下一事件</span></div>
+        <div class="mission-clock"><strong>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</strong><span>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.clockNow) }}</span></div>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
-        <div class="next-time"><strong>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.clockNow) }}</strong><span>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</span></div>
+        <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
+        <div class="mission-queue" v-if="$root.upcomingItems.length"><span class="queue-label">LATER / 随后</span><div v-for="item in $root.upcomingItems" :key="item.id"><b>{{ $root.fmt.time(item.scheduled_at) }}</b><span>{{ item.title }}</span></div></div>
+        <div class="mission-telemetry">
+          <span class="telemetry-label">SYSTEM TELEMETRY / 系统读数</span>
+          <div class="telemetry-row"><span>日程密度</span><i><b :style="{width: Math.min(100, $root.planStats.total / Math.max(1, $root.data.config?.max_items || 12) * 100) + '%'}"></b></i><em>{{ Math.round(Math.min(1, $root.planStats.total / Math.max(1, $root.data.config?.max_items || 12)) * 100) }}%</em></div>
+          <div class="telemetry-row"><span>完成进度</span><i><b :style="{width: ($root.planStats.total ? $root.planStats.done / $root.planStats.total * 100 : 0) + '%'}"></b></i><em>{{ $root.planStats.total ? Math.round($root.planStats.done / $root.planStats.total * 100) : 0 }}%</em></div>
+          <div class="telemetry-row"><span>环境干扰</span><i><b :style="{width: ($root.weatherKind === 'rain' || $root.weatherKind === 'snow' ? 76 : $root.weatherKind === 'cloud' ? 38 : 18) + '%'}"></b></i><em>{{ $root.weatherKind === 'rain' || $root.weatherKind === 'snow' ? '偏高' : $root.weatherKind === 'cloud' ? '中' : '低' }}</em></div>
+        </div>
+        <button class="mission-run" @click="$root.runItem($root.nextItem)"><span>立即触发</span><ui-icon name="play" :size="14" /></button>
       </div>
-      <div class="next-card glass empty-next" v-else>
-        <span class="eyebrow">接下来</span><h2>给生活一个新想法</h2>
-        <p>定时规划仍会到来，也可以现在让 bot 重新审视。</p>
-        <button class="soft-button" @click="$root.runPlanning()">现在规划</button>
+      <div class="mission-main empty" v-else>
+        <div class="mission-kicker"><i></i> SIGNAL EMPTY <span>暂无下一项</span></div>
+        <h2>让 bot 写下一段生活</h2><p>今天可以留白，也可以现在给 bot 一次规划机会。</p>
+        <button class="mission-run" @click="$root.runPlanning()"><span>开始规划</span><ui-icon name="sparkle" :size="14" /></button>
       </div>
-      <div class="mini-stats glass">
-        <div><strong>{{ $root.planStats.total }}</strong><span>今日小项</span></div>
-        <div><strong>{{ $root.planStats.done }}</strong><span>已经触发</span></div>
-        <div><strong>r{{ $root.data.plan?.revision || 0 }}</strong><span>计划版本</span></div>
+      <div class="mission-stats">
+        <div><strong>{{ String($root.planStats.done).padStart(2, '0') }}</strong><span>已触发</span></div>
+        <div><strong>{{ String($root.planStats.total - $root.planStats.done).padStart(2, '0') }}</strong><span>待发生</span></div>
+        <div><strong>{{ $root.data.plan?.revision || 0 }}</strong><span>计划版本</span></div>
       </div>
+      <div class="dock-footer">
+        <button @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 添加小项</button>
+        <button @click="$root.setView('calendar')"><ui-icon name="calendar" :size="15" /> 查看日历</button>
+      </div>
+      <div class="dock-barcode" aria-hidden="true"><i v-for="n in 18" :key="n" :style="{height: (4 + (n * 7) % 15) + 'px'}"></i></div>
+    </aside>
+
+    <section class="timeline-console">
+      <div class="console-heading"><div><span class="kicker">SCHEDULE / 行为序列</span><h2>今天的生活轨迹</h2></div><span class="console-count">{{ $root.planStats.total }} ENTRIES</span></div>
+      <timeline :plan="$root.data.plan" :server-time="$root.data.server_time" @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
     </section>
 
-    <section class="section-card glass timeline-section">
-      <div class="section-heading"><div><span class="eyebrow">今日时间轴</span><h2>生活的节奏</h2></div>
-        <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 添加小项</button>
-      </div>
-      <timeline :plan="$root.data.plan" :server-time="$root.data.server_time"
-        @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
-    </section>
-
-    <section class="section-card glass changes-preview" v-if="$root.latestDiff.length">
-      <div class="section-heading"><div><span class="eyebrow">最近变化</span><h2>计划也在生长</h2></div>
-        <button class="text-button" @click="$root.setView('changes')">全部变化 →</button>
-      </div>
-      <div v-for="change in $root.latestDiff.slice(0, 3)" :key="change.revision" class="change-row">
-        <span class="revision-badge">r{{ change.revision }}</span>
-        <div><strong>{{ change.actor === 'bot' ? 'bot' : '你' }} · {{ change.reason || '调整了计划' }}</strong>
-        <p>{{ $root.diffSummary(change.diff) }}</p></div>
-      </div>
-    </section>
+    <aside class="life-signal">
+      <section class="signal-card identity-card">
+        <div class="signal-heading"><span>STATE / 当前切片</span><ui-icon name="heart" :size="14" /></div>
+        <div class="state-list">
+          <div><span>地点</span><strong>{{ $root.data.day_state.current_location || '未记录' }}</strong></div>
+          <div><span>服装</span><strong>{{ $root.data.day_state.current_appearance || '未记录' }}</strong></div>
+          <div><span>心情</span><strong>{{ $root.data.day_state.current_mood || '未记录' }}</strong></div>
+          <div><span>活动</span><strong>{{ $root.data.day_state.current_activity || '自由活动' }}</strong></div>
+        </div>
+        <button class="signal-link" @click="$root.dayStateEditor = true">调整此刻状态 <ui-icon name="chevron" :size="13" /></button>
+      </section>
+      <section class="signal-card changes-preview" v-if="$root.latestDiff.length">
+        <div class="signal-heading"><span>CHANGE LOG / 变化</span><button @click="$root.setView('changes')">全部</button></div>
+        <div v-for="change in $root.latestDiff.slice(0, 3)" :key="change.revision" class="change-row">
+          <span class="revision-badge">第{{ change.revision }}版</span>
+          <div><strong>{{ change.actor === 'bot' ? 'bot' : '你' }} · {{ change.reason || '调整了计划' }}</strong><p>{{ $root.diffSummary(change.diff) }}</p></div>
+        </div>
+      </section>
+      <section class="signal-card anomaly-card">
+        <div class="signal-heading"><span>ANOMALY / 环境信号</span><i class="pulse"></i></div>
+        <div class="anomaly-readout"><strong>{{ $root.weatherText }}</strong><span>{{ $root.phaseLabel.split(' · ')[0] }}</span></div>
+        <p>界面光效、城市场景与信号强度会随时间、天气和事件状态实时变化。</p>
+      </section>
+    </aside>
   </div>`,
 }
 
@@ -211,11 +243,11 @@ export const ChangesView = {
       </div>
       <div v-if="!$root.diffs.length" class="empty-inline">还没有变化记录，生活才刚刚开始。</div>
       <article v-for="change in $root.diffs" :key="change.revision" class="diff-card">
-        <div class="diff-revision"><span>r{{ change.revision }}</span><small>{{ change.actor === 'bot' ? 'bot' : '你' }}</small></div>
+        <div class="diff-revision"><span>第{{ change.revision }}版</span><small>{{ change.actor === 'bot' ? 'bot' : '你' }}</small></div>
         <div class="diff-body"><h3>{{ change.reason || '调整生活安排' }}</h3><time>{{ $root.fmt.date(change.created_at) }}</time>
           <div v-for="entry in change.diff" class="diff-entry" :class="'op-' + entry.op">
             <strong>{{ entry.op === 'added' ? '+' : entry.op === 'removed' ? '-' : '~' }} {{ entry.title }}</strong>
-            <span v-for="(value, field) in entry.changes">{{ field }}: {{ $root.shortValue(value.from) }} → {{ $root.shortValue(value.to) }}</span>
+            <span v-for="(value, field) in entry.changes">{{ $root.fmt.field(field) }}：{{ $root.fmt.humanValue(field, value.from) }} → {{ $root.fmt.humanValue(field, value.to) }}</span>
           </div>
         </div>
       </article>
@@ -223,7 +255,7 @@ export const ChangesView = {
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">运行记录</span><h2>触发不是盲目发送</h2></div><button class="soft-button" @click="$root.loadRuns">刷新</button></div>
       <div class="run-table"><div class="run-row run-head"><span>小项</span><span>状态</span><span>概率</span><span>时间</span></div>
-        <div v-for="run in $root.runs" class="run-row"><span class="mono">{{ run.item_id.slice(0, 14) }}…</span><span>{{ $root.fmt.runStatus(run.status) }}</span><span>{{ run.probability == null ? '—' : Math.round(run.probability * 100) + '%' }}</span><span>{{ $root.fmt.date(run.claimed_at) }}</span></div>
+        <div v-for="run in $root.runs" class="run-row"><span>{{ $root.itemTitle(run.item_id) }}</span><span>{{ $root.fmt.runStatus(run.status) }}</span><span>{{ run.probability == null ? '—' : Math.round(run.probability * 100) + '%' }}</span><span>{{ $root.fmt.date(run.claimed_at) }}</span></div>
       </div>
     </section>
   </div>`,
@@ -244,14 +276,14 @@ export const TemplatesView = {
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">日型</span><h2>每一天都可以有自己的名字</h2></div><button class="soft-button" @click="$root.newDayType"><ui-icon name="plus" :size="14" /> 自定义日型</button></div>
       <div class="day-type-grid"><article v-for="entry in $root.data.day_types" class="day-type-card" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
-        <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ entry.builtin ? '内置日型' : entry.id }}</small>
+        <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ entry.builtin ? '内置日型' : '自定义日型' }}</small>
         <button class="text-button" @click="$root.editDayType(entry)">编辑</button><button v-if="!entry.builtin" class="text-button muted" @click="$root.deleteDayType(entry)">删除</button>
       </article></div>
     </section>
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">外观与头像</span><h2>让界面也拥有生活感</h2></div></div>
       <div class="theme-grid"><button v-for="theme in $root.themeTemplates" class="theme-card" :class="{active: $root.data.config.appearance.theme === theme.id}" @click="$root.setTheme(theme)">
-        <span class="theme-preview" :data-theme-name="theme.id" :style="theme.art ? {backgroundImage: 'linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url(' + $root.assetUrl('themes/' + theme.art + '.webp') + ')'} : {}"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
+        <span class="theme-preview" :data-theme-name="theme.id" :style="(theme.art || theme.customArt) ? {backgroundImage: 'linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url(' + $root.themeArt(theme) + ')'} : {}"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
       <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
       <div class="avatar-editor"><div><h3>全屏生活背景</h3><p>上传后会覆盖主题插画，手机和桌面均以全屏裁切适配；随时可恢复主题背景。</p><div class="data-actions"><label class="soft-button upload-button">上传背景<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBackground"></label><button class="soft-button" @click="$root.clearBackground">恢复主题背景</button></div></div></div>

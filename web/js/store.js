@@ -115,6 +115,33 @@ export const fmt = {
   runStatus(value) {
     return ({ prepared: '已准备', queued: '已排队', running: '执行中', responded: '已回应', finalized: '已归档', skipped_probability: '概率跳过', failed: '失败', interrupted: '已中断' })[value] || value
   },
+  field(value) {
+    return ({
+      title: '标题', intent: '意图', instruction: '执行说明', schedule: '时间', interaction: '互动方式',
+      target: '目标会话', execution_probability: '执行概率', state: '状态', category: '分类',
+      planned_appearance: '预计服装', planned_mood: '预计心情', overview: '整体概述',
+      day_type_id: '日型', start: '开始', end: '结束', at: '时刻', type: '时间类型',
+      current_appearance: '当前服装', current_mood: '当前心情', current_location: '当前位置',
+      current_activity: '当前活动', current_note: '当前备注', blocks: '日程分组', items: '小项',
+      scheduled_at: '计划时间', created_at: '创建时间', updated_at: '更新时间', plan_id: '所属计划', block_id: '所属分组',
+    })[value] || '计划内容'
+  },
+  humanValue(field, value) {
+    if (value == null || value === '') return '未设置'
+    if (typeof value === 'boolean') return value ? '开启' : '关闭'
+    if (field === 'state') return this.state(value)
+    if (field === 'interaction') return this.interaction(value)
+    if (field === 'execution_probability') return `${Math.round(Number(value) * 100)}%`
+    if (field === 'type') return ({ exact: '精确时间', window: '时间窗' })[value] || '时间设置'
+    if (field === 'schedule' && typeof value === 'object') {
+      if (value.type === 'window') return `${value.start}—${value.end}`
+      return value.at || '时间待定'
+    }
+    if (field.endsWith('_at') && Number(value)) return this.date(value)
+    if (Array.isArray(value)) return value.length ? `${value.length} 项设置` : '无'
+    if (typeof value === 'object') return '已调整'
+    return String(value)
+  },
   countdown(value, serverTime) {
     if (!value) return ''
     const seconds = Math.max(0, Math.round(value - serverTime))

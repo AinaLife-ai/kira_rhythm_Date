@@ -63,4 +63,7 @@ export const themeTemplates = [
   { id: 'crimson_night', name: '真红 · 深蓝', description: '深蓝午夜与赤色轨迹', color: '#ca5b88', mode: 'dark', art: 'crimson', tone: 'night' },
   { id: 'crimson_ember', name: '真红 · 余烬', description: '城市余烬与琥珀晚照', color: '#e89b59', mode: 'dark', art: 'crimson', tone: 'ember' },
   { id: 'kira_mist', name: '雾紫手账', description: '柔雾纸张与安静微光', color: '#9b8cff', mode: 'dark', art: '', tone: 'mist' },
+  { id: 'city_night', name: '海特洛 · 雨夜', description: '青色异象穿过霓虹高架与雨巷', color: '#ff3d7f', mode: 'dark', art: '', customArt: 'scenes/night.webp', pixel: 'lacrimosa', tone: 'city' },
+  { id: 'city_dusk', name: '海特洛 · 晚照', description: '雨后晚霞压在轻轨与旧楼上', color: '#ff7a59', mode: 'dark', art: '', customArt: 'scenes/dusk.webp', pixel: 'crimson', tone: 'ember' },
+  { id: 'city_day', name: '海特洛 · 白昼', description: '玻璃塔楼与树影之间的清醒日常', color: '#48d8d1', mode: 'dark', art: '', customArt: 'scenes/day.webp', pixel: 'mint', tone: 'day' },
 ]

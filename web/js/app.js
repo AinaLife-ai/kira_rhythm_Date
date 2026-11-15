@@ -69,6 +69,41 @@ const app = Vue.createApp({
       if (current && !options.some(([id]) => id === current)) options.push([current, `当前自定义 · ${current}`])
       return options
     },
+    configuredHour() {
+      const date = new Date(this.clockNow * 1000)
+      const timezone = this.data.config?.timezone
+      if (!timezone || timezone === 'system') return date.getHours()
+      try { return Number(new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hourCycle: 'h23' }).format(date)) % 24 }
+      catch (_) { return date.getHours() }
+    },
+    localClock() {
+      const date = new Date(this.clockNow * 1000)
+      const timezone = this.data.config?.timezone
+      try { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone && timezone !== 'system' ? timezone : undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date) }
+      catch (_) { return fmt.time(this.clockNow) }
+    },
+    timePhase() {
+      const hour = this.configuredHour
+      if (hour >= 5 && hour < 8) return 'dawn'
+      if (hour >= 8 && hour < 16) return 'day'
+      if (hour >= 16 && hour < 19) return 'dusk'
+      return 'night'
+    },
+    phaseLabel() {
+      return ({ dawn: '黎明 · 05:00—08:00', day: '白昼 · 08:00—16:00', dusk: '黄昏 · 16:00—19:00', night: '深夜 · 19:00—05:00' })[this.timePhase]
+    },
+    sceneBackground() {
+      const scene = ({ dawn: 'dusk', day: 'day', dusk: 'dusk', night: 'night' })[this.timePhase]
+      return `linear-gradient(90deg, rgba(5,8,14,.78) 0%, rgba(5,8,14,.28) 50%, rgba(5,8,14,.5) 100%), url("${this.assetUrl(`scenes/${scene}.webp`)}")`
+    },
+    eventState() {
+      if (this.nextItem && this.nextItem.scheduled_at - this.clockNow <= 900) return 'imminent'
+      if ((this.data.plan?.blocks || []).some((block) => (block.items || []).some((item) => item.state === 'running'))) return 'live'
+      return 'quiet'
+    },
+    eventLabel() {
+      return ({ imminent: '异象临近', live: '事件执行中', quiet: '城市信号稳定' })[this.eventState]
+    },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]
@@ -88,6 +123,9 @@ const app = Vue.createApp({
     nextItem() {
       const items = (this.data.plan?.blocks || []).flatMap((block) => block.items || [])
       return items.filter((item) => item.state === 'scheduled').sort((a, b) => a.scheduled_at - b.scheduled_at)[0] || null
+    },
+    upcomingItems() {
+      return (this.data.plan?.blocks || []).flatMap((block) => block.items || []).filter((item) => item.state === 'scheduled').sort((a, b) => a.scheduled_at - b.scheduled_at).slice(1, 4)
     },
     planStats() {
       const items = (this.data.plan?.blocks || []).flatMap((block) => block.items || [])
@@ -122,6 +160,7 @@ const app = Vue.createApp({
       return `${info.location || ''} ${temperature} ${info.status === 'stale' ? '· 缓存' : ''}`.trim()
     },
     weatherKind() {
+      if (!this.weatherInfo) return 'off'
       const text = this.weatherText
       if (/雪/.test(text)) return 'snow'
       if (/雨|雷/.test(text)) return 'rain'
@@ -168,8 +207,14 @@ const app = Vue.createApp({
       return cells
     },
   },
+  watch: {
+    timePhase: { immediate: true, handler(value) { document.documentElement.dataset.phase = value } },
+    weatherKind: { immediate: true, handler(value) { document.documentElement.dataset.weather = value } },
+    eventState: { immediate: true, handler(value) { document.documentElement.dataset.event = value } },
+  },
   methods: {
     assetUrl(path) { return window.__KRD_INLINE_ASSETS__?.[path] || `${assetBase}/${path}` },
+    themeArt(theme) { return this.assetUrl(theme?.customArt || `themes/${theme?.art || 'lacrimosa'}.webp`) },
     async setView(view) {
       state.view = view
       const epoch = ++this.viewEpoch
@@ -283,6 +328,10 @@ const app = Vue.createApp({
     async loadWeather(persona) {
       const weather = await get(`/weather/current?persona=${encodeURIComponent(persona)}`)
       if (persona === state.selectedPersona) this.data.weather = weather
+    },
+    itemTitle(id) {
+      const item = (this.data.plan?.blocks || []).flatMap((block) => block.items || []).find((entry) => entry.id === id)
+      return item?.title || '已移除的小项'
     },
     diffSummary(diff) {
       return (diff || []).slice(0, 3).map((entry) => `${entry.op === 'added' ? '新增' : entry.op === 'removed' ? '移除' : '调整'}「${entry.title}」`).join('；') || '保持原计划'
@@ -435,9 +484,9 @@ const app = Vue.createApp({
       document.documentElement.dataset.theme = theme.mode || 'dark'
       const root = document.documentElement.style
       const customBackground = this.data.background?.url
-      if (customBackground || theme.art) {
-        root.setProperty('--theme-art', `url("${customBackground || this.assetUrl(`themes/${theme.art}.webp`)}")`)
-        root.setProperty('--pixel-sprite', `url("${this.assetUrl(`pixels/${theme.art}.png`)}")`)
+      if (customBackground || theme.art || theme.customArt) {
+        root.setProperty('--theme-art', `url("${customBackground || this.themeArt(theme)}")`)
+        root.setProperty('--pixel-sprite', `url("${this.assetUrl(`pixels/${theme.pixel || theme.art}.png`)}")`)
       } else {
         root.removeProperty('--theme-art')
         root.removeProperty('--pixel-sprite')
@@ -540,6 +589,8 @@ const app = Vue.createApp({
         delete payload.per_persona
         await saveConfig(payload, this.settingsBaseRevision)
         this.prepareSettings()
+        this.applyAppearance()
+        this.loadWeather(state.selectedPersona).catch(() => {})
       } catch (_) { /* already notified */ }
     },
     async geocode() {

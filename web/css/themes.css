@@ -18,3 +18,7 @@
 [data-theme-name="mint_peach"][data-theme="light"] { --bg:#fff5ef;--bg-soft:#f8e9e1;--panel:rgba(255,253,250,.86);--panel-solid:#fffaf7;--accent:#e69d84;--accent-strong:#bf6d59;--accent-soft:rgba(230,157,132,.16);--line:rgba(122,70,59,.12);--text:#3c2925;--text-soft:#78605a; }
 [data-theme-name="crimson_night"] { --bg:#0a101c;--bg-soft:#121c2d;--panel:rgba(16,25,40,.82);--panel-solid:#172236;--accent:#d8668e;--accent-strong:#903a67;--accent-soft:rgba(194,79,122,.14);--text:#f9f5fb;--text-soft:#c3c4d4; }
 [data-theme-name="crimson_ember"] { --bg:#17100e;--bg-soft:#241915;--panel:rgba(34,23,19,.82);--panel-solid:#2b1d18;--accent:#eaa264;--accent-strong:#b55d3b;--accent-soft:rgba(226,142,84,.14);--text:#fff8f2;--text-soft:#d5c0b2; }
+
+[data-theme-name="city_night"] { --accent:#ff4f86; --accent-strong:#c92f62; --accent-soft:rgba(255,79,134,.14); --line:rgba(255,255,255,.14); }
+[data-theme-name="city_dusk"] { --accent:#ff835f; --accent-strong:#c55a3c; --accent-soft:rgba(255,131,95,.14); --line:rgba(255,255,255,.14); }
+[data-theme-name="city_day"] { --accent:#42d8d1; --accent-strong:#239d99; --accent-soft:rgba(66,216,209,.13); --line:rgba(255,255,255,.14); }
