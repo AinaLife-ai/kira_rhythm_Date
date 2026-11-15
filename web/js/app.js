@@ -420,8 +420,9 @@ const app = Vue.createApp({
       document.documentElement.dataset.themeName = theme.id
       document.documentElement.dataset.theme = theme.mode || 'dark'
       const root = document.documentElement.style
-      if (theme.art) {
-        root.setProperty('--theme-art', `url("${assetBase}/themes/${theme.art}.webp")`)
+      const customBackground = this.data.background?.url
+      if (customBackground || theme.art) {
+        root.setProperty('--theme-art', `url("${customBackground || `${assetBase}/themes/${theme.art}.webp`}")`)
         root.setProperty('--pixel-sprite', `url("${assetBase}/pixels/${theme.art}.png")`)
       } else {
         root.removeProperty('--theme-art')
@@ -449,6 +450,37 @@ const app = Vue.createApp({
         this.data.banner = asset
         notify('生活横幅已更新')
       } catch (error) { notify(error.message, 'error') } finally { event.target.value = '' }
+    },
+    async uploadBackground(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      try {
+        const asset = await upload(`/assets?persona=${encodeURIComponent(state.selectedPersona)}`, file)
+        this.data.background = asset
+        await saveConfig({ appearance: { background_asset_id: asset.id } })
+        this.applyAppearance()
+        notify('全屏生活背景已更新')
+      } catch (error) { notify(error.message, 'error') } finally { event.target.value = '' }
+    },
+    async clearBackground() {
+      try {
+        this.data.background = null
+        await saveConfig({ appearance: { background_asset_id: '' } })
+        this.applyAppearance()
+        notify('已恢复主题插画背景')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    resetPrompt(kind) {
+      const defaults = this.data.prompt_defaults || {}
+      if (kind === 'planning') this.draft.planning_prompt = defaults.planning_prompt
+      if (kind === 'execution') this.draft.execution_prompt = defaults.execution_prompt
+      if (kind === 'review') this.draft.planning_review.prompt = defaults.planning_review_prompt
+      notify('已恢复默认提示词，保存后生效')
+    },
+    resetAllPrompts() {
+      this.resetPrompt('planning')
+      this.resetPrompt('execution')
+      this.resetPrompt('review')
     },
     async setTheme(theme) {
       try {

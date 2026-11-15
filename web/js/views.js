@@ -106,7 +106,7 @@ export const TodayView = {
   template: `
   <div class="view-stack today-view">
     <section class="hero-card glass" :style="$root.heroStyle">
-      <div class="hero-aurora"></div>
+      <div class="hero-aurora"></div><div class="hero-hud"><span>KRD // {{ $root.data.persona_id }}</span><b>{{ $root.fmt.time($root.clockNow) }}</b><small>{{ $root.weatherText }}</small></div><span class="hero-rail"></span>
       <div class="hero-person">
         <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span></div>
         <div class="hero-copy">
@@ -130,7 +130,7 @@ export const TodayView = {
     </section>
 
     <section class="quick-grid">
-      <div class="next-card glass" v-if="$root.nextItem"><span class="pixel-runner" aria-hidden="true"></span>
+      <div class="next-card glass" v-if="$root.nextItem"><span class="pixel-runner" aria-hidden="true"></span><span class="pixel-platform" aria-hidden="true"></span>
         <span class="eyebrow">下一件生活小事</span>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
@@ -184,10 +184,9 @@ export const CalendarView = {
       <div class="month-grid">
         <button v-for="cell in $root.monthCells" :key="cell.key" class="day-cell" :class="{'other-month': !cell.current, 'is-today': cell.date === $root.data.date, 'is-selected': cell.date === $root.selectedDate, 'has-plan': cell.plan, 'is-holiday': cell.holiday?.is_off_day, 'is-workday': cell.holiday && !cell.holiday.is_off_day}"
           @click="$root.selectDate(cell.date)">
-          <span class="day-number">{{ cell.day }}</span>
-          <span v-if="cell.holiday" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span>
+          <span class="day-top"><span class="day-number">{{ cell.day }}</span><span v-if="cell.holiday" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span></span>
           <span class="lunar-label" :class="{festival: cell.lunar && cell.lunar !== '初一'}">{{ cell.lunar }}</span>
-          <small v-if="cell.plan">{{ cell.count }} 项</small>
+          <small v-if="cell.plan" class="plan-count">{{ cell.count }} 项</small>
         </button>
       </div>
       <div class="calendar-legend"><span><i class="legend-dot"></i> 有计划</span><span><i class="legend-ring"></i> 今天</span><button class="text-button" @click="$root.newPlanForDate()">为 {{ $root.selectedDate }} 安排 →</button></div>
@@ -255,6 +254,7 @@ export const TemplatesView = {
         <span class="theme-preview" :data-theme-name="theme.id" :style="theme.art ? {backgroundImage: 'linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url(' + $root.assetBase + '/themes/' + theme.art + '.webp)'} : {}"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
       <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
+      <div class="avatar-editor"><div><h3>全屏生活背景</h3><p>上传后会覆盖主题插画，手机和桌面均以全屏裁切适配；随时可恢复主题背景。</p><div class="data-actions"><label class="soft-button upload-button">上传背景<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBackground"></label><button class="soft-button" @click="$root.clearBackground">恢复主题背景</button></div></div></div>
       <div class="avatar-editor"><div><h3>生活横幅与强调色</h3><p>图片只保存在本机；颜色会立即应用到当前人格的界面。</p><div class="data-actions"><label class="soft-button upload-button">上传横幅<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBanner"></label><input type="color" v-model="$root.customAccent" style="width: 100px" @change="$root.applyCustomAccent"></div></div></div>
     </section>
   </div>`,
@@ -286,8 +286,8 @@ export const SettingsView = {
         </div>
         <label class="full-field"><span>历史模式</span><select v-model="$root.draft.history_mode"><option value="notice">notice · 系统短标记</option><option value="full">full · 额外保留模板</option><option value="none">none · 全非持久（空 user 边界）</option></select></label>
         <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">最后会话没有真实响应、已越权或适配器不可用时自动回退规划池。</small></label>
-        <label class="full-field"><span>完整规划提示词</span><textarea rows="7" v-model="$root.draft.planning_prompt"></textarea></label>
-        <label class="full-field"><span>小项执行提示词</span><textarea rows="6" v-model="$root.draft.execution_prompt"></textarea></label>
+        <label class="full-field"><span class="prompt-title">完整规划提示词<button class="text-button" @click="$root.resetPrompt('planning')">恢复默认</button></span><textarea rows="7" v-model="$root.draft.planning_prompt"></textarea></label>
+        <label class="full-field"><span class="prompt-title">小项执行提示词<button class="text-button" @click="$root.resetPrompt('execution')">恢复默认</button></span><textarea rows="6" v-model="$root.draft.execution_prompt"></textarea></label>
       </section>
       <section v-if="$root.settingsTab === 'time'" class="settings-section">
         <span class="eyebrow">时间与夜间</span><h2>执行、打扰与覆盖，分别决定</h2>
@@ -304,7 +304,7 @@ export const SettingsView = {
           <label class="switch-row"><span>计划中途检查提醒</span><input type="checkbox" v-model="$root.draft.planning_review.enabled"></label>
           <p class="field-hint">默认关闭。开启后向距离下一小项最近的会话提供完整计划与调整引导，不强制修改。</p>
           <div class="form-grid"><label><span>检查间隔（分钟）</span><input type="number" min="60" max="10080" v-model.number="$root.draft.planning_review.interval_minutes"></label><label><span>触发前最小余量（分钟）</span><input type="number" min="5" max="240" v-model.number="$root.draft.planning_review.min_lead_minutes"></label></div>
-          <label class="full-field"><span>检查提示词</span><textarea rows="5" v-model="$root.draft.planning_review.prompt"></textarea></label>
+          <label class="full-field"><span class="prompt-title">检查提示词<button class="text-button" @click="$root.resetPrompt('review')">恢复默认</button></span><textarea rows="5" v-model="$root.draft.planning_review.prompt"></textarea></label>
         </div>
       </section>
       <section v-if="$root.settingsTab === 'sessions'" class="settings-section">
@@ -333,7 +333,7 @@ export const SettingsView = {
         <div class="data-actions"><button class="soft-button" @click="$root.exportData">导出当前人格数据</button><label class="soft-button upload-button">导入备份<input type="file" accept="application/json" @change="$root.importData"></label><button class="soft-button" @click="$root.loadDiagnostics">刷新诊断</button></div>
         <pre v-if="$root.diagnostics" class="diagnostics">{{ JSON.stringify($root.diagnostics, null, 2) }}</pre>
       </section>
-      <div class="settings-save"><button class="primary" :disabled="$root.saving" @click="$root.saveSettings">{{ $root.saving ? '正在生效…' : '保存并热生效' }}</button><span>进行中的 Run 保留启动时规则，新规则用于后续认领。</span></div>
+      <div class="settings-save"><button class="soft-button" @click="$root.resetAllPrompts()">全部提示词恢复默认</button><button class="primary" :disabled="$root.saving" @click="$root.saveSettings">{{ $root.saving ? '正在生效…' : '保存并热生效' }}</button><span>进行中的 Run 保留启动时规则，新规则用于后续认领。</span></div>
     </div>
   </div>`,
 }

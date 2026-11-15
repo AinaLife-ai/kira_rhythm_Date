@@ -239,7 +239,8 @@ class ApiMixin:
                 raise KRDError("not_found", "Asset not found")
             config = await self.runtime.store.get_config(persona_id)
             used_by_plan = await self.runtime.store.one("SELECT id FROM blocks WHERE cover_asset_id=? LIMIT 1", (identifier,))
-            if config["appearance"].get("avatar_asset_id") == identifier or used_by_plan:
+            appearance = config["appearance"]
+            if identifier in {appearance.get("avatar_asset_id"), appearance.get("banner_asset_id"), appearance.get("background_asset_id")} or used_by_plan:
                 raise KRDError("asset_in_use", "Remove the avatar or block cover reference before deleting this image")
             await self.runtime.store.execute("DELETE FROM assets WHERE id=?", (identifier,))
             still_used = await self.runtime.store.one("SELECT 1 AS used FROM assets WHERE path=? LIMIT 1", (str(row["resolved_path"]),))

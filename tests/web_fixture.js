@@ -41,6 +41,7 @@ const data = {
   date: iso, calendar_today: { date: iso, lunar: { text: '二〇二六年十月初六' }, solar_term: '', solar_festivals: [], lunar_festivals: [], holiday: null, display: '初六', data_status: 'fresh' }, plan, day_state: { current_appearance: '雾蓝色针织衫', current_mood: '安静而期待', current_activity: '刚刚读完一章', current_note: '上午专注于喜欢的事，傍晚出去走一走。', revision: 2 },
   day_types: [{ id: 'weekday', name: '工作日', builtin: 1, rules: {}, config: { color: '#7c8cf8' } }, { id: 'weekend', name: '周末', builtin: 1, rules: {}, config: { color: '#ad7cf8' } }, { id: 'dream_day', name: '做梦的日子', builtin: 0, rules: {}, config: { color: '#77d6b3' } }],
   config, config_revision: 3, global_revision: 3,
+  prompt_defaults: { planning_prompt: config.planning_prompt, execution_prompt: config.execution_prompt, planning_review_prompt: config.planning_review.prompt },
   sessions: [{ sid: 'qq:dm:10001', title: '与爱奈的夜晚', adapter: 'qq' }, { sid: 'qq:gm:70001', title: '小小读书会', adapter: 'qq' }],
   planning_sessions: [{ sid: 'qq:dm:10001', title: '与爱奈的夜晚', adapter: 'qq' }],
   weather: { mode: 'real', real: { source: 'real', location: '上海', condition: '局部多云', temperature: 23.4, status: 'fresh' } },

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .assets import AssetService
+from .config import DEFAULT_CONFIG
 from .models import ACTIVE_ITEM_STATES, KRDError, TERMINAL_ITEM_STATES, new_id, now
 from .timeutils import parse_date
 from .store import dumps, loads
@@ -22,6 +23,12 @@ async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
         row = await runtime.store.one("SELECT * FROM assets WHERE persona_id=? AND id=?", (persona_id, banner_id))
         if row:
             banner = runtime.avatars.assets.public(row)
+    background = None
+    background_id = config["appearance"].get("background_asset_id")
+    if background_id:
+        row = await runtime.store.one("SELECT * FROM assets WHERE persona_id=? AND id=?", (persona_id, background_id))
+        if row:
+            background = runtime.avatars.assets.public(row)
     personas = []
     for persona in await runtime.ctx.persona_mgr.list_personas():
         personas.append({"id": persona.id, "name": persona.name or persona.id, "active": persona.id == active})
@@ -31,13 +38,18 @@ async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
         "plan": plan, "day_state": await runtime.plans.day_state(persona_id, day),
         "day_types": await runtime.store.list_day_types(persona_id),
         "config": config, "config_revision": await runtime.store.config_revision(persona_id),
+        "prompt_defaults": {
+            "planning_prompt": DEFAULT_CONFIG["planning_prompt"],
+            "execution_prompt": DEFAULT_CONFIG["execution_prompt"],
+            "planning_review_prompt": DEFAULT_CONFIG["planning_review"]["prompt"],
+        },
         "global_revision": await runtime.store.config_revision(""),
         "sessions": await runtime.policy.session_options(persona_id, "execution"),
         "planning_sessions": await runtime.policy.session_options(persona_id, "planning"),
         # Initial paint never waits for a remote weather provider. The frontend
         # starts the normal TTL-coalesced refresh after applying this snapshot.
         "weather": await runtime.weather.summary(persona_id, allow_network=False),
-        "avatar": await runtime.avatars.current(persona_id), "banner": banner,
+        "avatar": await runtime.avatars.current(persona_id), "banner": banner, "background": background,
         "scheduler": {"running": runtime.scheduler.running, "next_due": await runtime.scheduler.next_due()},
         "server_time": now(),
     }
