@@ -128,13 +128,19 @@ class Scheduler:
             "SELECT i.id,i.plan_id,i.scheduled_at,i.target,p.date,p.updated_at FROM items i JOIN plans p ON p.id=i.plan_id "
             "WHERE p.persona_id=? AND p.state='active' AND i.state='scheduled' AND i.scheduled_at>? "
             "ORDER BY i.scheduled_at LIMIT 1", (persona_id, timestamp))
-        if not row or row["scheduled_at"] - timestamp < review["min_lead_minutes"] * 60:
+        lead_seconds = review.get("min_lead_seconds")
+        if type(lead_seconds) is not int:
+            lead_seconds = review["min_lead_minutes"] * 60
+        if not row or row["scheduled_at"] - timestamp < lead_seconds:
             return None
         last = await self.store.one(
             "SELECT MAX(created_at) AS latest FROM planning_runs WHERE persona_id=? AND kind='review' AND target_date=?",
             (persona_id, row["date"]))
         base = max(float(row["updated_at"]), float(last["latest"] or 0))
-        scheduled_due = base + review["interval_minutes"] * 60
+        interval_seconds = review.get("interval_seconds")
+        if type(interval_seconds) is not int:
+            interval_seconds = review["interval_minutes"] * 60
+        scheduled_due = base + interval_seconds
         if scheduled_due >= row["scheduled_at"]:
             return None
         due = scheduled_due

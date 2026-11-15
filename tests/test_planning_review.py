@@ -100,3 +100,17 @@ async def test_due_review_defers_in_quiet_window(runtime):
     candidate = await runtime.scheduler._review_candidate("persona-a", config)
     assert candidate["due"] > time.time()
     assert await runtime.store.all("SELECT * FROM planning_runs WHERE kind='review'") == []
+
+@pytest.mark.asyncio
+async def test_review_interval_seconds_are_used(runtime):
+    await runtime.store.update_config("persona-a", {
+        "auto_plan": False,
+        "planning_review": {"enabled": True, "interval_seconds": 3600, "min_lead_seconds": 1800},
+    }, 0)
+    plan = await create_due_plan(runtime, count=1)
+    item = plan["blocks"][0]["items"][0]
+    await runtime.store.execute("UPDATE items SET scheduled_at=? WHERE id=?", (time.time() + 7200, item["id"]))
+    await runtime.store.execute("UPDATE plans SET updated_at=? WHERE id=?", (time.time() - 7200, plan["id"]))
+    await runtime.scheduler.dispatch_due()
+    rows = await runtime.store.all("SELECT * FROM planning_runs WHERE kind='review'")
+    assert len(rows) == 1

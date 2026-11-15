@@ -158,6 +158,9 @@ def validate_config(config: dict[str, Any]) -> None:
         raise KRDError("invalid_config", "planning_review.interval_minutes must be between 60 and 10080")
     if type(review.get("min_lead_minutes")) is not int or not 5 <= review["min_lead_minutes"] <= 240:
         raise KRDError("invalid_config", "planning_review.min_lead_minutes must be between 5 and 240")
+    for key, minimum, maximum in (("interval_seconds", 3600, 604800), ("min_lead_seconds", 300, 14400)):
+        if key in review and (type(review[key]) is not int or not minimum <= review[key] <= maximum):
+            raise KRDError("invalid_config", f"planning_review.{key} is outside its permitted range")
     if not isinstance(review.get("prompt"), str) or len(review["prompt"]) > 50000:
         raise KRDError("invalid_config", "planning_review.prompt must be a bounded string")
     for key in ("planning_prompt", "execution_prompt", "planning_time", "timezone"):

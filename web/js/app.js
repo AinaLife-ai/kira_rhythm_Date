@@ -5,6 +5,7 @@ import { planTemplates, themeTemplates } from './templates.js'
 import { PetCompanion } from './pet.js'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
@@ -658,6 +659,9 @@ const app = Vue.createApp({
     prepareSettings() {
       this.draft = clone(this.data.config || {})
       if (!themeTemplates.some((entry) => entry.id === this.draft.appearance?.theme)) this.draft.appearance.theme = 'random'
+      const review = (this.draft.planning_review ||= {})
+      if (typeOfSeconds(review.interval_seconds)) review.interval_seconds = Math.round(Number(review.interval_minutes) * 60)
+      if (typeOfSeconds(review.min_lead_seconds)) review.min_lead_seconds = Math.round(Number(review.min_lead_minutes) * 60)
       this.settingsBaseRevision = this.data.config_revision || 0
       this.allSessions = this.data.sessions || []
       this.diagnostics = null

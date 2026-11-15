@@ -338,7 +338,7 @@ export const SettingsView = {
         <div class="review-setting">
           <label class="switch-row"><span>计划中途检查提醒</span><input type="checkbox" v-model="$root.draft.planning_review.enabled"></label>
           <p class="field-hint">默认关闭。开启后向距离下一小项最近的会话提供完整计划与调整引导，不强制修改。</p>
-          <div class="form-grid"><label><span>检查间隔（分钟）</span><input type="number" min="60" max="10080" v-model.number="$root.draft.planning_review.interval_minutes"></label><label><span>触发前最小余量（分钟）</span><input type="number" min="5" max="240" v-model.number="$root.draft.planning_review.min_lead_minutes"></label></div>
+          <div class="form-grid"><label><span>检查间隔（秒）</span><input type="number" min="3600" max="604800" step="1" v-model.number="$root.draft.planning_review.interval_seconds"></label><label><span>触发前最小余量（秒）</span><input type="number" min="300" max="14400" step="1" v-model.number="$root.draft.planning_review.min_lead_seconds"></label></div>
           <label class="full-field"><span class="prompt-title">检查提示词<button class="text-button" @click="$root.resetPrompt('review')">恢复默认</button></span><textarea rows="5" v-model="$root.draft.planning_review.prompt"></textarea></label>
         </div>
       </section>
