@@ -1,5 +1,6 @@
 const VOICE = {
   tomato: {
+    drink: ['番茄汁也不错', '先喝一口'],
     idle: ['番茄，最好了。', '今天也不想动……'],
     look: ['那边红红的，是番茄吗？', '城市好吵，但还可以。'],
     stretch: ['伸个懒腰，番茄不会掉。', '骨头在响。'],
@@ -21,6 +22,7 @@ const VOICE = {
     default: ['番茄在这里。', '……嗯。'],
   },
   mint: {
+    drink: ['气泡水在冒泡', '这杯很清凉'],
     idle: ['今天也精神满满。', '尾巴自己动了。'],
     look: ['海风的方向在那边。', '那家店在卖什么？'],
     stretch: ['喵——伸展开。', '尾巴也要伸。'],
@@ -42,6 +44,7 @@ const VOICE = {
     default: ['薄荷在这里。', '喵。'],
   },
   garnet: {
+    drink: ['咖啡不加糖', '喝一口再继续'],
     idle: ['风有点大。', '别站太近。'],
     look: ['云压得很低。', '那边有人。'],
     stretch: ['肩膀有点僵。', '活动一下。'],
@@ -63,6 +66,7 @@ const VOICE = {
     default: ['我在。', '有事说。'],
   },
   xun: {
+    drink: ['茶要趁热', '先润润嗓子'],
     idle: ['店面今天照常营业。', '茶还热着。'],
     look: ['这条街，我熟。', '灯笼亮得早。'],
     stretch: ['年纪大了，要活动。', '肩颈。'],
@@ -84,6 +88,7 @@ const VOICE = {
     default: ['客人，慢慢看。', '我在店里。'],
   },
   hathor: {
+    drink: ['咖啡，提神', '补给完成'],
     idle: ['今天也照常配送。', '路线确认。'],
     look: ['目标在那边。', '城市的路我熟。'],
     stretch: ['翅膀有点僵。', '活动一下。'],
@@ -116,7 +121,7 @@ const VOICE_TAILS = {
 }
 
 const ACTIONS = {
-  idle: '发呆', walk: '散步', read: '看书', eat: '吃点东西', phone: '看手机',
+  idle: '发呆', walk: '散步', read: '看书', eat: '吃点东西', drink: '喝点东西', phone: '看手机',
   work: '专注', music: '听歌', sleep: '打盹', umbrella: '撑伞', scarf: '围巾',
   run: '赶路', happy: '开心', stretch: '伸懒腰', dance: '跳舞', look: '看风景',
   held: '被拿起', thrown: '被丢起来', land: '落地', dizzy: '晕乎乎',
@@ -170,17 +175,19 @@ export const PetCompanion = {
   computed: {
     petStyle() { return { left: this.x + '%', '--pet-lift': this.lift + 'px' } },
     currentSprite() {
-      if (this.action === 'sleep') return this.poses.sleep || this.sprite
-      if (['read'].includes(this.action)) return this.poses.sit || this.sprite
-      if (['phone'].includes(this.action)) return this.poses.phone || this.sprite
-      return this.poses.idle || this.sprite
+      if (this.action === 'sleep') return this.poses.sleep || this.poses.idle
+      if (this.action === 'read') return this.poses.read || this.poses.sit || this.poses.idle
+      if (this.action === 'eat') return this.poses.eat || this.poses.sit || this.poses.idle
+      if (this.action === 'drink') return this.poses.drink || this.poses.sit || this.poses.idle
+      if (this.action === 'phone') return this.poses.phone || this.poses.idle
+      return this.poses.idle
     },
     label() { return ACTIONS[this.action] || '发呆' },
     isUmbrella() { return this.action === 'umbrella' },
     isScarf() { return this.action === 'scarf' },
     isBook() { return this.action === 'read' },
     isPhone() { return this.action === 'phone' },
-    isCup() { return this.action === 'eat' },
+    isCup() { return false },
     isWork() { return this.action === 'work' },
     isMusic() { return this.action === 'music' },
     isSleep() { return this.action === 'sleep' },
@@ -241,8 +248,9 @@ export const PetCompanion = {
       const text = `${item.title || ''} ${item.intent || ''} ${this.activity || ''}`
       if (/睡|梦|午休|休息/.test(text)) return 'sleep'
       if (/书|阅读|读|学习|复习/.test(text)) return 'read'
-      if (/咖啡|吃|餐|食|甜点|喝/.test(text)) return 'eat'
-      if (/工作|专注|写|整理|开会|做事/.test(text)) return 'work'
+      if (/喝|饮|咖啡|茶|奶茶|苏打|果汁/.test(text)) return 'drink'
+      if (/吃|餐|食|甜点|饭|面条|拉面|意面|面食|泡面|披萨|三明治|能量棒/.test(text)) return 'eat'
+      if (/工作|专注|写|整理|开会|做事|查资料|资料|代码|编程|研究|开发|项目|排查|修复/.test(text)) return 'work'
       if (/音乐|听歌|耳机/.test(text)) return 'music'
       if (/散步|出门|走|逛/.test(text)) return 'look'
       return ''
@@ -341,6 +349,7 @@ export const PetCompanion = {
     },
     pat() {
       if (this.dragging || this.suppressClick) return
+      this.panel = false
       this.stopWalking()
       this.showLabel(false)
       this.showCare()
@@ -355,6 +364,11 @@ export const PetCompanion = {
       this.stopWalking()
       this.fullness = Math.min(100, this.fullness + 10)
       this.setAction('eat', this.speechFor('eat'))
+      this.panel = false
+    },
+    giveDrink() {
+      this.stopWalking()
+      this.setAction('drink', this.speechFor('drink'))
       this.panel = false
     },
     talk() {
@@ -408,12 +422,12 @@ export const PetCompanion = {
           this.suppressClick = true
           this.actionLockUntil = Date.now() + 2400
           this.setAction('thrown', this.speechFor('thrown'))
-          setTimeout(() => { this.lift = 10 + Math.random() * 34; this.setAction('land', this.speechFor('land')); this.mood = Math.min(100, this.mood + 1) }, 420)
+          setTimeout(() => { this.lift = 70 + Math.random() * 180; this.setAction('land', this.speechFor('land')); this.mood = Math.min(100, this.mood + 1) }, 420)
           setTimeout(() => { this.setAction('dizzy', this.speechFor('dizzy')) }, 820)
           setTimeout(() => { if (this.action === 'dizzy') this.action = 'idle' }, 2100)
         } else if (this.moved || heldLong) {
           this.suppressClick = true
-          this.lift = this.lift > 6 ? 8 + Math.random() * 20 : 0
+          this.lift = this.lift > 6 ? 50 + Math.random() * 120 : 0
           this.setAction('land', this.speechFor('land'))
           setTimeout(() => { if (this.action === 'land') this.action = 'idle' }, 900)
         } else {
@@ -456,7 +470,7 @@ export const PetCompanion = {
         <strong>{{ statusLine }}</strong>
         <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己散步和打盹。</p>
         <div class="pet-meters"><label>饱腹 <i><b :style="{width:fullness+'%'}"></b></i></label><label>心情 <i><b :style="{width:mood+'%'}"></b></i></label></div>
-        <div class="pet-buttons"><button @click="pat">摸摸</button><button @click="feed">投喂</button><button @click="talk">聊天</button><button @click="rest">休息</button></div>
+        <div class="pet-buttons"><button @click="pat">摸摸</button><button @click="feed">投喂</button><button @click="giveDrink">饮品</button><button @click="talk">聊天</button><button @click="rest">休息</button></div>
       </div>
     </transition>
   </div>`,

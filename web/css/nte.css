@@ -979,3 +979,12 @@ body { background:#08090c; }
 .pet-action-sleep .pet-sprite { max-width:180px; max-height:120px; }
 .pet-action-sleep .pet-hit { left:-90px; width:180px; }
 .pet-action-read .pet-sprite { max-width:150px; max-height:170px; }
+
+.pet-buttons { grid-template-columns:repeat(5,1fr); }
+.pet-action-read .pet-figure,.pet-action-eat .pet-figure,.pet-action-drink .pet-figure { width:180px; height:190px; }
+.pet-action-read .pet-sprite,.pet-action-eat .pet-sprite,.pet-action-drink .pet-sprite { max-width:180px; max-height:190px; }
+
+.pet-action-read .pet-figure,.pet-action-eat .pet-figure,.pet-action-drink .pet-figure { width:150px; height:145px; }
+.pet-action-read .pet-sprite,.pet-action-eat .pet-sprite,.pet-action-drink .pet-sprite { max-width:150px; max-height:145px; }
+.pet-action-sleep .pet-figure { width:160px; height:120px; }
+.pet-action-sleep .pet-sprite { max-width:160px; max-height:100px; }

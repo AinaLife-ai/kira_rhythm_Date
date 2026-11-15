@@ -54,7 +54,7 @@ def main(root: Path):
     for theme in themes:
         assert (root / "assets" / "themes" / f"{theme}.webp").is_file(), theme
     for pet in ("tomato", "mint", "garnet", "xun", "hathor"):
-        for pose in ("idle", "sit", "sleep", "phone"):
+        for pose in ("idle", "sit", "read", "eat", "drink", "sleep", "phone"):
             assert (root / "assets" / "pets" / f"{pet}_{pose}.webp").is_file(), f"{pet}_{pose}"
     assert "planning_review" in (root / "krd" / "config.py").read_text()
     required_bindings = {"settingsTab", "selectedDate", "selectedPlan", "dayStateEditor", "dayTypeEditor", "runs"}
