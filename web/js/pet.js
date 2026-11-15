@@ -1,39 +1,118 @@
 const VOICE = {
   tomato: {
-    read: ['这一页，番茄想再看一遍。', '书里也会写到番茄吗？'],
-    idle: ['番茄，最好了。', '今天也慢慢来。'],
-    sleep: ['番茄城堡……先睡一下。', '别把番茄酱拿走。'],
-    pat: ['摸头可以，番茄要留着。', '再一下下。'],
-    umbrella: ['伞够大，站进来一点。'],
+    idle: ['番茄，最好了。', '今天也不想动……'],
+    look: ['那边红红的，是番茄吗？', '城市好吵，但还可以。'],
+    stretch: ['伸个懒腰，番茄不会掉。', '骨头在响。'],
+    dance: ['番茄也会跳舞吗？', '只跳一下。'],
+    phone: ['红红的图标，像番茄。', '消息好多，不想回。'],
+    sleep: ['番茄城堡……先睡一下。', '三分钟，再睡三分钟。'],
+    read: ['这一页有番茄的味道。', '读完就睡。'],
+    eat: ['番茄酱是我的。', '这个可以蘸番茄吗？'],
+    work: ['好麻烦……但会做完。', '别催，我在想。'],
+    music: ['耳机里的歌很轻。', '番茄也在听。'],
+    umbrella: ['伞往我这边一点。', '雨会把番茄打湿。'],
+    scarf: ['围巾像番茄酱的颜色。', '暖和。'],
+    run: ['要出发了吗？', '番茄跟上。'],
+    pat: ['摸头可以，番茄不能拿走。', '再摸一下也可以。'],
+    held: ['放我下来，番茄要掉了。', '我抓着你的袖子。'],
+    thrown: ['不要转圈。', '我会飞吗？'],
+    land: ['番茄安全着陆。', '脚先落地。'],
+    dizzy: ['番茄在晃。', '世界转得慢一点。'],
+    default: ['番茄在这里。', '……嗯。'],
   },
   mint: {
-    eat: ['这个甜甜的，你要不要？', '气泡在舌尖跳。'],
-    walk: ['海风把尾巴吹乱了。', '去前面看看。'],
+    idle: ['今天也精神满满。', '尾巴自己动了。'],
+    look: ['海风的方向在那边。', '那家店在卖什么？'],
+    stretch: ['喵——伸展开。', '尾巴也要伸。'],
+    dance: ['这个节拍不错。', '跟着跳两下。'],
+    phone: ['有人发了新消息。', '这张图好可爱。'],
     sleep: ['尾巴借你当抱枕。', '睡一小会儿。'],
-    pat: ['耳朵、耳朵不能一直摸。', '喵……再摸一下。'],
-    idle: ['今天也要精神一点。'],
+    read: ['这本讲海边的故事。', '看完就去散步。'],
+    eat: ['苏打气泡在跳。', '这个甜甜的。'],
+    work: ['先把这件事做好。', '做完就去玩。'],
+    music: ['耳机分你一只。', '这个歌单很适合海边。'],
+    umbrella: ['雨落在伞上，好好听。', '靠近一点。'],
+    scarf: ['围巾毛茸茸的。', '尾巴也想围。'],
+    run: ['要追上去吗？', '我跑得很快。'],
+    pat: ['耳朵不能一直摸……', '再摸一下。'],
+    held: ['我的尾巴！', '轻一点。'],
+    thrown: ['好高。', '我会不会飞起来？'],
+    land: ['稳稳落地。', '猫是这样落地的。'],
+    dizzy: ['世界在打转。', '尾巴找不到方向了。'],
+    default: ['薄荷在这里。', '喵。'],
   },
   garnet: {
-    work: ['先把手头这件事做完。', '专注一会儿。'],
-    phone: ['等一下，我回个消息。', '看到一个有意思的东西。'],
-    sleep: ['别吵，我闭目养神。', '夜里安静。'],
-    pat: ['……只准一下。', '手拿开，我要工作了。'],
-    idle: ['风有点大。'],
+    idle: ['风有点大。', '别站太近。'],
+    look: ['云压得很低。', '那边有人。'],
+    stretch: ['肩膀有点僵。', '活动一下。'],
+    dance: ['不跳。', '……只一下。'],
+    phone: ['等我回个消息。', '看到一点有用的。'],
+    sleep: ['闭目养神。', '别吵。'],
+    read: ['这页写得还行。', '再翻一页。'],
+    eat: ['先吃饭。', '别浪费。'],
+    work: ['先把事情做完。', '专注一会儿。'],
+    music: ['这首歌可以。', '音量小一点。'],
+    umbrella: ['雨比预想的大。', '伞够用。'],
+    scarf: ['风很冷。', '围巾正好。'],
+    run: ['我先过去。', '别掉队。'],
+    pat: ['只准一下。', '手拿开。'],
+    held: ['放我下来。', '别拎衣领。'],
+    thrown: ['别扔。', '我鞋跟很高。'],
+    land: ['落地了。', '下次别这样。'],
+    dizzy: ['……有点晕。', '站稳。'],
+    default: ['我在。', '有事说。'],
   },
   xun: {
-    eat: ['坐下来，先吃点热的。', '汤要趁热。'],
-    umbrella: ['雨太大，站进来。', '伞往你那边一点。'],
-    read: ['这一页，讲的是旧城。', '陪我坐一会儿。'],
+    idle: ['店面今天照常营业。', '茶还热着。'],
+    look: ['这条街，我熟。', '灯笼亮得早。'],
+    stretch: ['年纪大了，要活动。', '肩颈。'],
+    dance: ['年轻时倒是常跳。', '看心情。'],
+    phone: ['客人来消息了。', '等我回一下。'],
+    sleep: ['打烊前小睡。', '别把客人吵醒。'],
+    read: ['旧账本，翻一翻。', '这页记着旧城。'],
+    eat: ['坐下，先吃点热的。', '汤要趁热。'],
+    work: ['今天账还没对。', '做完就收摊。'],
+    music: ['留声机还能转。', '这首听过。'],
+    umbrella: ['雨大，站进来。', '红伞够两个人。'],
+    scarf: ['夜里凉。', '披上。'],
+    run: ['要出门？', '伞带上。'],
     pat: ['老板娘可不是随便摸的。', '……下不为例。'],
-    idle: ['店面今天也照常营业。'],
+    held: ['放我下来。', '衣服会皱。'],
+    thrown: ['别闹。', '这把伞会掉。'],
+    land: ['站稳了。', '毛手毛脚。'],
+    dizzy: ['老了，经不起转。', '缓一缓。'],
+    default: ['客人，慢慢看。', '我在店里。'],
   },
   hathor: {
+    idle: ['今天也照常配送。', '路线确认。'],
+    look: ['目标在那边。', '城市的路我熟。'],
+    stretch: ['翅膀有点僵。', '活动一下。'],
+    dance: ['不跳，影响配送。', '……节拍还行。'],
+    phone: ['新单。', '等我确认地址。'],
+    sleep: ['闭眼十分钟。', '别超时。'],
+    read: ['配送条例。', '这页有必要看。'],
+    eat: ['先补充能量。', '咖啡就好。'],
+    work: ['按路线执行。', '目标出现。'],
+    music: ['头盔里放点歌。', '这首适合夜路。'],
+    umbrella: ['雨会影响能见度。', '伞给你。'],
+    scarf: ['夜风很冷。', '围巾不影响行动。'],
     run: ['目标出现，开始行动。', '我先过去，你跟上。'],
-    work: ['配送路线确认。', '按计划执行。'],
-    phone: ['接到一个新单。', '等我回个消息。'],
-    pat: ['翅膀不可以乱碰。', '只准碰一下。'],
-    idle: ['今晚的风很适合出发。'],
+    pat: ['翅膀不可以乱碰。', '只准一下。'],
+    held: ['放我下来，还有单。', '别抓翅膀。'],
+    thrown: ['这不安全。', '我在赶时间。'],
+    land: ['落地稳定。', '下次别扔。'],
+    dizzy: ['路线在转。', '重新校准。'],
+    default: ['天使，随时出发。', '收到。'],
   },
+}
+
+
+const VOICE_TAILS = {
+  tomato: ['番茄记住了', '番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '番茄在这里', '今天慢慢来'],
+  mint: ['尾巴说好', '海风刚好', '猫耳朵听见了', '气泡还在跳', '今天也精神满满', '再来一次'],
+  garnet: ['风有点大', '就这样', '我在听', '别靠太近', '这件事记下了', '稳住'],
+  xun: ['茶还热着', '店里照常', '慢慢来', '我记下了', '雨还没停', '客人先请'],
+  hathor: ['路线确认', '收到', '时间刚好', '目标不变', '注意安全', '我在赶路'],
 }
 
 const ACTIONS = {
@@ -217,14 +296,14 @@ export const PetCompanion = {
       if (changed) { this.showLabel(true); if (text) this.setSpeech(text) }
     },
     speechFor(action) {
-      const lines = VOICE[this.variant]?.[action]
-      if (lines?.length) return lines[Math.floor(Math.random() * lines.length)]
-      return ({
-        read: '这一页刚好看到喜欢的地方。', eat: '先认真吃一点东西。', work: '我先安静陪你一会儿。',
-        walk: '去窗边走走，顺便看看天气。', phone: '刚好看到一张很想给你看的图。',
-        music: '耳机分你一只。', sleep: '我眯一小会儿，有事叫我。', idle: '我在。',
-        look: '今天的城市看起来有点不一样。', stretch: '伸个懒腰，再继续。', dance: '心情不错，跳两下。',
-      })[action] || '我在。'
+      const base = VOICE[this.variant]?.[action] || VOICE[this.variant]?.default || ['我在']
+      const tails = VOICE_TAILS[this.variant] || []
+      const variants = [...base]
+      for (let i = 0; i < Math.min(6, tails.length); i += 1) {
+        variants.push(`${base[i % base.length].replace(/[。！？]$/, '')}，${tails[i]}`)
+      }
+      const line = variants[Math.floor(Math.random() * variants.length)]
+      return line.replace(/。$/, '')
     },
     stopWalking() {
       clearTimeout(this.walkTimer)
@@ -280,17 +359,17 @@ export const PetCompanion = {
     feed() {
       this.stopWalking()
       this.fullness = Math.min(100, this.fullness + 10)
-      this.setAction('eat', '谢谢，我会好好吃完的。')
+      this.setAction('eat', this.speechFor('eat'))
       this.panel = false
     },
     talk() {
       this.stopWalking()
-      this.setAction('phone', '你说，我在听。')
+      this.setAction('phone', this.speechFor('phone'))
       this.panel = false
     },
     rest() {
       this.stopWalking()
-      this.setAction('sleep', '好，我靠着你休息一会儿。')
+      this.setAction('sleep', this.speechFor('sleep'))
       this.panel = false
     },
     startDrag(event) {
@@ -308,7 +387,7 @@ export const PetCompanion = {
       this.holdTimer = setTimeout(() => {
         if (!this.moved) {
           this.dragging = true
-          this.setAction('held', '哇，放我下来。')
+          this.setAction('held', this.speechFor('held'))
         }
       }, 220)
       const move = (e) => {
@@ -320,7 +399,7 @@ export const PetCompanion = {
         this.x = Math.max(7, Math.min(94, this.dragOrigin + dx / rect.width * 100))
         this.lift = Math.max(0, Math.min(300, this.dragLift - dy))
         this.facing = dx > 0 ? 1 : -1
-        if (this.lift > 8) this.setAction('held', '我会抓紧你的。')
+        if (this.lift > 8) this.setAction('held', this.speechFor('held'))
       }
       const up = () => {
         clearTimeout(this.holdTimer)
@@ -332,14 +411,14 @@ export const PetCompanion = {
         if (flew) {
           this.suppressClick = true
           this.actionLockUntil = Date.now() + 2400
-          this.setAction('thrown', '哇——我要飞起来了！')
-          setTimeout(() => { this.lift = 10 + Math.random() * 34; this.setAction('land', '安全着陆。'); this.mood = Math.min(100, this.mood + 1) }, 420)
-          setTimeout(() => { this.setAction('dizzy', '世界还在转……') }, 820)
+          this.setAction('thrown', this.speechFor('thrown'))
+          setTimeout(() => { this.lift = 10 + Math.random() * 34; this.setAction('land', this.speechFor('land')); this.mood = Math.min(100, this.mood + 1) }, 420)
+          setTimeout(() => { this.setAction('dizzy', this.speechFor('dizzy')) }, 820)
           setTimeout(() => { if (this.action === 'dizzy') this.action = 'idle' }, 2100)
         } else if (this.moved || heldLong) {
           this.suppressClick = true
           this.lift = this.lift > 6 ? 8 + Math.random() * 20 : 0
-          this.setAction('land', '放我下来啦。')
+          this.setAction('land', this.speechFor('land'))
           setTimeout(() => { if (this.action === 'land') this.action = 'idle' }, 900)
         } else {
           this.lift = 0

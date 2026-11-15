@@ -62,7 +62,7 @@ export const themeTemplates = [
   { id: 'xun_street', name: '老板娘 · 雨市', description: '红伞、灯笼和湿润的夜街', color: '#ff4f6d', mode: 'dark', art: 'xun_street', character: 'xun', tone: 'city' },
   { id: 'xun_diner', name: '老板娘 · 深夜食堂', description: '收伞坐下，热汤和深夜的暖光', color: '#ffc06a', mode: 'dark', art: 'xun_diner', character: 'xun', tone: 'ember' },
   { id: 'xun_rooftop', name: '老板娘 · 天台', description: '紫蓝暮色里，红伞撑开一小片安静', color: '#b38bff', mode: 'dark', art: 'xun_rooftop', character: 'xun', tone: 'dusk' },
-  { id: 'hathor_garage', name: '哈索尔 · 夜行', description: '地下车库，机车与白色机械翼', color: '#58e1d1', mode: 'dark', art: 'hathor_garage', character: 'hathor', tone: 'garage' },
-  { id: 'hathor_roof', name: '哈索尔 · 天台巡航', description: '雨夜天台，蹲在边缘观察城市', color: '#64b8ff', mode: 'dark', art: 'hathor_roof', character: 'hathor', tone: 'sky' },
-  { id: 'hathor_store', name: '哈索尔 · 便利店', description: '玻璃便利店外，一罐热咖啡', color: '#7bffd1', mode: 'dark', art: 'hathor_store', character: 'hathor', tone: 'store' },
+  { id: 'hathor_garage', name: '天使 · 夜行', description: '地下车库，机车与白色机械翼', color: '#58e1d1', mode: 'dark', art: 'hathor_garage', character: 'hathor', tone: 'garage' },
+  { id: 'hathor_roof', name: '天使 · 天台巡航', description: '雨夜天台，蹲在边缘观察城市', color: '#64b8ff', mode: 'dark', art: 'hathor_roof', character: 'hathor', tone: 'sky' },
+  { id: 'hathor_store', name: '天使 · 便利店', description: '玻璃便利店外，一罐热咖啡', color: '#7bffd1', mode: 'dark', art: 'hathor_store', character: 'hathor', tone: 'store' },
 ]
