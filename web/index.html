@@ -83,7 +83,7 @@
         <span class="phone-home-indicator" aria-hidden="true"></span>
       </aside>
 
-      <pet-companion :variant="petVariant" :sprite="petSprite" :actions="petActions" :next-item="nextItem" :weather="weatherKind" :phase="timePhase" :event="eventState" :activity="data.day_state?.current_activity" :large="state.view === 'today'"></pet-companion>
+      <pet-companion :variant="petVariant" :poses="petPoses" :next-item="nextItem" :weather="weatherKind" :phase="timePhase" :event="eventState" :activity="data.day_state?.current_activity" :large="state.view === 'today'"></pet-companion>
       <div class="phone-side-key key-power" aria-hidden="true"></div>
       <div class="phone-side-key key-volume" aria-hidden="true"></div>
     </div>

@@ -971,3 +971,11 @@ body { background:#08090c; }
 .pet-action-walk,.pet-action-run { transition:transform .36s cubic-bezier(.2,.8,.2,1) !important; }
 .pet-sprite { transform-origin:center bottom; }
 .pet-facing-left .pet-sprite { transform:scaleX(-1); }
+.pet-hit { left:-80px; width:160px; height:162px; }
+.pet-figure { width:160px; height:150px; display:flex; align-items:flex-end; justify-content:center; }
+.pet-sprite { position:relative; inset:auto; display:block; width:auto; height:auto; max-width:160px; max-height:150px; object-fit:contain; background:none !important; transform-origin:center bottom; }
+.pet-action-sleep .pet-sprite { background:none !important; }
+.pet-action-sleep .pet-figure { width:180px; }
+.pet-action-sleep .pet-sprite { max-width:180px; max-height:120px; }
+.pet-action-sleep .pet-hit { left:-90px; width:180px; }
+.pet-action-read .pet-sprite { max-width:150px; max-height:170px; }

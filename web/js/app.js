@@ -121,8 +121,10 @@ const app = Vue.createApp({
       return themeTemplates.find((entry) => entry.id === id) || themeTemplates[0]
     },
     petVariant() { return this.activeTheme?.character || 'tomato' },
-    petSprite() { return this.assetUrl(`pets/${this.activeTheme?.character || 'tomato'}_walk.webp`) },
-    petActions() { return this.assetUrl(`pets/${this.activeTheme?.character || 'tomato'}_actions.webp`) },
+    petPoses() {
+      const char = this.activeTheme?.character || 'tomato'
+      return { idle: this.assetUrl(`pets/${char}_idle.webp`), sit: this.assetUrl(`pets/${char}_sit.webp`), sleep: this.assetUrl(`pets/${char}_sleep.webp`), phone: this.assetUrl(`pets/${char}_phone.webp`) }
+    },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]

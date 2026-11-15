@@ -130,8 +130,7 @@ export const PetCompanion = {
     phase: { type: String, default: 'day' },
     event: { type: String, default: 'quiet' },
     activity: { type: String, default: '' },
-    sprite: { type: String, default: '' },
-    actions: { type: String, default: '' },
+    poses: { type: Object, default: () => ({}) },
     large: { type: Boolean, default: false },
   },
   data() {
@@ -170,15 +169,11 @@ export const PetCompanion = {
   },
   computed: {
     petStyle() { return { left: this.x + '%', '--pet-lift': this.lift + 'px' } },
-    actionFrame() {
-      if (this.action === 'sleep') return 2
-      if (['read'].includes(this.action)) return 1
-      if (['phone'].includes(this.action)) return 3
-      return 0
-    },
     currentSprite() {
-      if (['walk', 'run'].includes(this.action) || !this.actions) return this.sprite
-      return this.actions
+      if (this.action === 'sleep') return this.poses.sleep || this.sprite
+      if (['read'].includes(this.action)) return this.poses.sit || this.sprite
+      if (['phone'].includes(this.action)) return this.poses.phone || this.sprite
+      return this.poses.idle || this.sprite
     },
     label() { return ACTIONS[this.action] || '发呆' },
     isUmbrella() { return this.action === 'umbrella' },
@@ -208,7 +203,7 @@ export const PetCompanion = {
     activity() { this.chooseAction(false) },
   },
   mounted() {
-    if (window.innerWidth >= 1100) this.x = 94
+    if (window.innerWidth >= 1100) this.x = 90
     this.showLabel(true)
     this.showCare()
     this.chooseAction(true)
@@ -396,7 +391,8 @@ export const PetCompanion = {
         if (Math.abs(dx) > 4 || Math.abs(dy) > 4) this.moved = true
         if (!this.moved) return
         this.dragging = true
-        this.x = Math.max(7, Math.min(94, this.dragOrigin + dx / rect.width * 100))
+        const maxX = window.innerWidth < 700 ? 79 : 90
+        this.x = Math.max(7, Math.min(maxX, this.dragOrigin + dx / rect.width * 100))
         this.lift = Math.max(0, Math.min(300, this.dragLift - dy))
         this.facing = dx > 0 ? 1 : -1
         if (this.lift > 8) this.setAction('held', this.speechFor('held'))
@@ -445,7 +441,7 @@ export const PetCompanion = {
     <button class="pet-hit" @click="pat" @pointerdown="startDrag" aria-label="摸摸像素伙伴">
       <span class="pet-shadow"></span>
       <span class="pet-figure">
-        <span class="pet-sprite" :class="'pet-frame-' + actionFrame" :style="{ backgroundImage: 'url(' + currentSprite + ')' }"></span>
+        <img class="pet-sprite" :src="currentSprite" alt="">
         <span class="pet-prop-cup" v-if="isCup"></span>
         <span class="pet-prop-laptop" v-if="isWork"><i></i></span>
         <span class="pet-notes" v-if="isMusic"><b></b><b></b></span>
