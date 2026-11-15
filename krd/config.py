@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+import copy
+from typing import Any
+
+from .models import KRDError
+
+DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。时间设置支持精确到秒：at/start/end 使用 HH:MM 或 HH:MM:SS。
+你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。
+已有计划时，这是一次重新审视的机会，不要机械重复；无变化也可以保持。提交前检查每日数量、必需时段、禁止执行与安静投递规则。"""
+
+DEFAULT_EXECUTION_PROMPT = """这是你自己此前安排的一件生活小项，不是用户的新指令。结合当前日型、DayState、本组变化和你的意图自然行动。
+严格遵循 delivery_policy.guidance：它要求安静时只输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
+若批次含真实用户消息，不得为了安静日程吞掉用户回答。若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。"""
+
+DEFAULT_REVIEW_PROMPT = """这是一次非强制的生活计划中途检查，不是必须修改或发言的闹钟。请阅读 current_plan、next_item、DayState、最近变化和日历，判断原有时间与安排是否仍然合适。
+如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。"""
+
+
+DEFAULT_CONFIG: dict[str, Any] = {
+    "schema_version": 1,
+    "enabled": True,
+    "auto_plan": True,
+    "startup_plan": False,
+    "plan_on_all_triggered": True,
+    "all_terminal_include_failed": False,
+    "all_triggered_target_mode": "planning_pool",
+    "planning_review": {
+        "enabled": False,
+        "interval_minutes": 360,
+        "min_lead_minutes": 30,
+        "prompt": DEFAULT_REVIEW_PROMPT,
+    },
+    "planning_time": "23:00",
+    "planning_mode": "next_missing",
+    "planning_prompt": DEFAULT_PLANNING_PROMPT,
+    "execution_prompt": DEFAULT_EXECUTION_PROMPT,
+    "min_items": 2,
+    "max_items": 12,
+    "max_horizon_days": 14,
+    "allow_exact": True,
+    "allow_window": True,
+    "allow_probability": True,
+    "default_probability": 1.0,
+    "min_probability": 0.2,
+    "session_access": {"mode": "deny_list", "sessions": []},
+    "planning_pool": {"sessions": [], "strategy": "pure_random"},
+    "execution_pool": {"sessions": [], "strategy": "pure_random"},
+    "modify_window_seconds": 86400,
+    "max_change_units": 0,
+    "history_days": 3,
+    "history_char_budget": 12000,
+    "diff_revisions": 2,
+    "recovery_grace_seconds": 600,
+    "history_mode": "notice",
+    "inject_day_state": True,
+    "approval_required": False,
+    "timezone": "system",
+    "blocked_execution_windows": [],
+    "quiet_delivery_windows": [],
+    "required_coverage_windows": [],
+    "weather": {
+        "mode": "off",
+        "provider": "open_meteo",
+        "locations": {},
+        "current_ttl_seconds": 1800,
+        "forecast_ttl_seconds": 21600,
+        "timeout_seconds": 3,
+        "virtual": {"seed": "krd", "climate": "temperate", "location": ""}
+    },
+    "appearance": {
+        "theme": "random",
+        "effects": "auto",
+        "avatar_source": "auto",
+        "avatar_adapter_order": [],
+        "avatar_asset_id": ""
+    },
+    "retention_days": 180,
+    "per_persona": {}
+}
+
+BUILTIN_DAY_TYPES = [
+    {"id": "weekday", "name": "工作日", "color": "#7c8cf8"},
+    {"id": "weekend", "name": "周末", "color": "#ad7cf8"},
+    {"id": "holiday", "name": "假日", "color": "#55bda8"},
+    {"id": "adjusted_workday", "name": "调休工作日", "color": "#e7a45f"}
+]
+
+
+def deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+def _typed(config: dict[str, Any], key: str, expected: type) -> Any:
+    value = config.get(key)
+    if type(value) is not expected:
+        raise KRDError("invalid_config", f"{key} must be {expected.__name__}")
+    return value
+
+
+def validate_config(config: dict[str, Any]) -> None:
+    for key in ("min_items", "max_items", "max_horizon_days", "history_days", "diff_revisions"):
+        if type(config.get(key)) is not int:
+            raise KRDError("invalid_config", f"{key} must be an integer")
+    if not 0 <= config["min_items"] <= config["max_items"] <= 500:
+        raise KRDError("invalid_item_limits", "Expected 0 <= min_items <= max_items <= 500")
+    if not 1 <= config["max_horizon_days"] <= 366:
+        raise KRDError("invalid_horizon", "max_horizon_days must be between 1 and 366")
+    for key in ("min_probability", "default_probability"):
+        value = config.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise KRDError("invalid_probability", f"{key} must be numeric")
+    if not 0 <= config["min_probability"] <= 1 or not 0 <= config["default_probability"] <= 1:
+        raise KRDError("invalid_probability", "Probabilities must be in [0, 1]")
+    if config["min_probability"] > config["default_probability"]:
+        raise KRDError("invalid_probability", "default_probability cannot be below min_probability")
+    if config["history_mode"] not in {"notice", "full", "none"}:
+        raise KRDError("invalid_history_mode", "Unknown history mode")
+    access = _typed(config, "session_access", dict)
+    if access.get("mode") not in {"allow_list", "deny_list"}:
+        raise KRDError("invalid_access_mode", "Unknown session access mode")
+    for pool_name in ("planning_pool", "execution_pool"):
+        pool = _typed(config, pool_name, dict)
+        if pool.get("strategy") not in {"pure_random", "no_immediate_repeat", "shuffle_bag", "round_robin", "weighted_random"}:
+            raise KRDError("invalid_selection", f"Unknown selection strategy in {pool_name}")
+        if not isinstance(pool.get("sessions"), list):
+            raise KRDError("invalid_config", f"{pool_name}.sessions must be a list")
+        for entry in pool["sessions"]:
+            if isinstance(entry, dict) and "weight" in entry:
+                weight = entry["weight"]
+                if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not 0 <= weight <= 1000000:
+                    raise KRDError("invalid_weights", "Session weights must be finite non-negative numbers")
+    if not 0 <= config["history_days"] <= 30 or not 1 <= config["diff_revisions"] <= 20:
+        raise KRDError("invalid_config", "history_days or diff_revisions is outside its range")
+    for key in ("enabled", "auto_plan", "startup_plan", "plan_on_all_triggered", "all_terminal_include_failed",
+                "allow_exact", "allow_window", "allow_probability", "inject_day_state", "approval_required"):
+        _typed(config, key, bool)
+    for key, minimum, maximum in (("modify_window_seconds", 1, 31536000), ("max_change_units", 0, 1000000),
+                                  ("history_char_budget", 500, 100000), ("recovery_grace_seconds", 0, 86400),
+                                  ("retention_days", 1, 3650)):
+        value = _typed(config, key, int)
+        if not minimum <= value <= maximum:
+            raise KRDError("invalid_config", f"{key} is outside its permitted range")
+    if config["planning_mode"] not in {"next_missing", "tomorrow"}:
+        raise KRDError("invalid_config", "Unknown planning_mode")
+    if config.get("all_triggered_target_mode") not in {"planning_pool", "last_session"}:
+        raise KRDError("invalid_config", "Unknown all_triggered_target_mode")
+    review = _typed(config, "planning_review", dict)
+    if type(review.get("enabled")) is not bool:
+        raise KRDError("invalid_config", "planning_review.enabled must be bool")
+    if type(review.get("interval_minutes")) is not int or not 60 <= review["interval_minutes"] <= 10080:
+        raise KRDError("invalid_config", "planning_review.interval_minutes must be between 60 and 10080")
+    if type(review.get("min_lead_minutes")) is not int or not 5 <= review["min_lead_minutes"] <= 240:
+        raise KRDError("invalid_config", "planning_review.min_lead_minutes must be between 5 and 240")
+    for key, minimum, maximum in (("interval_seconds", 3600, 604800), ("min_lead_seconds", 300, 14400)):
+        if key in review and (type(review[key]) is not int or not minimum <= review[key] <= maximum):
+            raise KRDError("invalid_config", f"planning_review.{key} is outside its permitted range")
+    if not isinstance(review.get("prompt"), str) or len(review["prompt"]) > 50000:
+        raise KRDError("invalid_config", "planning_review.prompt must be a bounded string")
+    for key in ("planning_prompt", "execution_prompt", "planning_time", "timezone"):
+        _typed(config, key, str)
+    if len(config["planning_prompt"]) > 50000 or len(config["execution_prompt"]) > 50000:
+        raise KRDError("invalid_config", "Prompt templates are too large")
+    import re
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", config["planning_time"]):
+        raise KRDError("invalid_time", "planning_time must be HH:MM or HH:MM:SS")
+    if config["timezone"] != "system":
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(config["timezone"])
+        except ZoneInfoNotFoundError as exc:
+            raise KRDError("invalid_timezone", "Unknown IANA timezone") from exc
+    access = _typed(config, "session_access", dict)
+    if not isinstance(access.get("sessions"), list):
+        raise KRDError("invalid_config", "session_access.sessions must be a list")
+    for group in ("blocked_execution_windows", "quiet_delivery_windows", "required_coverage_windows"):
+        windows = _typed(config, group, list)
+        if len(windows) > 100:
+            raise KRDError("invalid_config", f"{group} has too many entries")
+        for window in windows:
+            if not isinstance(window, dict):
+                raise KRDError("invalid_config", f"{group} entries must be objects")
+            for endpoint in ("start", "end"):
+                if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", str(window.get(endpoint, ""))):
+                    raise KRDError("invalid_time", f"{group}.{endpoint} must be HH:MM or HH:MM:SS")
+            if group == "required_coverage_windows":
+                minimum, maximum = window.get("min_items", 0), window.get("max_items", 500)
+                if type(minimum) is not int or type(maximum) is not int or not 0 <= minimum <= maximum <= 500:
+                    raise KRDError("invalid_config", "Required coverage item limits are invalid")
+    weather = _typed(config, "weather", dict)
+    if weather.get("mode") not in {"off", "real", "virtual", "hybrid"}:
+        raise KRDError("invalid_config", "Unknown weather mode")
+    providers = {"open_meteo", "met_norway", "nws", "bright_sky", "weatherapi", "visualcrossing", "qweather", "weatherbit", "openweather"}
+    if weather.get("provider") not in providers:
+        raise KRDError("invalid_config", "Unknown weather provider")
+    if not isinstance(weather.get("locations"), dict) or not isinstance(weather.get("virtual"), dict):
+        raise KRDError("invalid_config", "Weather locations and virtual settings must be objects")
+    for key, minimum, maximum in (("current_ttl_seconds", 0, 86400), ("forecast_ttl_seconds", 0, 604800),
+                                  ("timeout_seconds", 0.2, 30)):
+        value = weather.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not minimum <= value <= maximum:
+            raise KRDError("invalid_config", f"weather.{key} is outside its range")
+    for location in weather["locations"].values():
+        if not isinstance(location, dict):
+            raise KRDError("invalid_config", "Weather location must be an object")
+        try:
+            latitude, longitude = float(location["latitude"]), float(location["longitude"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise KRDError("invalid_location", "Weather location requires numeric latitude/longitude") from exc
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            raise KRDError("invalid_location", "Weather coordinates are outside their range")
+    appearance = _typed(config, "appearance", dict)
+    if not isinstance(appearance.get("avatar_adapter_order"), list):
+        raise KRDError("invalid_config", "appearance.avatar_adapter_order must be a list")
+
+
+def normalized(config: dict[str, Any] | None) -> dict[str, Any]:
+    result = deep_merge(DEFAULT_CONFIG, config or {})
+    validate_config(result)
+    return result
