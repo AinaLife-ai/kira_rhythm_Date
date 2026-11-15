@@ -284,7 +284,7 @@ export const TemplatesView = {
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">外观与头像</span><h2>让界面也拥有生活感</h2></div></div>
       <div class="theme-grid"><button v-for="theme in $root.themeTemplates" class="theme-card" :class="{active: ($root.data.config.appearance.theme === 'random' ? theme.random : $root.data.config.appearance.theme === theme.id)}" @click="$root.setTheme(theme)">
-        <span class="theme-preview" :data-theme-name="theme.id" :style="theme.random ? {backgroundImage: 'radial-gradient(circle at 30% 25%, #ff3f6e 0, transparent 32%), radial-gradient(circle at 70% 70%, #45d9cf 0, transparent 34%), linear-gradient(135deg,#171427,#0a0d16)'} : ((theme.art || theme.customArt) ? {backgroundImage: 'linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url(' + $root.themeArt(theme) + ')'} : {})><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
+        <span class="theme-preview" :data-theme-name="theme.id" :style="$root.themePreviewStyle(theme)"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
       <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
       <div class="avatar-editor"><div><h3>全屏生活背景</h3><p>上传后会覆盖主题插画，手机和桌面均以全屏裁切适配；随时可恢复主题背景。</p><div class="data-actions"><label class="soft-button upload-button">上传背景<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBackground"></label><button class="soft-button" @click="$root.clearBackground">恢复主题背景</button></div></div></div>
@@ -295,7 +295,7 @@ export const TemplatesView = {
 
 export const SettingsView = {
   template: `
-  <div class="settings-layout glass">
+  <div class="settings-layout glass" v-if="$root.draft">
     <aside class="settings-tabs"><button v-for="tab in [['general','规划与数量'],['time','时间与夜间'],['sessions','会话权限'],['weather','天气与地点'],['data','数据与诊断']]" :class="{active: $root.settingsTab === tab[0]}" @click="$root.settingsTab = tab[0]">{{ tab[1] }}</button></aside>
     <div class="settings-content">
       <section v-if="$root.settingsTab === 'general'" class="settings-section">

@@ -279,6 +279,11 @@ const app = Vue.createApp({
       }
     },
     assetUrl(path) { return window.__KRD_INLINE_ASSETS__?.[path] || `${assetBase}/${path}` },
+    themePreviewStyle(theme) {
+      if (theme?.random) return { backgroundImage: 'radial-gradient(circle at 30% 25%, #ff3f6e 0, transparent 32%), radial-gradient(circle at 70% 70%, #45d9cf 0, transparent 34%), linear-gradient(135deg,#171427,#0a0d16)' }
+      if (theme?.art || theme?.customArt) return { backgroundImage: `linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url("${this.themeArt(theme)}")` }
+      return {}
+    },
     themeArt(theme) { return this.assetUrl(theme?.customArt || `themes/${theme?.art || 'tomato_rain'}.webp`) },
     async setView(view) {
       state.view = view
@@ -757,5 +762,6 @@ const app = Vue.createApp({
 import { del as requestDelete } from './api.js'
 
 app.component('UiIcon', UiIcon)
+app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
 const mounted = app.mount('#app')
 if (location.search.includes('debug')) window.__krdApp = mounted
