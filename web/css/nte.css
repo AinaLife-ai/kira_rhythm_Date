@@ -988,3 +988,8 @@ body { background:#08090c; }
 .pet-action-read .pet-sprite,.pet-action-eat .pet-sprite,.pet-action-drink .pet-sprite { max-width:150px; max-height:145px; }
 .pet-action-sleep .pet-figure { width:160px; height:120px; }
 .pet-action-sleep .pet-sprite { max-width:160px; max-height:100px; }
+
+.refresh-button .ui-icon { animation:refresh-spin 12s linear infinite; opacity:.9; }
+.refresh-button.refreshing .ui-icon { animation-duration:.75s; }
+.refresh-button.refreshing { border-color:var(--accent); color:var(--accent); }
+@keyframes refresh-spin { to { transform:rotate(360deg); } }

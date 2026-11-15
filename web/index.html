@@ -49,7 +49,7 @@
             <div class="event-chip" :class="'event-' + eventState"><i></i>{{ eventLabel }}</div>
             <div class="weather-chip"><ui-icon :name="weatherKind" :size="15"></ui-icon><span>{{ weatherText }}</span><b v-if="weatherInfo?.temperature != null">{{ weatherInfo.temperature }}°</b></div>
             <label class="persona-select"><span class="persona-dot"></span><select v-model="state.selectedPersona" @change="selectPersona" aria-label="选择人格"><option v-for="persona in data.personas" :value="persona.id">{{ persona.name }}{{ persona.active ? ' · 当前' : '' }}</option></select></label>
-            <button class="icon-button" title="刷新" @click="refresh()"><ui-icon name="refresh" :size="16"></ui-icon></button>
+            <button class="icon-button refresh-button" :class="{ refreshing: refreshing }" :title="refreshing ? '正在刷新' : '实时连接中，点击立即刷新'" :aria-busy="refreshing" @click="refresh()"><ui-icon name="refresh" :size="16"></ui-icon></button>
           </div>
         </div>
       </header>

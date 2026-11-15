@@ -244,7 +244,7 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
-    this.wanderTimer = setInterval(() => this.wander(), 18000)
+    this.wanderTimer = setInterval(() => this.wander(), 12000)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
@@ -357,7 +357,7 @@ export const PetCompanion = {
     wander() {
       if (this.dragging || this.walking || this.lift > 0 || this.panel) return
       if (this.event !== 'quiet' || this.weather === 'rain' || this.weather === 'snow') return
-      if (!['idle', 'look', 'phone'].includes(this.action)) return
+      if (!['idle', 'look', 'phone', 'read', 'eat', 'drink'].includes(this.action)) return
       this.startWalking(this.nextWalkTarget())
     },
     startWalking(target) {

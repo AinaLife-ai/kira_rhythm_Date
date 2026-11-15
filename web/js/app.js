@@ -43,6 +43,8 @@ const app = Vue.createApp({
       weatherResult: '',
       diagnostics: null,
       liveTimer: null,
+      refreshing: false,
+      refreshQueued: false,
       monthAnchor: '',
       customTemplates: [],
       customAccent: '',
@@ -288,6 +290,9 @@ const app = Vue.createApp({
       }
     },
     async refresh({ persona = state.selectedPersona, reset = false, entry = true } = {}) {
+      if (this.refreshing) { this.refreshQueued = true; return }
+      this.refreshing = true
+      try {
       const epoch = ++this.refreshEpoch
       const data = await loadBootstrap(persona, { reset })
       if (!data || epoch !== this.refreshEpoch || !data.ready) return
@@ -312,6 +317,13 @@ const app = Vue.createApp({
         // Deliberately after first paint: remote refresh must not hold bootstrap.
         this.refreshAvatar(data.persona_id).catch(() => {})
         this.loadWeather(data.persona_id).catch(() => {})
+      }
+      } finally {
+        this.refreshing = false
+        if (this.refreshQueued) {
+          this.refreshQueued = false
+          this.refresh({ persona: state.selectedPersona, reset: false, entry: false }).catch((error) => notify(error.message, 'error'))
+        }
       }
     },
     async selectPersona() {
