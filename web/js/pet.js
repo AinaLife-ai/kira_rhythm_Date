@@ -37,7 +37,7 @@ const VOICE = {
     dance: ['这个节拍不错。', '跟着跳两下。'],
     phone: ['有人发了新消息。', '这张图好可爱。'],
     sleep: ['尾巴借你当抱枕。', '睡一小会儿。'],
-    read: ['这本讲海边的故事。', '看完就去散步。'],
+    read: ['这本讲海边的故事。', '看完就伸个懒腰。'],
     eat: ['苏打气泡在跳。', '这个甜甜的。'],
     work: ['先把这件事做好。', '做完就去玩。'],
     music: ['耳机分你一只。', '这个歌单很适合海边。'],
@@ -133,15 +133,15 @@ const VOICE = {
 
 
 const VOICE_TAILS = {
-  tomato: ['番茄记住了', '番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '番茄在这里', '今天慢慢来'],
+  tomato: ['番茄看完了', '番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '番茄在这里', '今天慢慢来'],
   mint: ['尾巴说好', '海风刚好', '猫耳朵听见了', '气泡还在跳', '今天也精神满满', '再来一次'],
-  garnet: ['风有点大', '就这样', '我在听', '别靠太近', '这件事记下了', '稳住'],
-  xun: ['茶还热着', '店里照常', '慢慢来', '我记下了', '雨还没停', '客人先请'],
+  garnet: ['风有点大', '就这样', '我在听', '别靠太近', '这件事有意思', '稳住'],
+  xun: ['茶还热着', '店里照常', '慢慢来', '我听着呢', '雨还没停', '客人先请'],
   hathor: ['路线确认', '收到', '时间刚好', '目标不变', '注意安全', '我在赶路'],
 }
 
 const ACTIONS = {
-  idle: '发呆', walk: '散步', jump: '跳一下', read: '看书', eat: '吃点东西', drink: '喝点东西', phone: '看手机', crouch: '蹲一会儿',
+  idle: '发呆', jump: '运动中', read: '看书', eat: '吃点东西', drink: '喝点东西', phone: '看手机', crouch: '蹲一会儿',
   work: '专注', music: '听歌', sleep: '打盹', umbrella: '撑伞', scarf: '围巾',
   run: '赶路', happy: '开心', stretch: '伸懒腰', dance: '跳舞', look: '看风景',
   held: '被拿起', thrown: '被丢起来', land: '落地', dizzy: '晕乎乎',
@@ -171,16 +171,11 @@ export const PetCompanion = {
       mood: 88,
       idleTimer: null,
       speechTimer: null,
-      wanderTimer: null,
-      walkTimer: null,
-      walkFrameTimer: null,
-      walkFrame: 0,
-      walking: false,
-      walkMode: null,
       stickyAction: false,
       interactionLockUntil: 0,
-      walkFrame: 0,
-      walkAnimTimer: null,
+      jumpLeft: 0,
+      jumpTimer: null,
+      jumpSchedule: false,
       dragging: false,
       dragStart: 0,
       dragStartY: 0,
@@ -202,7 +197,6 @@ export const PetCompanion = {
   computed: {
     petStyle() { return { left: this.x + '%', '--pet-lift': this.lift + 'px' } },
     currentSprite() {
-      if (this.action === 'walk' || this.action === 'run') return this.poses.walk?.[this.walkFrame] || this.poses.idle
       if (this.action === 'sleep') return this.poses.sleep || this.poses.idle
       if (this.action === 'read') return this.poses.read || this.poses.sit || this.poses.idle
       if (this.action === 'eat') return this.poses.eat || this.poses.sit || this.poses.idle
@@ -247,15 +241,10 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
-    this.wanderTimer = setInterval(() => this.wander(), 10000)
-    this.initialWalkTimer = setTimeout(() => this.wander(), 4500)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
-    clearInterval(this.wanderTimer)
-    clearTimeout(this.initialWalkTimer)
-    clearTimeout(this.walkTimer)
-    clearInterval(this.walkFrameTimer)
+    clearTimeout(this.jumpTimer)
     clearTimeout(this.speechTimer)
     clearTimeout(this.labelTimer)
     clearTimeout(this.careTimer)
@@ -288,14 +277,13 @@ export const PetCompanion = {
       if (/吃|餐|食|甜点|饭|面条|拉面|意面|面食|泡面|披萨|三明治|能量棒/.test(text)) return 'eat'
       if (/工作|专注|写|整理|开会|做事|查资料|资料|代码|编程|研究|开发|项目|排查|修复/.test(text)) return 'work'
       if (/音乐|听歌|耳机/.test(text)) return 'music'
-      if (/散步|出门|走|逛/.test(text)) return 'walk'
+      if (/散步|出门|走|逛|运动|活动/.test(text)) return 'jump'
       return ''
     },
     chooseAction(force) {
       if (this.dragging || Date.now() < this.actionLockUntil) return
       if (this.stickyAction && !force) return
       if (!force && Date.now() < this.interactionLockUntil) return
-      if (this.walking && this.walkMode === 'random') this.stopWalking()
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
       if (this.event === 'imminent') {
@@ -316,7 +304,7 @@ export const PetCompanion = {
       }
       const keyword = this.keywordAction()
       if (keyword) {
-        if (keyword === 'walk') { this.startWalking(this.nextWalkTarget(), 'schedule'); return }
+        if (keyword === 'jump') { this.startJump('schedule'); return }
         this.setAction(keyword, this.speechFor(keyword), true)
         return
       }
@@ -325,17 +313,19 @@ export const PetCompanion = {
         return
       }
       const idle = this.pickIdle()
+      if (idle === 'jump') { this.startJump(); return }
       if (force) this.setAction(idle, this.speechFor(idle), false)
       else { this.action = idle; this.stickyAction = false }
     },
     pickIdle() {
-      const list = ['idle', 'look', 'stretch', 'dance', 'crouch', 'phone', 'sleep']
+      const list = ['idle', 'look', 'stretch', 'dance', 'crouch', 'phone', 'sleep', 'jump']
       return list[Math.floor(Math.random() * list.length)]
     },
     setAction(action, text, sticky = false) {
       const changed = this.action !== action
       this.action = action
       this.stickyAction = sticky
+      if (action !== 'jump') { clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0 }
       if (changed) { this.showLabel(true); if (text) this.setSpeech(text) }
     },
     speechFor(action) {
@@ -348,92 +338,35 @@ export const PetCompanion = {
       const line = variants[Math.floor(Math.random() * variants.length)]
       return line.replace(/。$/, '')
     },
-    stopWalking() {
-      clearInterval(this.walkAnimTimer)
-      this.walkAnimTimer = null
-      clearTimeout(this.walkTimer)
-      clearInterval(this.walkFrameTimer)
-      this.walkFrameTimer = null
-      this.walkTimer = null
-      this.walking = false
-      this.walkMode = null
-      this.stickyAction = false
-    },
-    nextWalkTarget() {
-      const min = window.innerWidth < 700 ? 12 : 8
-      const max = window.innerWidth < 700 ? 78 : 90
-      const distance = 10 + Math.random() * 22
-      let direction = Math.random() < 0.5 ? -1 : 1
-      let next = this.x + direction * distance
-      if (next < min || next > max) {
-        direction *= -1
-        next = this.x + direction * distance
-      }
-      return Math.max(min, Math.min(max, next))
-    },
-    wander() {
-      if (this.dragging || this.walking || this.lift > 0 || this.panel || this.stickyAction) return
-      if (Date.now() < this.interactionLockUntil) return
-      if (this.weather === 'rain' || this.weather === 'snow') return
-      if (!['idle', 'look', 'phone', 'read', 'eat', 'drink'].includes(this.action)) return
-      if (Math.random() < 0.22) this.startJump()
-      else this.startWalking(this.nextWalkTarget(), 'random')
-    },
-    startJump() {
-      if (this.dragging || this.walking || this.panel) return
-      this.stopWalking()
-      this.stickyAction = false
+    startJump(source = 'random') {
+      if (this.dragging || this.panel || this.action === 'jump') return
+      this.stickyAction = source === 'schedule'
+      this.jumpSchedule = source === 'schedule'
+      this.jumpLeft = 3 + Math.floor(Math.random() * 4)
       this.action = 'jump'
+      this.showLabel(false)
+      this.setSpeech(this.speechFor('jump'))
+      this.jumpHop()
+    },
+    jumpHop() {
+      if (this.action !== 'jump') return
       const min = window.innerWidth < 700 ? 12 : 8
       const max = window.innerWidth < 700 ? 78 : 90
       this.x = Math.max(min, Math.min(max, this.x + (Math.random() * 16 - 8)))
       this.lift = 35 + Math.random() * 90
-      this.showLabel(false)
-      this.setSpeech(this.speechFor('jump'))
-      setTimeout(() => { this.lift = 8 + Math.random() * 28; this.action = 'idle' }, 520)
-    },
-    startWalking(target, mode = 'random') {
-      const shell = this.$el.closest('.app-shell') || this.$el.parentElement
-      const width = Math.max(260, shell?.getBoundingClientRect().width || window.innerWidth)
-      this.stopWalking()
-      this.walkMode = mode
-      this.stickyAction = mode === 'schedule'
-      this.walking = true
-      this.lift = 0
-      this.facing = target > this.x ? 1 : -1
-      this.action = 'walk'
-      this.walkFrame = 0
-      this.walkFrameTimer = setInterval(() => { this.walkFrame = (this.walkFrame + 1) % 4 }, 180)
-      const step = () => {
-        if (!this.walking || this.dragging) { this.walking = false; this.walkTimer = null; return }
-        const diff = target - this.x
-        if (Math.abs(diff) < 0.35) {
-          this.x = target
-          this.walking = false
-          this.walkTimer = null
-          clearInterval(this.walkFrameTimer)
-          this.walkFrameTimer = null
-          if (mode === 'schedule') {
-            this.walking = false
-            setTimeout(() => { if (this.walkMode === 'schedule' && !this.dragging) this.startWalking(this.nextWalkTarget(), 'schedule') }, 300)
-          } else {
-            this.action = 'idle'
-            this.stickyAction = false
-          }
-          clearInterval(this.walkAnimTimer)
-          this.walkAnimTimer = null
-          return
-        }
-        const stepPct = (1.7 / width) * 100
-        this.x += Math.sign(diff) * Math.min(Math.abs(diff), stepPct)
-        this.walkTimer = setTimeout(step, 40)
-      }
-      step()
+      clearTimeout(this.jumpTimer)
+      this.jumpTimer = setTimeout(() => {
+        if (this.action !== 'jump') return
+        this.lift = 8 + Math.random() * 28
+        this.jumpLeft -= 1
+        if (this.jumpLeft > 0) this.jumpHop()
+        else { this.action = 'idle'; this.stickyAction = false; this.jumpSchedule = false }
+      }, 460)
     },
     pat() {
       if (this.dragging || this.suppressClick) return
+      clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
       this.panel = false
-      this.stopWalking()
       this.showLabel(false)
       this.showCare()
       this.hearts = 4
@@ -446,32 +379,28 @@ export const PetCompanion = {
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
     feed() {
-      this.stopWalking()
       this.fullness = Math.min(100, this.fullness + 10)
       this.setAction('eat', this.speechFor('eat'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     giveDrink() {
-      this.stopWalking()
       this.setAction('drink', this.speechFor('drink'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     talk() {
-      this.stopWalking()
       this.setAction('phone', this.speechFor('phone'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     rest() {
-      this.stopWalking()
       this.setAction('sleep', this.speechFor('sleep'), true)
       this.interactionLockUntil = 0
       this.panel = false
     },
     startDrag(event) {
-      this.stopWalking()
+      clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
       this.stickyAction = false
       this.interactionLockUntil = 0
       const shell = this.$el.closest('.app-shell') || this.$el.parentElement
@@ -560,7 +489,7 @@ export const PetCompanion = {
       <div v-if="panel" class="pet-panel">
         <div class="pet-panel-head"><span>陪伴模式 / PET</span><button @click="panel = false" aria-label="关闭">×</button></div>
         <strong>{{ statusLine }}</strong>
-        <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己散步和打盹。</p>
+        <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己跳一跳和打盹。</p>
         <div class="pet-meters"><label>饱腹 <i><b :style="{width:fullness+'%'}"></b></i></label><label>心情 <i><b :style="{width:mood+'%'}"></b></i></label></div>
         <div class="pet-buttons"><button @click="pat">摸摸</button><button @click="feed">投喂</button><button @click="giveDrink">饮品</button><button @click="talk">聊天</button><button @click="rest">休息</button></div>
       </div>

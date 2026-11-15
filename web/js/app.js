@@ -128,7 +128,7 @@ const app = Vue.createApp({
     petVariant() { return this.activeTheme?.character || 'tomato' },
     petPoses() {
       const char = this.activeTheme?.character || 'tomato'
-      return { idle: this.assetUrl(`pets/${char}_idle.webp`), sit: this.assetUrl(`pets/${char}_sit.webp`), read: this.assetUrl(`pets/${char}_read.webp`), eat: this.assetUrl(`pets/${char}_eat.webp`), drink: this.assetUrl(`pets/${char}_drink.webp`), sleep: this.assetUrl(`pets/${char}_sleep.webp`), phone: this.assetUrl(`pets/${char}_phone.webp`), look: this.assetUrl(`pets/${char}_look.webp`), stretch: this.assetUrl(`pets/${char}_stretch.webp`), dance: this.assetUrl(`pets/${char}_dance.webp`), crouch: this.assetUrl(`pets/${char}_crouch.webp`), walk: [0,1,2,3].map(i => this.assetUrl(`pets/${char}_walk${i}.webp`)) }
+      return { idle: this.assetUrl(`pets/${char}_idle.webp`), sit: this.assetUrl(`pets/${char}_sit.webp`), read: this.assetUrl(`pets/${char}_read.webp`), eat: this.assetUrl(`pets/${char}_eat.webp`), drink: this.assetUrl(`pets/${char}_drink.webp`), sleep: this.assetUrl(`pets/${char}_sleep.webp`), phone: this.assetUrl(`pets/${char}_phone.webp`), look: this.assetUrl(`pets/${char}_look.webp`), stretch: this.assetUrl(`pets/${char}_stretch.webp`), dance: this.assetUrl(`pets/${char}_dance.webp`), crouch: this.assetUrl(`pets/${char}_crouch.webp`) }
     },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
