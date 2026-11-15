@@ -59,6 +59,7 @@ const app = Vue.createApp({
       signalBars: 0,
       deviceCleanup: [],
       avatarNonce: 0,
+      avatarBroken: false,
       settingsBaseRevision: 0,
       refreshEpoch: 0,
       viewEpoch: 0,
@@ -90,7 +91,7 @@ const app = Vue.createApp({
     localClock() {
       const date = new Date(this.clockNow * 1000)
       const timezone = this.data.config?.timezone
-      try { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone && timezone !== 'system' ? timezone : undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date) }
+      try { return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone && timezone !== 'system' ? timezone : undefined, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date) }
       catch (_) { return fmt.time(this.clockNow) }
     },
     timePhase() {
@@ -165,7 +166,9 @@ const app = Vue.createApp({
       return banner ? { backgroundImage: `linear-gradient(90deg, var(--panel-solid) 0%, transparent 100%), url("${banner}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
     },
     avatarUrl() {
+      if (this.data.avatar?.source === 'builtin') return ''
       const url = this.data.avatar?.url || ''
+      if (!url) return ''
       if (!url.startsWith('/') || !this.avatarNonce) return url
       return `${url}${url.includes('?') ? '&' : '?'}entry=${this.avatarNonce}`
     },
@@ -235,6 +238,7 @@ const app = Vue.createApp({
     },
   },
   watch: {
+    avatarUrl() { this.avatarBroken = false },
     timePhase: { immediate: true, handler(value) { document.documentElement.dataset.phase = value } },
     weatherKind: { immediate: true, handler(value) { document.documentElement.dataset.weather = value } },
     eventState: { immediate: true, handler(value) { document.documentElement.dataset.event = value } },

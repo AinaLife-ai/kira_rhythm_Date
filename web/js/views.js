@@ -119,7 +119,7 @@ export const TodayView = {
         <p>{{ $root.data.day_state.current_note || $root.data.plan?.overview || '没有安排也很好，让今天自然发生。' }}</p>
       </div>
       <div class="scene-identity">
-        <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span><i></i></div>
+        <div class="avatar-wrap"><img v-if="$root.avatarUrl && !$root.avatarBroken" :src="$root.avatarUrl" alt="生活头像" @error="$root.avatarBroken = true"><span v-else class="avatar-placeholder" aria-label="未设置头像">?</span><span class="avatar-status"></span><i></i></div>
         <div><span class="identity-label">CURRENT PERSONA / 当前人格</span><strong>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '生活人格' }}</strong><small>{{ $root.data.day_state.current_location || '常驻城市 · 生活区' }}</small></div>
       </div>
       <div class="scene-status">
@@ -286,7 +286,7 @@ export const TemplatesView = {
       <div class="theme-grid"><button v-for="theme in $root.themeTemplates" class="theme-card" :class="{active: ($root.data.config.appearance.theme === 'random' ? theme.random : $root.data.config.appearance.theme === theme.id)}" @click="$root.setTheme(theme)">
         <span class="theme-preview" :data-theme-name="theme.id" :style="$root.themePreviewStyle(theme)"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
-      <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
+      <div class="avatar-editor"><img v-if="$root.avatarUrl && !$root.avatarBroken" :src="$root.avatarUrl" alt="当前头像" @error="$root.avatarBroken = true"><span v-else class="avatar-placeholder" aria-label="未设置头像">?</span><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
       <div class="avatar-editor"><div><h3>全屏生活背景</h3><p>上传后会覆盖主题插画，手机和桌面均以全屏裁切适配；随时可恢复主题背景。</p><div class="data-actions"><label class="soft-button upload-button">上传背景<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBackground"></label><button class="soft-button" @click="$root.clearBackground">恢复主题背景</button></div></div></div>
       <div class="avatar-editor"><div><h3>生活横幅与强调色</h3><p>图片只保存在本机；颜色会立即应用到当前人格的界面。</p><div class="data-actions"><label class="soft-button upload-button">上传横幅<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBanner"></label><input type="color" v-model="$root.customAccent" style="width: 100px" @change="$root.applyCustomAccent"></div></div></div>
     </section>

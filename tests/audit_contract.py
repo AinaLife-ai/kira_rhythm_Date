@@ -32,7 +32,12 @@ def main(root: Path):
     assert "pet-action-walk" not in frontend and "pet-action-walk" not in css
     assert "pixel-walk" not in css and "boot-walker" not in css
     assert "jump: '运动中'" in frontend
+    assert "avatar-placeholder" in (root / "web" / "js" / "views.js").read_text()
+    assert "pet-schedule" in (root / "web" / "js" / "pet.js").read_text()
+    assert "fullness" not in (root / "web" / "js" / "pet.js").read_text()
     app = (root / "web" / "js" / "app.js").read_text()
+    assert "second: '2-digit'" in app
+    assert "includeSeconds" in (root / "web" / "js" / "store.js").read_text()
     assert "MIN_REFRESH_SPIN_MS" in app
     assert not list((root / "assets" / "pets").glob("*_walk*.webp"))
     assert "eval(" not in frontend and "new Function" not in frontend

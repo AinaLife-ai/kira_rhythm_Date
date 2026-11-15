@@ -87,15 +87,16 @@ export async function saveConfig(patch, expectedRevision = state.data.config_rev
 }
 
 export const fmt = {
-  time(value, withSeconds = false) {
+  time(value, withSeconds = null) {
     if (!value) return '—'
     const date = new Date(Number(value) * 1000)
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', ...(withSeconds ? { second: '2-digit' } : {}) })
+    const includeSeconds = withSeconds === true || (withSeconds !== false && date.getSeconds() !== 0)
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', ...(includeSeconds ? { second: '2-digit' } : {}) })
   },
   date(value) {
     if (!value) return '—'
     const date = new Date(Number(value) * 1000)
-    return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...(date.getSeconds() !== 0 ? { second: '2-digit' } : {}) })
   },
   dateOnly(value) {
     if (!value) return '—'
@@ -144,7 +145,8 @@ export const fmt = {
   },
   countdown(value, serverTime) {
     if (!value) return ''
-    const seconds = Math.max(0, Math.round(value - serverTime))
+    const seconds = Math.round(value - serverTime)
+    if (seconds <= 0) return '已到时间'
     if (seconds < 60) return `${seconds} 秒后`
     if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟后`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分后`

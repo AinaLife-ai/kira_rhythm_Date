@@ -1,3 +1,5 @@
+import { fmt } from './store.js'
+
 const VOICE = {
   tomato: {
     rain: ['雨会把番茄打湿', '撑伞也不是不行'],
@@ -155,6 +157,8 @@ export const PetCompanion = {
     phase: { type: String, default: 'day' },
     event: { type: String, default: 'quiet' },
     activity: { type: String, default: '' },
+    plan: { type: Object, default: null },
+    now: { type: Number, default: () => Date.now() / 1000 },
     poses: { type: Object, default: () => ({}) },
     large: { type: Boolean, default: false },
   },
@@ -167,8 +171,6 @@ export const PetCompanion = {
       speechUntil: 0,
       panel: false,
       hearts: 0,
-      fullness: 76,
-      mood: 88,
       idleTimer: null,
       speechTimer: null,
       stickyAction: false,
@@ -220,6 +222,14 @@ export const PetCompanion = {
     petClass() {
       return `pet-${this.variant}`
     },
+    planItems() {
+      return (this.plan?.blocks || []).flatMap((block) => block.items || [])
+    },
+    planTotal() { return this.planItems.length },
+    planDone() { return this.planItems.filter((item) => ['triggered', 'triggered_silent'].includes(item.state)).length },
+    planProgress() { return this.planTotal ? Math.round(this.planDone / this.planTotal * 100) : 0 },
+    nextClock() { return this.nextItem ? fmt.time(this.nextItem.scheduled_at) : '—' },
+    nextIn() { return this.nextItem ? fmt.countdown(this.nextItem.scheduled_at, this.now) : '今天留白' },
     statusLine() {
       if (this.event === 'imminent') return '下一件事快到了'
       if (this.weather === 'rain') return '正在听雨'
@@ -370,7 +380,6 @@ export const PetCompanion = {
       this.showLabel(false)
       this.showCare()
       this.hearts = 4
-      this.mood = Math.min(100, this.mood + 2)
       this.action = 'happy'
       this.stickyAction = false
       this.interactionLockUntil = 0
@@ -379,7 +388,6 @@ export const PetCompanion = {
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
     feed() {
-      this.fullness = Math.min(100, this.fullness + 10)
       this.setAction('eat', this.speechFor('eat'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
@@ -442,7 +450,7 @@ export const PetCompanion = {
           this.suppressClick = true
           this.actionLockUntil = Date.now() + 2400
           this.setAction('thrown', this.speechFor('thrown'))
-          setTimeout(() => { this.lift = 70 + Math.random() * 180; this.setAction('land', this.speechFor('land')); this.mood = Math.min(100, this.mood + 1) }, 420)
+          setTimeout(() => { this.lift = 70 + Math.random() * 180; this.setAction('land', this.speechFor('land')) }, 420)
           setTimeout(() => { this.setAction('dizzy', this.speechFor('dizzy')) }, 820)
           setTimeout(() => { if (this.action === 'dizzy') this.action = 'idle' }, 2100)
         } else if (this.moved || heldLong) {
@@ -494,7 +502,13 @@ export const PetCompanion = {
         <div class="pet-panel-head"><span>陪伴模式 / PET</span><button @click="panel = false" aria-label="关闭">×</button></div>
         <strong>{{ statusLine }}</strong>
         <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己跳一跳和打盹。</p>
-        <div class="pet-meters"><label>饱腹 <i><b :style="{width:fullness+'%'}"></b></i></label><label>心情 <i><b :style="{width:mood+'%'}"></b></i></label></div>
+        <div class="pet-schedule">
+          <div class="pet-schedule-head"><span>今日节奏</span><b>{{ planDone }}/{{ planTotal }}</b></div>
+          <i class="pet-progress"><b :style="{width: planProgress + '%'}"></b></i>
+          <div class="pet-schedule-stats"><span>已完成 {{ planDone }}</span><span>待发生 {{ planTotal - planDone }}</span></div>
+          <div class="pet-next-card" v-if="nextItem"><span>NEXT / 下一项</span><strong>{{ nextItem.title }}</strong><div><b>{{ nextClock }}</b><small>{{ nextIn }}</small></div></div>
+          <div class="pet-next-card empty" v-else><span>NEXT / 下一项</span><strong>今天留白</strong><small>没有需要赶的时间</small></div>
+        </div>
         <div class="pet-buttons"><button @click="pat">摸摸</button><button @click="feed">投喂</button><button @click="giveDrink">饮品</button><button @click="talk">聊天</button><button @click="rest">休息</button></div>
       </div>
     </transition>

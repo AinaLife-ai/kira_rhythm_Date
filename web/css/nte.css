@@ -165,6 +165,9 @@ input[type="checkbox"] { accent-color:var(--nte-pink); }
 .scene-identity { position:absolute; z-index:4; left:24px; bottom:43px; display:flex; align-items:center; gap:11px; }
 .avatar-wrap { position:relative; width:58px; height:58px; padding:0; flex:0 0 auto; background:none; border:0; border-radius:0; clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%); }
 .avatar-wrap img { width:58px; height:58px; object-fit:cover; border-radius:0; border:1px solid rgba(255,255,255,.35); }
+.avatar-placeholder { display:grid; place-items:center; background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 24%,#161a21),#080b11); border:1px solid rgba(255,255,255,.38); color:color-mix(in srgb,var(--accent) 70%,#fff); font:900 28px/1 "Arial Narrow",Impact,sans-serif; letter-spacing:.02em; }
+.avatar-wrap .avatar-placeholder { width:100%; height:100%; border-radius:inherit; }
+.avatar-editor .avatar-placeholder { flex:0 0 auto; width:76px; height:76px; border-radius:22px; font-size:36px; }
 .avatar-wrap:before { content:''; position:absolute; inset:-4px; border:1px solid var(--nte-pink); clip-path:inherit; z-index:-1; }
 .avatar-status { position:absolute; right:-2px; bottom:-2px; width:10px; height:10px; background:var(--nte-cyan); border:2px solid #05070b; border-radius:0; }
 .scene-identity .identity-label { display:block; color:var(--nte-dim); font:700 7px/1 "Arial Narrow",sans-serif; letter-spacing:.18em; }
@@ -799,11 +802,21 @@ body { background:#08090c; }
 .pet-panel-head button { width:18px; height:18px; padding:0; border:0; border-radius:5px; background:rgba(255,255,255,.08); color:#fff; font-size:13px; line-height:1; }
 .pet-panel > strong { display:block; margin-top:9px; color:#fff; font-size:12px; }
 .pet-panel p { margin-top:5px; color:var(--nte-dim); font-size:8px; line-height:1.6; }
-.pet-meters { margin-top:9px; display:flex; flex-direction:column; gap:5px; }
-.pet-meters label { display:grid; grid-template-columns:23px 1fr; align-items:center; gap:6px; color:var(--nte-dim); font-size:7px; }
-.pet-meters i { height:4px; background:rgba(255,255,255,.12); overflow:hidden; }
-.pet-meters b { display:block; height:100%; background:linear-gradient(90deg,var(--nte-pink),var(--nte-cyan)); }
-.pet-buttons { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin-top:10px; }
+.pet-schedule { margin-top:10px; padding:9px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.045); }
+.pet-schedule-head { display:flex; align-items:center; justify-content:space-between; color:var(--nte-dim); font:700 7px/1.2 "Arial Narrow",sans-serif; letter-spacing:.08em; }
+.pet-schedule-head b { color:#fff; font:700 10px/1 "Arial Narrow",sans-serif; letter-spacing:0; }
+.pet-progress { display:block; height:5px; margin-top:6px; overflow:hidden; background:rgba(255,255,255,.12); }
+.pet-progress b { display:block; height:100%; background:linear-gradient(90deg,var(--nte-pink),var(--nte-cyan)); transition:width .3s ease; }
+.pet-schedule-stats { display:flex; justify-content:space-between; margin-top:5px; color:var(--nte-dim); font-size:7px; }
+.pet-next-card { margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,.1); }
+.pet-next-card > span { display:block; color:var(--nte-dim); font:700 6px/1.2 "Arial Narrow",sans-serif; letter-spacing:.1em; }
+.pet-next-card > strong { display:block; margin-top:4px; overflow:hidden; color:#fff; font-size:10px; line-height:1.35; white-space:nowrap; text-overflow:ellipsis; }
+.pet-next-card > div { display:flex; align-items:baseline; justify-content:space-between; gap:5px; margin-top:3px; }
+.pet-next-card > div b { color:var(--nte-cyan); font:700 12px/1 "Arial Narrow",sans-serif; }
+.pet-next-card > div small { overflow:hidden; color:var(--nte-dim); font-size:7px; white-space:nowrap; text-overflow:ellipsis; }
+.pet-next-card.empty > strong { color:var(--nte-dim); font-size:10px; }
+.pet-next-card.empty > small { display:block; margin-top:4px; color:var(--nte-dim); font-size:7px; }
+.pet-buttons { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; margin-top:10px; }
 .pet-buttons button { padding:7px 2px; border:1px solid rgba(255,255,255,.14); border-radius:8px; background:rgba(255,255,255,.04); color:var(--nte-ink); font-size:8px; }
 .pet-buttons button:hover { background:var(--nte-pink); border-color:var(--nte-pink); color:#fff; }
 .pet-panel-enter-active,.pet-panel-leave-active { transition:opacity .18s, transform .18s; }
