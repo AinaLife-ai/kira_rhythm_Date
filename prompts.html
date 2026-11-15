@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KRD 提示词与消息结构</title>
+<style>
+body{margin:0;background:#090c1b;color:#f8f2fc;font-family:Inter,system-ui,"PingFang SC",sans-serif}
+header{position:sticky;top:0;padding:22px 28px;background:rgba(10,13,28,.88);border-bottom:1px solid rgba(239,102,126,.25);display:flex;gap:18px;align-items:center;z-index:2}
+a{color:#ef8ca0;text-decoration:none}header a{font-size:13px}main{max-width:1080px;margin:auto;padding:30px}
+h1{font-size:24px;letter-spacing:.04em;margin:0 0 8px}p{color:#c7bfd9;line-height:1.7}
+pre{white-space:pre-wrap;word-break:break-word;background:#11152a;border:1px solid rgba(239,102,126,.2);border-left:3px solid #ef667e;padding:20px;border-radius:4px 14px 4px 14px;color:#ded7ec;font:12px/1.75 ui-monospace,Consolas,monospace;max-height:70vh;overflow:auto}
+section{margin:30px 0}h2{font-size:16px;color:#ef8ca0;letter-spacing:.08em}
+</style></head><body>
+<header><a href="index.html">返回界面预览</a><strong>KRD 提示词与真实消息结构</strong></header>
+<main><h1>模型实际看到的内容</h1><p>以下文档与 JSON 来自当前构建，不是示意伪代码。动态上下文完整、未脱敏字段均为测试数据。</p>
+<section><h2>完整说明</h2><pre id="md">加载中</pre></section>
+<section><h2>真实样例 JSON</h2><pre id="json">加载中</pre></section></main>
+<script>
+Promise.all([fetch('PROMPTS.zh-CN.md').then(r=>r.text()),fetch('PROMPTS-SAMPLES.json').then(r=>r.json())]).then(([md,json])=>{document.querySelector('#md').textContent=md;document.querySelector('#json').textContent=JSON.stringify(json,null,2)}).catch(e=>{document.querySelector('#md').textContent='加载失败：'+e.message})
+</script></body></html>

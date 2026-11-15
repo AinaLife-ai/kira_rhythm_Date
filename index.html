@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark" data-theme-name="kira_mist">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>生活节律·日程插件</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/effects.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+  <div id="app" v-cloak>
+    <div class="world-art" aria-hidden="true"></div>
+    <div class="ambient" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="scanline"></span><span class="grain"></span></div>
+    <transition name="boot-fade">
+      <div v-if="!booted" class="boot-screen" aria-hidden="true">
+        <div class="boot-grid"></div>
+        <div class="boot-mark"><span>K</span><i></i></div>
+        <div class="boot-word"><strong>KIRA RHYTHM</strong><small>URBAN LIFE ARCHIVE</small></div>
+        <div class="boot-line"><i></i></div>
+        <div class="boot-walker"></div>
+      </div>
+    </transition>
+    <div class="app-shell" v-if="data.ready">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark"><span>K</span><i></i></div><div><strong>生活节律</strong><small>KIRARHYTHMDATE</small></div></div>
+        <nav class="main-nav" aria-label="生活节律导航">
+          <button v-for="item in navItems" :key="item.id" :class="{active: state.view === item.id}" @click="setView(item.id)">
+            <ui-icon class="nav-icon" :name="item.icon" :size="20" /><span>{{ item.label }}</span><i class="active-line"></i>
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="live-status"><span :class="{online: data.scheduler?.running}"></span><div><strong>生活线运行中</strong><small>{{ data.scheduler?.running ? '事件驱动调度' : '调度已暂停' }}</small></div></div>
+          <button class="quick-plan" @click="runPlanning"><ui-icon name="plus" :size="16" /> 给予规划机会</button>
+        </div>
+      </aside>
+      <main class="main-area">
+        <header class="topbar">
+          <div class="breadcrumb"><span>{{ state.view === 'today' ? '此刻' : ({calendar:'日历',changes:'变化',templates:'模板',settings:'设置'})[state.view] }}</span><small>{{ data.date }} · {{ dayTypeName }}</small></div>
+          <div class="top-actions">
+            <div class="live-pill"><span></span> Live</div>
+            <label class="persona-select"><span class="persona-dot"></span><select v-model="state.selectedPersona" @change="selectPersona" aria-label="选择人格"><option v-for="persona in data.personas" :value="persona.id">{{ persona.name }}{{ persona.active ? ' · 当前' : '' }}</option></select></label>
+            <button class="icon-button" title="刷新" @click="refresh()"><ui-icon name="refresh" :size="17" /></button>
+          </div>
+        </header>
+        <div class="content-scroll">
+          <div v-if="state.loading" class="loading-page"><div class="loading-orbit"></div><p>正在读取生活节律…</p></div>
+          <div v-show="!state.loading" class="view-host">
+            <today-view v-show="state.view === 'today'"></today-view>
+            <calendar-view v-show="state.view === 'calendar'"></calendar-view>
+            <changes-view v-show="state.view === 'changes'"></changes-view>
+            <templates-view v-show="state.view === 'templates'"></templates-view>
+            <settings-view v-show="state.view === 'settings'"></settings-view>
+          </div>
+        </div>
+      </main>
+    </div>
+    <section v-else-if="!state.loading" class="empty-state welcome-state"><span class="empty-orbit"><ui-icon name="sparkle" :size="28" /></span><h1>{{ state.loadError ? '暂时无法读取生活节律' : '生活从一个人格开始' }}</h1><p>{{ state.loadError || '请先在 KiraAI 中创建并启用一个人格。' }}</p><button v-if="state.loadError" class="primary" @click="refresh({reset:true, entry:true})">重新加载</button></section>
+    <div v-if="state.loading && !data.ready" class="loading-page initial-loading"><div class="loading-orbit"></div><p>正在唤醒生活节律…</p></div>
+    <item-editor v-if="state.editor" :editor="state.editor"></item-editor>
+    <day-state-editor v-if="state.dayStateEditor"></day-state-editor>
+    <day-type-editor v-if="state.dayTypeEditor" v-bind="state.dayTypeEditor"></day-type-editor>
+    <div class="toast-stack" aria-live="polite"><div v-for="notice in state.notices" :key="notice.id" class="toast" :class="'toast-' + notice.type"><ui-icon :name="notice.type === 'error' ? 'alert' : 'check'" :size="16" />{{ notice.text }}</div></div>
+  </div>
+  <script src="preview-bridge.js"></script>
+  <script src="web_fixture.js"></script>
+  <script src="vendor/vue.global.prod.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
