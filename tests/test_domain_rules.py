@@ -124,3 +124,14 @@ async def test_quiet_window_seconds_are_enforced(runtime):
         exact("秒级边界前", "23:00:03", interaction="must_message"), exact("白天", "09:00:00"),
     ]), expected_revision=0)
     assert accepted["revision"] == 1
+
+@pytest.mark.asyncio
+async def test_legacy_session_manager_without_kind_is_supported(runtime):
+    class LegacySessions:
+        async def get_sessions(self, *, include_content=True):
+            assert include_content is False
+            return [SimpleNamespace(sid="qq:dm:10001", session_title="旧版会话", adapter_name="qq")]
+
+    runtime.ctx.session_mgr = LegacySessions()
+    options = await runtime.policy.session_options("persona-a")
+    assert options == [{"sid": "qq:dm:10001", "title": "旧版会话", "adapter": "qq"}]
