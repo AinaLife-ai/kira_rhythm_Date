@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from .models import KRDError, compact_error
 from .store import dumps
-from .llm_format import humanize_timestamps
+from .llm_format import prepare_llm_payload
 
 
 def runtime_from_event(event):
@@ -16,6 +16,12 @@ def runtime_from_event(event):
 
 def error_result(exc: Exception) -> str:
     return dumps(compact_error(exc))
+
+def host_tz(runtime):
+    try:
+        return getattr(runtime.ctx.get_timezone(), 'key', None)
+    except Exception:
+        return None
 
 
 async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None = None,
@@ -33,8 +39,10 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
                                           "diff": r["diff"], "change_units": r["change_units"]} for r in results]}
         cfg = await runtime.store.get_config(persona_id)
         tz_name = runtime.plans.policy.timezone_name(cfg)
-        payload["timezone"] = tz_name
-        return dumps(humanize_timestamps(payload, tz_name))
+        host = host_tz(runtime)
+        if host != tz_name:
+            payload["timezone"] = tz_name
+        return dumps(prepare_llm_payload(payload, tz_name, host, drop=("source",)))
     except Exception as exc:
         return error_result(exc)
 
@@ -79,7 +87,11 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
         await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "rhythm_update"})
         cfg = await runtime.store.get_config(persona_id)
         tz_name = runtime.plans.policy.timezone_name(cfg)
-        return dumps(humanize_timestamps({"ok": True, "timezone": tz_name, "results": results}, tz_name))
+        host = host_tz(runtime)
+        payload = {"ok": True, "results": results}
+        if host != tz_name:
+            payload["timezone"] = tz_name
+        return dumps(prepare_llm_payload(payload, tz_name, host, drop=("source",)))
     except Exception as exc:
         return error_result(exc)
 
@@ -133,6 +145,10 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
             raise KRDError("invalid_scope", f"Unknown view scope: {scope}")
         cfg = await runtime.store.get_config(persona_id)
         tz_name = runtime.plans.policy.timezone_name(cfg)
-        return dumps(humanize_timestamps({"ok": True, "scope": scope, "timezone": tz_name, "result": result}, tz_name))
+        host = host_tz(runtime)
+        payload = {"ok": True, "scope": scope, "result": result}
+        if host != tz_name:
+            payload["timezone"] = tz_name
+        return dumps(prepare_llm_payload(payload, tz_name, host, drop=("source",)))
     except Exception as exc:
         return error_result(exc)

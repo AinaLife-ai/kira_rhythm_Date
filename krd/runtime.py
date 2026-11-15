@@ -32,7 +32,7 @@ class Runtime:
         self.weather = None
         self.avatars = None
         self.calendar = None
-        self.context_builder = ContextBuilder(self.store, self.plans, None)
+        self.context_builder = ContextBuilder(self.store, self.plans, None, host_timezone=lambda: getattr(self.ctx.get_timezone(), 'key', None))
         self.scheduler = Scheduler(self)
         self.plans.on_change = self.scheduler.wake
         self.ws_clients: set[Any] = set()
