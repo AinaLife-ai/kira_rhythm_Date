@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from .plans import PlanService
 from .policy import SessionPolicy
 from .scheduler import Scheduler
 from .store import Store
+from .timeutils import compiled_windows, timezone
 
 STATIC_TOOL_GUIDE = """
 [KRD 生活节律]
@@ -33,6 +35,7 @@ class Runtime:
         self.avatars = None
         self.context_builder = ContextBuilder(self.store, self.plans, None)
         self.scheduler = Scheduler(self)
+        self.plans.on_change = self.scheduler.wake
         self.ws_clients: set[Any] = set()
         self._persona_cache: tuple[float, str] = (0, "")
 
@@ -54,6 +57,8 @@ class Runtime:
                 await client.close()
             except Exception:
                 pass
+        if self.weather is not None:
+            await self.weather.close()
         await self.store.close()
 
     def log(self, level: str, event: str, **fields: Any) -> None:
@@ -89,18 +94,22 @@ class Runtime:
         event._krd_runtime = self
         metadata = self.context_builder.metadata(event)
         active = await self.active_persona_id()
+        base_config = await self.store.get_config(active) if active else None
         valid = [item for item in metadata if item["persona_id"] == active]
         if metadata and not valid and all((getattr(message, "extra", None) or {}).get("krd") for message in event.messages):
             event.stop()
             return
         if len(valid) != len(metadata) and req.tool_set:
             req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
+        allowed_valid = []
         for item in valid:
-            allowed = await self.policy.is_allowed(active, event.sid, "planning" if item["kind"] == "planning" else "execution")
+            allowed = await self.policy.is_allowed(
+                active, event.sid, "planning" if item["kind"] == "planning" else "execution", config=base_config)
             if not allowed:
                 if req.tool_set:
                     req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
                 continue
+            allowed_valid.append(item)
             if item["kind"] == "planning":
                 content = await self.context_builder.planning_prompt(item)
             else:
@@ -109,31 +118,30 @@ class Runtime:
                 content, name=f"krd_{item['kind']}_{item['run_id']}", source="kira_rhythm_Date",
                 persist=False, render_template=False,
             ))
-            config = await self.store.get_config(active)
-            if config["history_mode"] == "full":
-                template = config["planning_prompt"] if item["kind"] == "planning" else config["execution_prompt"]
+            if base_config["history_mode"] == "full":
+                template = base_config["planning_prompt"] if item["kind"] == "planning" else base_config["execution_prompt"]
                 req.user_prompt.append(Prompt(
                     template, name="krd_full_template", source="kira_rhythm_Date", persist=True, render_template=False,
                 ))
-            elif config["history_mode"] == "none":
+            elif base_config["history_mode"] == "none":
                 message_prompts = [p for p in req.user_prompt if isinstance(p, Prompt) and p.name == "message"]
                 index = item.get("message_index", 0)
                 if index < len(message_prompts):
                     message_prompts[index].persist = False
+        event._krd_allowed_run_ids = {item["run_id"] for item in allowed_valid}
         await self.scheduler.on_request(event)
+        normal_allowed = False
         if not metadata and active:
-            allowed = await self.policy.is_allowed(active, event.sid, "execution")
-            if allowed:
-                config = await self.store.get_config(active)
-                if config.get("inject_day_state", True):
+            normal_allowed = await self.policy.is_allowed(active, event.sid, "execution", config=base_config)
+            if normal_allowed:
+                if base_config.get("inject_day_state", True):
                     req.user_prompt.append(Prompt(
-                        await self.context_builder.compact_state(active), name="krd_day_state",
+                        await self.context_builder.compact_state(active, config=base_config), name="krd_day_state",
                         source="kira_rhythm_Date", persist=False, render_template=False,
                     ))
             elif req.tool_set:
                 req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
-        allowed_any = valid or (active and await self.policy.is_allowed(active, event.sid, "execution"))
-        if allowed_any:
+        if allowed_valid or normal_allowed:
             for prompt in req.system_prompt:
                 if prompt.name == "tools" and "KRD 生活节律" not in prompt.content:
                     prompt.content += "\n" + STATIC_TOOL_GUIDE
@@ -141,16 +149,36 @@ class Runtime:
             req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
 
     async def before_llm_response(self, event, response) -> None:
-        # Enforce silence before S/Z or delivery plugins observe the response.
+        # Enforce silence before delivery plugins observe the response, but never
+        # erase a real user's response in an S/Z mixed batch.
         metadata = self.context_builder.metadata(event)
-        if not metadata or not getattr(response, "text_response", ""):
+        messages = getattr(event, "messages", []) or []
+        if (not metadata or len(metadata) != len(messages) or
+                any(item["kind"] != "item" for item in metadata) or not getattr(response, "text_response", "")):
             return
+        active = await self.active_persona_id()
+        silence = []
         for item in metadata:
-            if item["kind"] != "item":
-                continue
-            run = await self.store.one("SELECT items.interaction FROM runs JOIN items ON items.id=runs.item_id WHERE runs.id=?", (item["run_id"],))
-            if run and run["interaction"] == "silent":
-                response.text_response = "<msg/>"
+            if item["persona_id"] != active:
+                return
+            run = await self.store.one(
+                "SELECT i.interaction,i.scheduled_at,p.date,p.persona_id FROM runs r "
+                "JOIN items i ON i.id=r.item_id JOIN plans p ON p.id=i.plan_id WHERE r.id=?", (item["run_id"],))
+            if not run:
+                return
+            quiet = False
+            if run["interaction"] != "silent":
+                config = await self.store.get_config(run["persona_id"])
+                tz_name = self.policy.timezone_name(config)
+                today = datetime.now(timezone(tz_name)).date()
+                windows = []
+                for day in (today - timedelta(days=1), today):
+                    windows.extend(compiled_windows(day.isoformat(), config["quiet_delivery_windows"], tz_name))
+                timestamp = __import__("time").time()
+                quiet = any(left <= timestamp < right for left, right in windows)
+            silence.append(run["interaction"] == "silent" or quiet)
+        if silence and all(silence):
+            response.text_response = "<msg/>"
 
     async def on_llm_response(self, event, response) -> None:
         active = await self.active_persona_id()

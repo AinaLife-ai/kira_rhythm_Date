@@ -7,7 +7,6 @@ import pytest
 import pytest_asyncio
 
 from krd.context import ContextBuilder
-from krd.store import Store
 from .fakes import FakeRuntime, create_due_plan
 
 

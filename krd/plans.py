@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import copy
 import random
+import sqlite3
 from datetime import datetime
 from typing import Any
 
 from .config import deep_merge, normalized
-from .models import KRDError, TERMINAL_ITEM_STATES, new_id, now
+from .models import ACTIVE_ITEM_STATES, KRDError, TERMINAL_ITEM_STATES, new_id, now
 from .policy import SessionPolicy
 from .store import Store, dumps, loads
-from .timeutils import compiled_windows, sample_window, timezone, to_utc, window_utc
+from .timeutils import compiled_windows, parse_date, sample_window, timezone, to_utc, window_utc
 
 PLAN_FIELDS = ("title", "overview", "planned_appearance", "planned_mood")
 ITEM_FIELDS = ("title", "intent", "instruction", "schedule", "target", "interaction", "category", "execution_probability")
@@ -26,6 +27,13 @@ class PlanService:
         self.store = store
         self.policy = policy
         self.rng = random.Random()
+        self.on_change = None
+
+    def _changed(self) -> None:
+        # A new earlier item must interrupt the scheduler's current wait. The
+        # callback is synchronous and never performs I/O on the request path.
+        if self.on_change:
+            self.on_change()
 
     async def current_date(self, persona_id: str) -> str:
         config = await self.store.get_config(persona_id)
@@ -60,50 +68,97 @@ class PlanService:
             return sorted(candidates)[0][1]
         return "weekend" if weekday >= 5 else "weekday"
 
+    @staticmethod
+    def _assemble_plans(plan_rows: list[dict[str, Any]], block_rows: list[dict[str, Any]],
+                        item_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Assemble a plan tree without per-block/per-day database round trips."""
+        items_by_block: dict[str, list[dict[str, Any]]] = {}
+        for row in item_rows:
+            items_by_block.setdefault(row["block_id"], []).append(item_json(row))
+        blocks_by_plan: dict[str, list[dict[str, Any]]] = {}
+        for row in block_rows:
+            block = dict(row)
+            block["meta"] = loads(block.pop("meta_json"), {})
+            block["items"] = items_by_block.get(block["id"], [])
+            blocks_by_plan.setdefault(block["plan_id"], []).append(block)
+        return [{**row, "blocks": blocks_by_plan.get(row["id"], [])} for row in plan_rows]
+
     async def get_plan(self, plan_id: str, persona_id: str | None = None) -> dict[str, Any] | None:
         row = await self.store.one("SELECT * FROM plans WHERE id=?", (plan_id,))
         if row is None or (persona_id is not None and row["persona_id"] != persona_id):
             return None
-        blocks = await self.store.all("SELECT * FROM blocks WHERE plan_id=? ORDER BY position", (plan_id,))
-        result = dict(row)
-        result["blocks"] = []
-        for block in blocks:
-            block["meta"] = loads(block.pop("meta_json"), {})
-            block["items"] = [item_json(item) for item in await self.store.all(
-                "SELECT * FROM items WHERE block_id=? ORDER BY position,scheduled_at", (block["id"],))]
-            result["blocks"].append(block)
-        return result
+        blocks = await self.store.all("SELECT * FROM blocks WHERE plan_id=? ORDER BY position,id", (plan_id,))
+        items = await self.store.all(
+            "SELECT * FROM items WHERE plan_id=? ORDER BY position,scheduled_at,id", (plan_id,))
+        return self._assemble_plans([row], blocks, items)[0]
 
     async def get_plan_by_date(self, persona_id: str, day: str) -> dict[str, Any] | None:
-        row = await self.store.one("SELECT id FROM plans WHERE persona_id=? AND date=?", (persona_id, day))
-        return await self.get_plan(row["id"], persona_id) if row else None
+        plans = await self.list_plans(persona_id, day, day)
+        return plans[0] if plans else None
 
     async def list_plans(self, persona_id: str, start: str, end: str) -> list[dict[str, Any]]:
+        start = parse_date(start).isoformat()
+        end = parse_date(end).isoformat()
+        if start > end or (parse_date(end) - parse_date(start)).days > 366:
+            raise KRDError("invalid_plan_range", "Expected an ascending range of at most 367 days")
         rows = await self.store.all(
-            "SELECT id FROM plans WHERE persona_id=? AND date BETWEEN ? AND ? ORDER BY date", (persona_id, start, end))
-        return [await self.get_plan(row["id"], persona_id) for row in rows]
+            "SELECT * FROM plans WHERE persona_id=? AND date BETWEEN ? AND ? ORDER BY date", (persona_id, start, end))
+        if not rows:
+            return []
+        blocks = await self.store.all(
+            "SELECT b.* FROM blocks b JOIN plans p ON p.id=b.plan_id "
+            "WHERE p.persona_id=? AND p.date BETWEEN ? AND ? ORDER BY b.plan_id,b.position,b.id",
+            (persona_id, start, end))
+        items = await self.store.all(
+            "SELECT i.* FROM items i JOIN plans p ON p.id=i.plan_id "
+            "WHERE p.persona_id=? AND p.date BETWEEN ? AND ? ORDER BY i.plan_id,i.position,i.scheduled_at,i.id",
+            (persona_id, start, end))
+        return self._assemble_plans(rows, blocks, items)
 
     async def _prepare_items(self, persona_id: str, payload: dict[str, Any], actor: str,
-                             config_override: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+                             config_override: dict[str, Any] | None = None,
+                             existing_items: dict[str, dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         config = config_override or await self.store.get_config(persona_id)
         day = payload["date"]
         tz_name = self.policy.timezone_name(config)
         blocked = compiled_windows(day, config["blocked_execution_windows"], tz_name)
         quiet = compiled_windows(day, config["quiet_delivery_windows"], tz_name)
+        previous_by_id = existing_items or {}
+        raw_blocks = payload.get("blocks", [])
+        if not isinstance(raw_blocks, list):
+            raise KRDError("invalid_plan", "blocks must be a list")
+        execution_options = None
         prepared = []
-        for block_index, raw_block in enumerate(payload.get("blocks", [])):
-            block = {"id": raw_block.get("id") or new_id("blk"), "title": str(raw_block.get("title", "生活片段"))[:120],
+        for block_index, raw_block in enumerate(raw_blocks):
+            if not isinstance(raw_block, dict) or not isinstance(raw_block.get("items", []), list):
+                raise KRDError("invalid_plan", "Each block must be an object with an items list")
+            block = {"id": str(raw_block.get("id") or new_id("blk")), "title": str(raw_block.get("title", "生活片段"))[:120],
                      "position": int(raw_block.get("position", block_index)), "color": str(raw_block.get("color", ""))[:32],
                      "cover_asset_id": str(raw_block.get("cover_asset_id", "")), "meta": raw_block.get("meta", {})}
+            if len(block["id"]) > 128 or not isinstance(block["meta"], dict):
+                raise KRDError("invalid_block", "Block identity or metadata is invalid")
             block["items"] = []
             for raw_item in raw_block.get("items", []):
+                if not isinstance(raw_item, dict):
+                    raise KRDError("invalid_item", "Each item must be an object")
                 schedule = raw_item.get("schedule") or {}
+                if not isinstance(schedule, dict):
+                    raise KRDError("invalid_schedule", "schedule must be an object")
+                supplied_id = str(raw_item.get("id") or "")
+                if len(supplied_id) > 128:
+                    raise KRDError("invalid_item", "Item ID is too long")
+                previous = previous_by_id.get(supplied_id)
+                schedule_unchanged = bool(previous and schedule == previous.get("schedule"))
                 kind = schedule.get("type", "exact")
-                if kind == "exact" and not config["allow_exact"] and actor == "bot":
+                if kind == "exact" and not config["allow_exact"] and actor == "bot" and not schedule_unchanged:
                     raise KRDError("exact_disabled", "Exact schedules are disabled")
-                if kind == "window" and not config["allow_window"] and actor == "bot":
+                if kind == "window" and not config["allow_window"] and actor == "bot" and not schedule_unchanged:
                     raise KRDError("window_disabled", "Window schedules are disabled")
-                if kind == "exact":
+                if schedule_unchanged:
+                    # A revision is not a new random draw. This also permits an
+                    # unrelated edit after the original wall time has passed.
+                    timestamps = [float(previous["scheduled_at"])]
+                elif kind == "exact":
                     timestamps = [to_utc(day, schedule["at"], tz_name)]
                 elif kind == "window":
                     timestamps = sample_window(schedule, day, tz_name, self.rng)
@@ -121,17 +176,23 @@ class PlanService:
                 interaction = raw_item.get("interaction", "auto")
                 if interaction not in {"auto", "must_message", "silent"}:
                     raise KRDError("invalid_interaction", "Unknown interaction mode")
-                target = await self.policy.require_target(persona_id, str(raw_item.get("target", "")), "execution")
-                series_id = raw_item.get("series_id") or (new_id("ser") if len(timestamps) > 1 else "")
+                if execution_options is None:
+                    execution_options = await self.policy.session_options(persona_id, "execution", config=config)
+                target = await self.policy.require_target(
+                    persona_id, str(raw_item.get("target", "")), "execution", options=execution_options, config=config)
+                series_id = (previous.get("series_id", "") if schedule_unchanged else
+                             raw_item.get("series_id") or (new_id("ser") if len(timestamps) > 1 else ""))
                 for occurrence, timestamp in enumerate(timestamps):
-                    if timestamp < now() - 60:
-                        raise KRDError("schedule_in_past", "Cannot create an item in the past")
-                    if any(left <= timestamp < right for left, right in blocked):
-                        raise KRDError("blocked_execution_window", "This item falls into a blocked execution window")
-                    if interaction == "must_message" and any(left <= timestamp < right for left, right in quiet):
-                        raise KRDError("quiet_delivery_window", "must_message cannot be scheduled in a quiet delivery window")
+                    if not schedule_unchanged:
+                        if timestamp < now() - 60:
+                            raise KRDError("schedule_in_past", "Cannot create an item in the past")
+                        if any(left <= timestamp < right for left, right in blocked):
+                            raise KRDError("blocked_execution_window", "This item falls into a blocked execution window")
+                        if interaction == "must_message" and any(left <= timestamp < right for left, right in quiet):
+                            raise KRDError("quiet_delivery_window", "must_message cannot be scheduled in a quiet delivery window")
+                    identifier = supplied_id if supplied_id and occurrence == 0 else new_id("itm")
                     item = {
-                        "id": raw_item.get("id") or new_id("itm"), "series_id": series_id,
+                        "id": identifier, "series_id": series_id,
                         "title": str(raw_item.get("title", "未命名生活小项"))[:160],
                         "intent": str(raw_item.get("intent", ""))[:1000],
                         "instruction": str(raw_item.get("instruction", ""))[:6000],
@@ -158,6 +219,9 @@ class PlanService:
     def _validate_coverage(self, blocks: list[dict[str, Any]], config: dict[str, Any], actor: str, day: str,
                            tz_name: str | None = None) -> None:
         items = [item for item in self._flatten(blocks) if item.get("state") != "cancelled"]
+        block_ids = [block["id"] for block in blocks]
+        if len(block_ids) != len(set(block_ids)):
+            raise KRDError("duplicate_block_id", "Block IDs must be unique within a plan")
         identifiers = [item["id"] for item in self._flatten(blocks)]
         if len(identifiers) != len(set(identifiers)):
             raise KRDError("duplicate_item_id", "Item IDs must be unique within a plan")
@@ -179,21 +243,31 @@ class PlanService:
                          mode: str = "revise", reason: str = "", expected_revision: int = 0) -> dict[str, Any]:
         if not persona_id:
             raise KRDError("persona_required", "An active persona is required")
-        day = str(payload.get("date", ""))
-        datetime.fromisoformat(day)
+        if not isinstance(payload, dict):
+            raise KRDError("invalid_plan", "Plan must be an object")
+        day = parse_date(str(payload.get("date", ""))).isoformat()
         current_date = await self.current_date(persona_id)
         config = await self.store.get_config(persona_id)
-        if day < current_date or (datetime.fromisoformat(day) - datetime.fromisoformat(current_date)).days > config["max_horizon_days"]:
+        if day < current_date or (parse_date(day) - parse_date(current_date)).days > config["max_horizon_days"]:
             raise KRDError("outside_horizon", "Plan date is outside the allowed horizon")
         existing = await self.get_plan_by_date(persona_id, day)
         if existing and expected_revision != existing["revision"]:
             raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"])
-        if not existing and mode not in {"create", "create_missing", "revise", "merge", "replace"}:
+        if not existing and expected_revision:
+            raise KRDError("revision_conflict", "Plan no longer exists", current_revision=0)
+        if mode not in {"create", "create_missing", "revise", "merge", "replace"}:
             raise KRDError("invalid_mode", "Unknown planning mode")
+        if existing and mode in {"create", "create_missing"}:
+            if mode == "create_missing":
+                return {"plan": existing, "revision": existing["revision"], "diff": [], "change_units": 0}
+            raise KRDError("revision_conflict", "Plan already exists", current_revision=existing["revision"])
         day_type_id = (payload.get("day_type_id") if actor == "user" and payload.get("day_type_id") else
                        existing["day_type_id"] if existing else await self.resolve_day_type(persona_id, day))
         effective = await self.effective_config(persona_id, day_type_id)
-        prepared, _ = await self._prepare_items(persona_id, payload, actor, config_override=effective)
+        before_items = self._flatten(existing["blocks"]) if existing else []
+        prepared, _ = await self._prepare_items(
+            persona_id, payload, actor, config_override=effective,
+            existing_items={item["id"]: item for item in before_items})
         # IDs are globally unique across plans, not merely unique inside one day.
         for block in prepared:
             existing_block = await self.store.one("SELECT plan_id FROM blocks WHERE id=?", (block["id"],))
@@ -204,7 +278,6 @@ class PlanService:
                 if other and (not existing or other["plan_id"] != existing["id"]):
                     raise KRDError("item_identity_conflict", "Item ID belongs to another plan")
         merged = copy.deepcopy(prepared)
-        before_items = self._flatten(existing["blocks"]) if existing else []
         if existing:
             # Reuse block identity before retaining old history, preventing a same-title
             # block from being inserted twice while cancelled/triggered items are kept.
@@ -246,15 +319,20 @@ class PlanService:
         }
         async with self.store.transaction() as db:
             if existing:
-                await db.execute(
+                cursor = await db.execute(
                     "UPDATE plans SET day_type_id=?,title=?,overview=?,planned_appearance=?,planned_mood=?,state=?,revision=?,updated_at=? WHERE id=? AND revision=?",
                     (plan_row["day_type_id"], plan_row["title"], plan_row["overview"], plan_row["planned_appearance"],
                      plan_row["planned_mood"], state, revision, timestamp, plan_id, expected_revision))
+                if cursor.rowcount != 1:
+                    raise KRDError("revision_conflict", "Plan was changed concurrently")
             else:
-                await db.execute(
-                    "INSERT INTO plans(id,persona_id,date,day_type_id,title,overview,planned_appearance,planned_mood,state,revision,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (plan_id, persona_id, day, plan_row["day_type_id"], plan_row["title"], plan_row["overview"],
-                     plan_row["planned_appearance"], plan_row["planned_mood"], state, revision, actor, timestamp, timestamp))
+                try:
+                    await db.execute(
+                        "INSERT INTO plans(id,persona_id,date,day_type_id,title,overview,planned_appearance,planned_mood,state,revision,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (plan_id, persona_id, day, plan_row["day_type_id"], plan_row["title"], plan_row["overview"],
+                         plan_row["planned_appearance"], plan_row["planned_mood"], state, revision, actor, timestamp, timestamp))
+                except sqlite3.IntegrityError as exc:
+                    raise KRDError("revision_conflict", "Plan was created concurrently") from exc
             for block in merged:
                 await db.execute(
                     "INSERT INTO blocks(id,plan_id,title,position,color,cover_asset_id,meta_json) VALUES(?,?,?,?,?,?,?) "
@@ -262,12 +340,23 @@ class PlanService:
                     (block["id"], plan_id, block["title"], block["position"], block["color"], block["cover_asset_id"], dumps(block.get("meta", {}))))
                 for item in block["items"]:
                     previous = next((old for old in before_items if old["id"] == item["id"]), None)
-                    if previous and previous["state"] in {"queued", "running"} and any(previous.get(field) != item.get(field) for field in ITEM_FIELDS):
-                        raise KRDError("item_running", f"Cannot edit a running item: {item['id']}")
+                    desired_state = item.get("state", "scheduled")
+                    known_states = ACTIVE_ITEM_STATES | TERMINAL_ITEM_STATES | {"failed", "interrupted"}
+                    if desired_state not in known_states:
+                        raise KRDError("invalid_item_state", f"Unknown item state: {desired_state}")
+                    if previous and previous["state"] in {"queued", "running"}:
+                        changed = any(previous.get(field) != item.get(field) for field in ITEM_FIELDS)
+                        if changed or desired_state != previous["state"] or previous["block_id"] != block["id"]:
+                            raise KRDError("item_running", f"Cannot edit a running item: {item['id']}")
                     if previous and previous["state"] in TERMINAL_ITEM_STATES:
-                        if any(previous.get(field) != item.get(field) for field in (*ITEM_FIELDS, "scheduled_at")):
+                        changed = any(previous.get(field) != item.get(field) for field in (*ITEM_FIELDS, "scheduled_at"))
+                        if changed or desired_state != previous["state"]:
                             raise KRDError("item_terminal", f"Cannot rewrite a triggered item: {item['id']}")
                         item["state"] = previous["state"]
+                    elif previous and desired_state not in {"scheduled", "cancelled", previous["state"]}:
+                        raise KRDError("invalid_item_state", "Client cannot directly set an execution state")
+                    elif not previous and desired_state not in {"scheduled", "cancelled"}:
+                        raise KRDError("invalid_item_state", "New items must start as scheduled or cancelled")
                     item_revision = previous["revision"] + 1 if previous else 1
                     await db.execute(
                         "INSERT INTO items(id,plan_id,block_id,series_id,title,intent,instruction,position,schedule_json,scheduled_at,target,interaction,category,execution_probability,state,revision,reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
@@ -288,13 +377,18 @@ class PlanService:
                 (new_id("mut"), plan_id, revision, actor, reason, units, mode, dumps(before_items), dumps(self._flatten(merged)), timestamp))
             if actor == "bot" and config["max_change_units"] and existing:
                 async with db.execute(
-                    "SELECT COALESCE(SUM(units),0) AS used FROM mutations WHERE actor='bot' AND created_at>=?",
-                    (timestamp - config["modify_window_seconds"],)) as cursor:
+                    "SELECT COALESCE(SUM(m.units),0) AS used FROM mutations m JOIN plans p ON p.id=m.plan_id "
+                    "WHERE m.actor='bot' AND p.persona_id=? AND m.created_at>=?",
+                    (persona_id, timestamp - config["modify_window_seconds"])) as cursor:
                     used = (await cursor.fetchone())[0]
                 if used > config["max_change_units"]:
                     raise KRDError("modify_budget", "The rolling modification budget is exhausted", used=used)
-        await self._ensure_day_state(persona_id, day, plan_row, actor)
+            await db.execute(
+                "INSERT OR IGNORE INTO day_states(persona_id,date,current_appearance,current_mood,current_location,current_activity,current_note,revision,source,updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)",
+                (persona_id, day, plan_row["planned_appearance"], plan_row["planned_mood"], "", "", plan_row["overview"], actor, timestamp))
         result = await self.get_plan(plan_id, persona_id)
+        if not self.store.in_transaction:
+            self._changed()
         return {"plan": result, "revision": revision, "diff": diff, "change_units": units}
 
     async def apply_many(self, persona_id: str, payloads: list[dict[str, Any]], *, actor: str = "bot",
@@ -309,6 +403,7 @@ class PlanService:
                 results.append(await self.apply_plan(
                     persona_id, payload, actor=actor, mode=payload.get("mode", mode),
                     reason=payload.get("reason", reason), expected_revision=int(payload.get("expected_revision", 0))))
+        self._changed()
         return results
 
     @staticmethod
@@ -334,6 +429,7 @@ class PlanService:
             (persona_id, day, plan["planned_appearance"], plan["planned_mood"], "", "", plan["overview"], actor, now()))
 
     async def day_state(self, persona_id: str, day: str) -> dict[str, Any]:
+        day = parse_date(day).isoformat()
         row = await self.store.one("SELECT * FROM day_states WHERE persona_id=? AND date=?", (persona_id, day))
         if row:
             return row
@@ -351,6 +447,9 @@ class PlanService:
         return await self.set_day_state(persona_id, day, patch, actor, reason)
 
     async def set_day_state(self, persona_id: str, day: str, patch: dict[str, Any], actor: str, reason: str = "") -> dict[str, Any]:
+        day = parse_date(day).isoformat()
+        if not isinstance(patch, dict):
+            raise KRDError("invalid_day_state", "DayState patch must be an object")
         allowed = {"current_appearance", "current_mood", "current_location", "current_activity", "current_note"}
         if set(patch) - allowed:
             raise KRDError("invalid_day_state", "Unsupported DayState field")
@@ -366,8 +465,15 @@ class PlanService:
         return await self.day_state(persona_id, day)
 
     async def record_experience(self, persona_id: str, day: str, content: str, *, kind: str = "note", item_id: str = "") -> dict[str, Any]:
+        day = parse_date(day).isoformat()
         if not content.strip() or len(content) > 8000:
             raise KRDError("invalid_experience", "Experience must be non-empty and at most 8000 characters")
+        if item_id:
+            owner = await self.store.one(
+                "SELECT p.persona_id FROM items i JOIN plans p ON p.id=i.plan_id WHERE i.id=?", (item_id,))
+            if not owner or owner["persona_id"] != persona_id:
+                raise KRDError("not_found", "Experience item not found in this persona")
+        kind = str(kind)[:40]
         identifier = new_id("exp")
         await self.store.execute(
             "INSERT INTO experiences(id,persona_id,date,item_id,kind,content,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -382,8 +488,16 @@ class PlanService:
             return await self.store.all("SELECT * FROM experiences WHERE persona_id=? AND date=? ORDER BY created_at DESC LIMIT ?", (persona_id, day, limit))
         return await self.store.all("SELECT * FROM experiences WHERE persona_id=? ORDER BY created_at DESC LIMIT ?", (persona_id, limit))
 
-    async def revisions(self, plan_id: str, limit: int = 2) -> list[dict[str, Any]]:
-        rows = await self.store.all("SELECT revision,diff_json,actor,reason,created_at FROM plan_revisions WHERE plan_id=? ORDER BY revision DESC LIMIT ?", (plan_id, max(1, min(20, limit))))
+    async def revisions(self, plan_id: str, limit: int = 2, persona_id: str | None = None) -> list[dict[str, Any]]:
+        if persona_id is None:
+            rows = await self.store.all(
+                "SELECT revision,diff_json,actor,reason,created_at FROM plan_revisions WHERE plan_id=? ORDER BY revision DESC LIMIT ?",
+                (plan_id, max(1, min(20, limit))))
+        else:
+            rows = await self.store.all(
+                "SELECT r.revision,r.diff_json,r.actor,r.reason,r.created_at FROM plan_revisions r "
+                "JOIN plans p ON p.id=r.plan_id WHERE r.plan_id=? AND p.persona_id=? ORDER BY r.revision DESC LIMIT ?",
+                (plan_id, persona_id, max(1, min(20, limit))))
         return [{**row, "diff": loads(row.pop("diff_json"), [])} for row in rows]
 
     async def update_item(self, persona_id: str, item_id: str, patch: dict[str, Any], *, actor: str, reason: str = "") -> dict[str, Any]:

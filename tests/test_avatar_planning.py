@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -34,7 +33,7 @@ async def test_existing_next_day_plan_still_gets_daily_opportunity(runtime):
 
 
 @pytest.mark.asyncio
-async def test_avatar_download_is_cached_for_24_hours(runtime, monkeypatch):
+async def test_avatar_normal_reads_use_cache_but_entry_refresh_bypasses_it(runtime, monkeypatch):
     image = Image.new("RGB", (12, 12), (140, 120, 240))
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
@@ -51,8 +50,10 @@ async def test_avatar_download_is_cached_for_24_hours(runtime, monkeypatch):
     service = AvatarService(runtime.store, runtime.ctx, runtime.store.path.parent)
     first = await service.current("persona-a")
     second = await service.current("persona-a")
+    refreshed = await service.current("persona-a", force_refresh=True)
     assert first["source"] == "adapter:qq" and second["id"] == first["id"]
-    assert len(calls) == 1
+    assert refreshed["id"] == first["id"]
+    assert len(calls) == 2
 
 
 from krd.context import ContextBuilder

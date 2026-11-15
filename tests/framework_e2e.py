@@ -6,7 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 
@@ -73,6 +73,7 @@ def run(framework: Path, plugin_root: Path):
                 adapter_mgr=services.message_delivery.adapter_mgr, message_delivery=services.message_delivery, workflow=workflow))
         else:
             processor = MessageProcessor(workflow)
+        assert processor is not None
         try:
             tool_manager = FuncToolManager()
         except TypeError:
@@ -104,8 +105,17 @@ def run(framework: Path, plugin_root: Path):
         assert "current_item" not in memory[0].content
         assert model.chat.await_count == 1
         services.message_delivery.send_message_chain.assert_awaited()
+        planning = await runtime.scheduler.trigger_planning(
+            "persona-a", "manual", plan["date"], "E2E planning revision")
+        planning_event = services.event_bus.publish.await_args.args[0]
+        marker = runtime.context_builder.metadata(planning_event)[0]
+        assert marker["kind"] == "planning" and marker["run_id"] == planning["id"]
+        await workflow.handle_batch_event(planning_event)
+        planning_receipt = await runtime.store.one("SELECT status FROM planning_runs WHERE id=?", (planning["id"],))
+        assert planning_receipt["status"] == "no_change"
+        assert model.chat.await_count == 2
         await manager.terminate(loaded)
-        print("FRAMEWORK E2E OK", framework.name, "memory_messages", len(memory))
+        print("FRAMEWORK E2E OK", framework.name, "item + planning", "memory_messages", len(memory))
 
     asyncio.run(main())
 

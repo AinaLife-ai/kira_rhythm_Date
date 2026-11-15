@@ -27,6 +27,7 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
         for metadata in runtime.context_builder.metadata(event):
             if metadata["kind"] == "planning":
                 await runtime.store.execute("UPDATE planning_runs SET status='completed',finished_at=? WHERE id=?", (__import__('time').time(), metadata["run_id"]))
+        await runtime.broadcast("plan_changed", {"persona_id": persona_id, "days": [r["plan"]["date"] for r in results]})
         return dumps({"ok": True, "days": [{"plan_id": r["plan"]["id"], "date": r["plan"]["date"], "revision": r["revision"],
                                            "diff": r["diff"], "change_units": r["change_units"]} for r in results]})
     except Exception as exc:
@@ -40,29 +41,33 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
         if not isinstance(operations, list) or not operations or len(operations) > 50:
             raise KRDError("invalid_operations", "Provide 1–50 operations")
         results = []
-        for operation in operations:
-            kind = operation.get("type")
-            if kind == "day_state":
-                day = operation.get("date") or await runtime.plans.current_date(persona_id)
-                patch = operation.get("patch") or {key: value for key, value in operation.items()
-                                                   if key.startswith("current_")}
-                result = await runtime.plans.set_day_state(persona_id, day, patch, "bot", reason)
-            elif kind == "record_experience":
-                day = operation.get("date") or await runtime.plans.current_date(persona_id)
-                result = await runtime.plans.record_experience(
-                    persona_id, day, str(operation.get("content", "")), kind=operation.get("kind", "note"),
-                    item_id=operation.get("item_id", ""))
-            elif kind == "update_item":
-                patch = operation.get("patch") or {key: value for key, value in operation.items() if key not in {"type", "item_id"}}
-                result = await runtime.plans.update_item(persona_id, operation["item_id"], patch, actor="bot", reason=reason)
-            elif kind == "append_item":
-                result = await runtime.plans.append_item(
-                    persona_id, operation["plan_id"], operation.get("block_title", "生活片段"),
-                    operation.get("item") or {}, actor="bot", reason=reason)
-            else:
-                raise KRDError("invalid_operation", f"Unknown operation type: {kind}")
-            results.append({"type": kind, "result": result})
-        await runtime.scheduler.wake()
+        async with runtime.store.transaction():
+            for operation in operations:
+                if not isinstance(operation, dict):
+                    raise KRDError("invalid_operation", "Each operation must be an object")
+                kind = operation.get("type")
+                if kind == "day_state":
+                    day = operation.get("date") or await runtime.plans.current_date(persona_id)
+                    patch = operation.get("patch") or {key: value for key, value in operation.items()
+                                                       if key.startswith("current_")}
+                    result = await runtime.plans.set_day_state(persona_id, day, patch, "bot", reason)
+                elif kind == "record_experience":
+                    day = operation.get("date") or await runtime.plans.current_date(persona_id)
+                    result = await runtime.plans.record_experience(
+                        persona_id, day, str(operation.get("content", "")), kind=operation.get("kind", "note"),
+                        item_id=operation.get("item_id", ""))
+                elif kind == "update_item":
+                    patch = operation.get("patch") or {key: value for key, value in operation.items() if key not in {"type", "item_id"}}
+                    result = await runtime.plans.update_item(persona_id, operation["item_id"], patch, actor="bot", reason=reason)
+                elif kind == "append_item":
+                    result = await runtime.plans.append_item(
+                        persona_id, operation["plan_id"], operation.get("block_title", "生活片段"),
+                        operation.get("item") or {}, actor="bot", reason=reason)
+                else:
+                    raise KRDError("invalid_operation", f"Unknown operation type: {kind}")
+                results.append({"type": kind, "result": result})
+        runtime.scheduler.wake()
+        await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "rhythm_update"})
         return dumps({"ok": True, "results": results})
     except Exception as exc:
         return error_result(exc)
@@ -86,6 +91,8 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
             if not row:
                 raise KRDError("not_found", "Item not found")
             plan = await plans_service.get_plan(row["plan_id"], persona_id)
+            if plan is None:
+                raise KRDError("not_found", "Item not found in the active persona")
             result = next((block for block in plan["blocks"] if block["id"] == row["block_id"]), None)
         elif scope == "day":
             result = await plans_service.get_plan_by_date(persona_id, today)
@@ -97,12 +104,13 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
         elif scope == "diff":
             if not plan_id:
                 raise KRDError("plan_required", "plan_id is required for diff view")
-            result = await plans_service.revisions(plan_id, limit)
+            result = await plans_service.revisions(plan_id, limit, persona_id)
         elif scope == "quota":
             config = await runtime.store.get_config(persona_id)
             row = await runtime.store.one(
-                "SELECT COALESCE(SUM(units),0) AS used FROM mutations WHERE actor='bot' AND created_at>=?",
-                (__import__('time').time() - config["modify_window_seconds"],))
+                "SELECT COALESCE(SUM(m.units),0) AS used FROM mutations m JOIN plans p ON p.id=m.plan_id "
+                "WHERE m.actor='bot' AND p.persona_id=? AND m.created_at>=?",
+                (persona_id, __import__('time').time() - config["modify_window_seconds"]))
             result = {"used": row["used"], "limit": config["max_change_units"], "window_seconds": config["modify_window_seconds"]}
         elif scope == "experiences":
             result = await plans_service.experiences(persona_id, date or None, item_id, limit)

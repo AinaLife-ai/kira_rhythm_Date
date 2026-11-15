@@ -14,8 +14,9 @@ class SessionPolicy:
         self.ctx = ctx
         self.rng = random.Random()
 
-    async def session_options(self, persona_id: str, kind: str = "execution") -> list[dict[str, str]]:
-        config = await self.store.get_config(persona_id)
+    async def session_options(self, persona_id: str, kind: str = "execution", *,
+                              config: dict | None = None) -> list[dict[str, str]]:
+        config = config or await self.store.get_config(persona_id)
         sessions = await self.ctx.session_mgr.get_sessions(include_content=False, kind="im")
         access = config["session_access"]
         listed = {str(v) for v in access.get("sessions", [])}
@@ -33,8 +34,8 @@ class SessionPolicy:
             result.append({"sid": sid, "title": session.session_title or sid, "adapter": session.adapter_name})
         return result
 
-    async def is_allowed(self, persona_id: str, sid: str, kind: str = "execution") -> bool:
-        return any(item["sid"] == sid for item in await self.session_options(persona_id, kind))
+    async def is_allowed(self, persona_id: str, sid: str, kind: str = "execution", *, config: dict | None = None) -> bool:
+        return any(item["sid"] == sid for item in await self.session_options(persona_id, kind, config=config))
 
     async def check_adapter_permission(self, sid: str) -> tuple[bool, str]:
         parts = sid.split(":", 2)
@@ -53,21 +54,25 @@ class SessionPolicy:
             allowed = True
         return (bool(allowed), "ok" if allowed else "adapter_denied")
 
-    async def require_target(self, persona_id: str, target: str, kind: str = "execution") -> str:
+    async def require_target(self, persona_id: str, target: str, kind: str = "execution", *,
+                             options: list[dict[str, str]] | None = None, config: dict | None = None) -> str:
         if not target or target in {"pool", "auto", f"pool:{kind}"}:
-            selected = await self.select_session(persona_id, kind)
+            selected = await self.select_session(persona_id, kind, options=options, config=config)
             if not selected:
                 raise KRDError("no_available_session", "No session is available for this persona and pool")
             return selected
-        if not await self.is_allowed(persona_id, target, kind):
+        allowed = (any(item["sid"] == target for item in options) if options is not None else
+                   await self.is_allowed(persona_id, target, kind, config=config))
+        if not allowed:
             raise KRDError("session_denied", f"Session is not allowed: {target}")
         return target
 
-    async def select_session(self, persona_id: str, kind: str) -> str | None:
-        options = await self.session_options(persona_id, kind)
+    async def select_session(self, persona_id: str, kind: str, *, options: list[dict[str, str]] | None = None,
+                             config: dict | None = None) -> str | None:
+        options = await self.session_options(persona_id, kind, config=config) if options is None else options
         if not options:
             return None
-        config = await self.store.get_config(persona_id)
+        config = config or await self.store.get_config(persona_id)
         strategy = config[f"{kind}_pool"].get("strategy", "pure_random")
         state = await self.store.pool_state(persona_id, kind)
         sids = [item["sid"] for item in options]

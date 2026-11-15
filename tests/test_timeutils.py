@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 from krd.models import KRDError
-from krd.timeutils import compiled_windows, next_daily, sample_window, subtract_window, to_utc, window_utc
+from krd.timeutils import next_daily, sample_window, subtract_window, to_utc, window_utc
 
 
 def test_cross_midnight_window():

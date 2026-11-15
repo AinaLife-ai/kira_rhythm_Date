@@ -28,13 +28,34 @@ class Scheduler:
         self.wake_event = asyncio.Event()
         self.task: asyncio.Task | None = None
         self.running = False
+        self.last_cleanup = 0.0
+        self.watchdog_seconds = 900.0
+        self._watchdogs: dict[str, asyncio.Task] = {}
 
     async def start(self) -> None:
         if self.running:
             return
         self.running = True
         await self.recover()
+        await self._startup_planning()
         self.task = asyncio.create_task(self._loop(), name="krd_scheduler")
+
+    async def _startup_planning(self) -> None:
+        persona_id = await self.runtime.active_persona_id()
+        if not persona_id:
+            return
+        config = await self.store.get_config(persona_id)
+        if not config["enabled"] or not config["auto_plan"] or not config["startup_plan"]:
+            return
+        today = await self.plans.current_date(persona_id)
+        tomorrow = (datetime.fromisoformat(today) + timedelta(days=1)).date().isoformat()
+        if not await self.plans.get_plan_by_date(persona_id, today):
+            target = today
+        elif not await self.plans.get_plan_by_date(persona_id, tomorrow):
+            target = tomorrow
+        else:
+            return
+        await self.trigger_planning(persona_id, "startup", target, "Startup found a missing current/next-day plan")
 
     async def stop(self) -> None:
         self.running = False
@@ -43,22 +64,36 @@ class Scheduler:
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
             self.task = None
+        watchdogs = list(self._watchdogs.values())
+        self._watchdogs.clear()
+        for task in watchdogs:
+            task.cancel()
+        if watchdogs:
+            await asyncio.gather(*watchdogs, return_exceptions=True)
 
     def wake(self) -> None:
         self.wake_event.set()
 
     async def recover(self) -> None:
-        rows = await self.store.all("SELECT id,item_id,status FROM runs WHERE status IN ('prepared','queued','running')")
-        for row in rows:
-            await self.store.execute("UPDATE runs SET status='interrupted',finalized_at=?,error='Interrupted before confirmed response' WHERE id=?", (now(), row["id"]))
-            await self.store.execute("UPDATE items SET state='interrupted',updated_at=? WHERE id=? AND state IN ('queued','running')", (now(), row["item_id"]))
+        timestamp = now()
+        async with self.store.transaction() as db:
+            await db.execute(
+                "UPDATE runs SET status='interrupted',finalized_at=?,error='Interrupted before confirmed response' "
+                "WHERE status IN ('prepared','queued','running')", (timestamp,))
+            await db.execute(
+                "UPDATE items SET state='interrupted',updated_at=? WHERE state IN ('queued','running') "
+                "AND EXISTS(SELECT 1 FROM runs r WHERE r.item_id=items.id AND r.status='interrupted' AND r.finalized_at=?)",
+                (timestamp, timestamp))
 
     async def _loop(self) -> None:
         while self.running:
             try:
                 await self.dispatch_due()
+                await self._maybe_cleanup()
                 due = await self.next_due()
-                timeout = None if due is None else max(0.05, min(due - time.time(), 3600))
+                # The cap also detects active-persona changes made outside KRD;
+                # ordinary schedule/config changes wake us immediately instead.
+                timeout = 30 if due is None else max(0.05, min(due - time.time(), 30))
                 try:
                     await asyncio.wait_for(self.wake_event.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
@@ -73,6 +108,16 @@ class Scheduler:
                 except asyncio.TimeoutError:
                     pass
                 self.wake_event.clear()
+
+    async def _maybe_cleanup(self) -> None:
+        monotonic = time.monotonic()
+        if monotonic - self.last_cleanup < 21600:
+            return
+        persona_id = await self.runtime.active_persona_id()
+        if persona_id:
+            config = await self.store.get_config(persona_id)
+            await self.store.cleanup(persona_id, config["retention_days"], await self.plans.current_date(persona_id))
+        self.last_cleanup = monotonic
 
     async def next_due(self) -> float | None:
         persona_id = await self.runtime.active_persona_id()
@@ -133,6 +178,8 @@ class Scheduler:
 
     async def claim_item(self, item_id: str, manual: bool = False) -> dict[str, Any] | None:
         timestamp = time.time()
+        run = None
+        terminal = False
         async with self.store.transaction() as db:
             async with db.execute(
                 "SELECT i.*,p.persona_id,p.state AS plan_state FROM items i JOIN plans p ON p.id=i.plan_id WHERE i.id=?",
@@ -143,55 +190,85 @@ class Scheduler:
                 return None
             config = await self.store.get_config(item["persona_id"])
             if not manual and timestamp > item["scheduled_at"] + config["recovery_grace_seconds"]:
-                await db.execute("UPDATE items SET state='missed',updated_at=? WHERE id=?", (timestamp, item_id))
-                return None
-            probability = 1.0 if manual else float(item["execution_probability"])
-            draw = self.rng.random()
-            skipped = draw >= probability
-            state = "skipped_probability" if skipped else "queued"
-            await db.execute("UPDATE items SET state=?,updated_at=? WHERE id=? AND state='scheduled'", (state, timestamp, item_id))
-            async with db.execute("SELECT COALESCE(MAX(attempt),0)+1 FROM runs WHERE item_id=?", (item_id,)) as cursor:
-                attempt = (await cursor.fetchone())[0]
-            run = {
-                "id": new_id("run"), "item_id": item_id, "plan_id": item["plan_id"], "persona_id": item["persona_id"],
-                "attempt": attempt, "session_id": item["target"], "kind": "item",
-                "status": "skipped_probability" if skipped else "prepared", "scheduled_at": timestamp if manual else item["scheduled_at"],
-                "claimed_at": timestamp, "probability": probability, "draw": draw,
-            }
-            await db.execute(
-                "INSERT INTO runs(id,item_id,plan_id,persona_id,attempt,session_id,kind,status,scheduled_at,claimed_at,probability,draw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                tuple(run[key] for key in ("id", "item_id", "plan_id", "persona_id", "attempt", "session_id", "kind", "status", "scheduled_at", "claimed_at", "probability", "draw")))
-        if run["status"] == "prepared":
-            await self.publish_run(run)
+                state = "missed"
+                terminal = True
+                await db.execute("UPDATE items SET state='missed',updated_at=? WHERE id=? AND state='scheduled'", (timestamp, item_id))
+            else:
+                probability = 1.0 if manual else float(item["execution_probability"])
+                draw = self.rng.random()
+                skipped = draw >= probability
+                state = "skipped_probability" if skipped else "queued"
+                terminal = skipped
+                await db.execute("UPDATE items SET state=?,updated_at=? WHERE id=? AND state='scheduled'", (state, timestamp, item_id))
+                async with db.execute("SELECT COALESCE(MAX(attempt),0)+1 FROM runs WHERE item_id=?", (item_id,)) as cursor:
+                    attempt = (await cursor.fetchone())[0]
+                run = {
+                    "id": new_id("run"), "item_id": item_id, "plan_id": item["plan_id"], "persona_id": item["persona_id"],
+                    "attempt": attempt, "session_id": item["target"], "kind": "item",
+                    "status": "skipped_probability" if skipped else "prepared", "scheduled_at": timestamp if manual else item["scheduled_at"],
+                    "claimed_at": timestamp, "probability": probability, "draw": draw,
+                }
+                await db.execute(
+                    "INSERT INTO runs(id,item_id,plan_id,persona_id,attempt,session_id,kind,status,scheduled_at,claimed_at,probability,draw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                    tuple(run[key] for key in ("id", "item_id", "plan_id", "persona_id", "attempt", "session_id", "kind", "status", "scheduled_at", "claimed_at", "probability", "draw")))
+        if run and run["status"] == "prepared":
+            if not await self.publish_run(run):
+                run["status"] = "failed"
+                state = "failed"
+                terminal = True
         await self.runtime.broadcast("item_changed", {"item_id": item_id, "state": state})
-        if not manual:
+        if not manual and terminal:
             await self.check_all_triggered(item["plan_id"])
         return run
 
     async def trigger_planning(self, persona_id: str, kind: str, target_date: str, reason: str,
                                trigger_id: str | None = None) -> dict[str, Any] | None:
-        if not persona_id or persona_id != await self.runtime.active_persona_id():
+        if not persona_id:
+            return None
+        if persona_id != await self.runtime.active_persona_id():
+            if kind == "manual":
+                raise KRDError("persona_not_active", "Planning can only run for the active persona")
             return None
         config = await self.store.get_config(persona_id)
         if not config["enabled"] or (kind != "manual" and not config["auto_plan"]):
+            if kind == "manual":
+                raise KRDError("planning_disabled", "Enable this persona's life rhythm before planning")
             return None
         trigger_id = trigger_id or new_id(f"trg_{kind}")
         existing = await self.store.one("SELECT * FROM planning_runs WHERE trigger_id=?", (trigger_id,))
         if existing:
             return existing
-        target = await self.policy.require_target(persona_id, "", "planning")
-        if not target:
-            return None
+        try:
+            target = await self.policy.require_target(persona_id, "", "planning")
+        except KRDError as exc:
+            if kind == "manual":
+                raise
+            # Record automatic dispatch failure so a missing adapter/session does
+            # not make the scheduler retry and log every five seconds forever.
+            run = {"id": new_id("prn"), "trigger_id": trigger_id, "persona_id": persona_id, "kind": kind,
+                   "target_date": target_date, "session_id": "", "status": "failed", "reason": reason}
+            await self.store.execute(
+                "INSERT OR IGNORE INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,reason,created_at,finished_at,error) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (run["id"], trigger_id, persona_id, kind, target_date, "", "failed", reason, now(), now(), exc.message))
+            return await self.store.one("SELECT * FROM planning_runs WHERE trigger_id=?", (trigger_id,))
         run = {"id": new_id("prn"), "trigger_id": trigger_id, "persona_id": persona_id, "kind": kind,
                "target_date": target_date, "session_id": target, "status": "prepared", "reason": reason}
-        await self.store.execute(
-            "INSERT INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-            (run["id"], trigger_id, persona_id, kind, target_date, target, "prepared", reason, now()))
-        await self.publish_run(run)
+        async with self.store.transaction() as db:
+            cursor = await db.execute(
+                "INSERT OR IGNORE INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (run["id"], trigger_id, persona_id, kind, target_date, target, "prepared", reason, now()))
+            if cursor.rowcount != 1:
+                return await self.store.one("SELECT * FROM planning_runs WHERE trigger_id=?", (trigger_id,))
+        if not await self.publish_run(run):
+            run["status"] = "failed"
+            if kind == "manual":
+                raise KRDError("dispatch_failed", "Planning event could not be dispatched; inspect adapter permissions")
         return run
 
-    async def publish_run(self, run: dict[str, Any]) -> None:
-        kind = run["kind"]
+    async def publish_run(self, run: dict[str, Any]) -> bool:
+        # run.kind stores the trigger reason (daily/manual/all_triggered) for
+        # planning runs; prompt metadata must expose only item vs planning.
+        kind = "item" if run["kind"] == "item" else "planning"
         run_id = run["id"]
         target = run["session_id"]
         try:
@@ -233,7 +310,9 @@ class Scheduler:
             else:
                 await self.store.execute("UPDATE planning_runs SET status='queued' WHERE id=?", (run_id,))
             await self.ctx.event_bus.publish(event)
+            self._arm_watchdog(run_id, kind)
             await self.runtime.broadcast("run_queued", {"run_id": run_id, "kind": kind})
+            return True
         except Exception as exc:
             if kind == "item":
                 await self.store.execute("UPDATE runs SET status='failed',error=? WHERE id=?", (str(exc), run_id))
@@ -241,9 +320,57 @@ class Scheduler:
             else:
                 await self.store.execute("UPDATE planning_runs SET status='failed',error=?,finished_at=? WHERE id=?", (str(exc), now(), run_id))
             self.runtime.log("warning", "dispatch_failed", run_id=run_id, error=str(exc))
+            await self.runtime.broadcast("run_failed", {"run_id": run_id, "kind": kind, "error": str(exc)})
+            return False
+
+    def _arm_watchdog(self, run_id: str, kind: str) -> None:
+        self._clear_watchdog(run_id)
+        task = asyncio.create_task(self._watchdog(run_id, kind), name=f"krd_watchdog:{run_id}")
+        self._watchdogs[run_id] = task
+
+        def finished(completed: asyncio.Task) -> None:
+            if self._watchdogs.get(run_id) is completed:
+                self._watchdogs.pop(run_id, None)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(finished)
+
+    def _clear_watchdog(self, run_id: str) -> None:
+        task = self._watchdogs.pop(run_id, None)
+        if task and not task.done():
+            task.cancel()
+
+    async def _watchdog(self, run_id: str, kind: str) -> None:
+        await asyncio.sleep(self.watchdog_seconds)
+        changed = False
+        async with self.store.transaction() as db:
+            if kind == "item":
+                run = await self.store.one("SELECT item_id,status FROM runs WHERE id=?", (run_id,))
+                if run and run["status"] in {"prepared", "queued", "running"}:
+                    await db.execute(
+                        "UPDATE runs SET status='interrupted',finalized_at=?,error='Workflow watchdog timeout' WHERE id=?",
+                        (now(), run_id))
+                    await db.execute(
+                        "UPDATE items SET state='interrupted',updated_at=? WHERE id=? AND state IN ('queued','running')",
+                        (now(), run["item_id"]))
+                    changed = True
+            else:
+                cursor = await db.execute(
+                    "UPDATE planning_runs SET status='interrupted',finished_at=?,error='Workflow watchdog timeout' "
+                    "WHERE id=? AND status IN ('prepared','queued','running')", (now(), run_id))
+                changed = cursor.rowcount == 1
+        if changed:
+            await self.runtime.broadcast("run_interrupted", {"run_id": run_id, "kind": kind})
 
     async def on_request(self, event) -> None:
+        active = await self.runtime.active_persona_id()
+        allowed_runs = getattr(event, "_krd_allowed_run_ids", None)
         for metadata in ContextBuilder.metadata(event):
+            if metadata.get("persona_id") != active:
+                continue
+            if allowed_runs is not None and metadata["run_id"] not in allowed_runs:
+                continue
             if metadata["kind"] == "item":
                 await self.store.execute("UPDATE runs SET status='running' WHERE id=? AND status IN ('prepared','queued')", (metadata["run_id"],))
             else:
@@ -259,6 +386,7 @@ class Scheduler:
             if metadata["persona_id"] != active_persona:
                 continue
             run_id = metadata["run_id"]
+            self._clear_watchdog(run_id)
             if metadata["kind"] == "item":
                 run = await self.store.one("SELECT * FROM runs WHERE id=?", (run_id,))
                 if not run:
@@ -268,7 +396,7 @@ class Scheduler:
                     continue
                 if status == "error":
                     await self.store.execute("UPDATE runs SET status='failed',responded_at=?,raw_output=?,error=? WHERE id=?",
-                                             (now(), text, "model_error", run_id))
+                                             (now(), text[:20000], "model_error", run_id))
                     await self.store.execute("UPDATE items SET state='failed',updated_at=? WHERE id=?", (now(), item["id"]))
                     state = "failed"
                 else:
@@ -276,10 +404,11 @@ class Scheduler:
                     error = "delivery_unmet" if item["interaction"] == "must_message" and silent else ""
                     await self.store.execute(
                         "UPDATE runs SET status='responded',responded_at=?,raw_output=?,input_tokens=?,output_tokens=?,error=? WHERE id=?",
-                        (now(), text, getattr(response, "input_tokens", None), getattr(response, "output_tokens", None), error, run_id))
+                        (now(), text[:20000], getattr(response, "input_tokens", None), getattr(response, "output_tokens", None), error, run_id))
                     await self.store.execute("UPDATE items SET state=?,updated_at=? WHERE id=?", (state, now(), item["id"]))
                 await self.runtime.broadcast("item_changed", {"item_id": item["id"], "state": state})
-                await self.check_all_triggered(item["plan_id"])
+                if run["status"] not in {"responded", "finalized", "failed"}:
+                    await self.check_all_triggered(item["plan_id"])
             else:
                 current = await self.store.one("SELECT status FROM planning_runs WHERE id=?", (run_id,))
                 if current and current["status"] not in {"completed", "failed"}:
@@ -297,7 +426,7 @@ class Scheduler:
         return not compact or compact in {"<msg/>", "<msg></msg>"}
 
     async def check_all_triggered(self, plan_id: str) -> None:
-        plan = await self.plans.get_plan(plan_id)
+        plan = await self.store.one("SELECT id,persona_id,date FROM plans WHERE id=?", (plan_id,))
         if not plan or not plan["persona_id"] or plan["persona_id"] != await self.runtime.active_persona_id():
             return
         config = await self.store.get_config(plan["persona_id"])
@@ -314,10 +443,15 @@ class Scheduler:
         await self.trigger_planning(plan["persona_id"], "all_triggered", target, "All items reached a terminal state", trigger_id)
 
     async def run_now(self, persona_id: str, item_id: str) -> dict[str, Any]:
-        item = await self.store.one("SELECT persona_id FROM items WHERE id=?", (item_id,))
+        if persona_id != await self.runtime.active_persona_id():
+            raise KRDError("persona_not_active", "Items can only run for the active persona")
+        item = await self.store.one(
+            "SELECT p.persona_id FROM items i JOIN plans p ON p.id=i.plan_id WHERE i.id=?", (item_id,))
         if not item or item["persona_id"] != persona_id:
             raise KRDError("not_found", "Item not found")
         run = await self.claim_item(item_id, manual=True)
         if not run:
             raise KRDError("cannot_run", "Item is not in a schedulable state")
+        if run["status"] == "failed":
+            raise KRDError("dispatch_failed", "Item event could not be dispatched; inspect adapter permissions")
         return run

@@ -20,9 +20,39 @@ class WeatherService:
         self.ctx = ctx
         self.plugin_cfg = plugin_cfg or {}
         self._locks: dict[str, asyncio.Lock] = {}
+        self._refreshes: dict[str, asyncio.Task] = {}
+
+    def refresh_soon(self, persona_id: str) -> None:
+        current = self._refreshes.get(persona_id)
+        if current and not current.done():
+            return
+        task = asyncio.create_task(self.summary(persona_id), name=f"krd_weather:{persona_id}")
+        self._refreshes[persona_id] = task
+
+        def finished(completed: asyncio.Task) -> None:
+            if self._refreshes.get(persona_id) is completed:
+                self._refreshes.pop(persona_id, None)
+            if not completed.cancelled():
+                completed.exception()  # Consume failures; callers receive cache states.
+
+        task.add_done_callback(finished)
+
+    async def close(self) -> None:
+        tasks = list(self._refreshes.values())
+        self._refreshes.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def _client(self, timeout: float = 3.0) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=timeout, follow_redirects=True, headers={"Accept-Encoding": "gzip, deflate"})
+
+    @staticmethod
+    async def _get(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+        response = await client.get(url, **kwargs)
+        response.raise_for_status()
+        return response
 
     def _ua(self) -> str:
         contact = str(self.plugin_cfg.get("weather_contact", "")).strip()
@@ -30,13 +60,13 @@ class WeatherService:
 
     async def geocode(self, name: str) -> list[dict[str, Any]]:
         async with self._client(5) as client:
-            response = await client.get("https://geocoding-api.open-meteo.com/v1/search", params={"name": name, "count": 8, "language": "zh", "format": "json"})
+            response = await self._get(client,"https://geocoding-api.open-meteo.com/v1/search", params={"name": name, "count": 8, "language": "zh", "format": "json"})
             response.raise_for_status()
             rows = response.json().get("results", [])
         return [{"name": row.get("name"), "country": row.get("country", ""), "admin1": row.get("admin1", ""),
                  "latitude": row["latitude"], "longitude": row["longitude"], "timezone": row.get("timezone", "auto")} for row in rows]
 
-    async def summary(self, persona_id: str) -> dict[str, Any]:
+    async def summary(self, persona_id: str, *, allow_network: bool = True) -> dict[str, Any]:
         config = await self.store.get_config(persona_id)
         weather = config["weather"]
         mode = weather.get("mode", "off")
@@ -50,16 +80,23 @@ class WeatherService:
             if not location:
                 result["real"] = {"status": "location_required"}
             else:
-                result["real"] = await self._cached_current(persona_id, location, weather)
+                result["real"] = await self._cached_current(persona_id, location, weather, allow_network=allow_network)
         return result
 
-    async def _cached_current(self, persona_id: str, location: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    async def _cached_current(self, persona_id: str, location: dict[str, Any], config: dict[str, Any], *,
+                              allow_network: bool = True) -> dict[str, Any]:
         provider = config.get("provider", "open_meteo")
         key = f"current:{provider}:{round(float(location['latitude']), 4)}:{round(float(location['longitude']), 4)}"
         row = await self.store.one("SELECT * FROM weather_cache WHERE cache_key=?", (key,))
         timestamp = __import__('time').time()
         if row and row["expires_at"] > timestamp:
             return loads(row["payload_json"], {"status": "cache_error"})
+        if not allow_network:
+            if row:
+                stale = loads(row["payload_json"], {})
+                stale["status"] = "stale"
+                return stale
+            return {"status": "pending", "provider": provider}
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             row = await self.store.one("SELECT * FROM weather_cache WHERE cache_key=?", (key,))
@@ -84,7 +121,7 @@ class WeatherService:
         lat, lon = float(location["latitude"]), float(location["longitude"])
         async with self._client(timeout) as client:
             if provider == "open_meteo":
-                response = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                response = await self._get(client,"https://api.open-meteo.com/v1/forecast", params={
                     "latitude": lat, "longitude": lon, "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
                     "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
                     "timezone": "auto", "forecast_days": 1})
@@ -96,7 +133,7 @@ class WeatherService:
                                     (daily.get("temperature_2m_min") or [None])[0], (daily.get("temperature_2m_max") or [None])[0],
                                     (daily.get("precipitation_probability_max") or [None])[0], (daily.get("sunrise") or [None])[0], (daily.get("sunset") or [None])[0])
             if provider == "met_norway":
-                response = await client.get("https://api.met.no/weatherapi/locationforecast/2.0/compact", params={"lat": round(lat, 4), "lon": round(lon, 4)}, headers={"User-Agent": self._ua()})
+                response = await self._get(client,"https://api.met.no/weatherapi/locationforecast/2.0/compact", params={"lat": round(lat, 4), "lon": round(lon, 4)}, headers={"User-Agent": self._ua()})
                 data = response.json()
                 point = data["properties"]["timeseries"][0]
                 details = point["data"]["instant"]["details"]
@@ -107,43 +144,43 @@ class WeatherService:
                 return result
             if provider == "nws":
                 headers = {"User-Agent": self._ua(), "Accept": "application/geo+json"}
-                point = (await client.get(f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}", headers=headers)).json()
+                point = (await self._get(client,f"https://api.weather.gov/points/{lat:.4f},{lon:.4f}", headers=headers)).json()
                 forecast_url = point["properties"]["forecast"]
-                data = (await client.get(forecast_url, headers=headers)).json()
+                data = (await self._get(client,forecast_url, headers=headers)).json()
                 period = data["properties"]["periods"][0]
                 return self._normal(provider, location, period.get("startTime"), period.get("temperature"), None,
                                     period.get("shortForecast"), period.get("windSpeed"), detailed=period.get("detailedForecast"))
             if provider == "bright_sky":
-                response = await client.get("https://api.brightsky.dev/current_weather", params={"lat": lat, "lon": lon})
+                response = await self._get(client,"https://api.brightsky.dev/current_weather", params={"lat": lat, "lon": lon})
                 data = response.json().get("weather", {})
                 return self._normal(provider, location, data.get("timestamp"), data.get("temperature"), None,
                                     data.get("condition"), data.get("wind_speed"), detailed=data.get("icon"))
             if provider == "weatherapi":
                 key = self._credential("weatherapi_key")
-                response = await client.get("https://api.weatherapi.com/v1/forecast.json", params={"key": key, "q": f"{lat},{lon}", "days": 1, "aqi": "no", "alerts": "no"})
+                response = await self._get(client,"https://api.weatherapi.com/v1/forecast.json", params={"key": key, "q": f"{lat},{lon}", "days": 1, "aqi": "no", "alerts": "no"})
                 data = response.json()
                 current, day = data["current"], data["forecast"]["forecastday"][0]["day"]
                 return self._normal(provider, location, current.get("last_updated"), current.get("temp_c"), current.get("feelslike_c"),
                                     current.get("condition", {}).get("text"), current.get("wind_kph"), day.get("mintemp_c"), day.get("maxtemp_c"), day.get("daily_chance_of_rain"))
             if provider == "visualcrossing":
                 key = self._credential("visualcrossing_key")
-                response = await client.get(f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{lat},{lon}/today", params={"unitGroup": "metric", "key": key, "contentType": "json"})
+                response = await self._get(client,f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{lat},{lon}/today", params={"unitGroup": "metric", "key": key, "contentType": "json"})
                 data = response.json()
                 current, day = data.get("currentConditions", {}), data.get("days", [{}])[0]
                 return self._normal(provider, location, current.get("datetime"), current.get("temp"), current.get("feelslike"), current.get("conditions"), current.get("windspeed"), day.get("tempmin"), day.get("tempmax"), day.get("precipprob"), day.get("sunrise"), day.get("sunset"))
             if provider == "qweather":
                 key = self._credential("qweather_key")
-                response = await client.get("https://devapi.qweather.com/v7/weather/now", params={"location": f"{lon},{lat}", "key": key})
+                response = await self._get(client,"https://devapi.qweather.com/v7/weather/now", params={"location": f"{lon},{lat}", "key": key})
                 data = response.json().get("now", {})
                 return self._normal(provider, location, data.get("obsTime"), data.get("temp"), data.get("feelsLike"), data.get("text"), data.get("windSpeed"))
             if provider == "weatherbit":
                 key = self._credential("weatherbit_key")
-                response = await client.get("https://api.weatherbit.io/v2.0/current", params={"lat": lat, "lon": lon, "key": key})
+                response = await self._get(client,"https://api.weatherbit.io/v2.0/current", params={"lat": lat, "lon": lon, "key": key})
                 data = response.json().get("data", [{}])[0]
                 return self._normal(provider, location, data.get("ob_time"), data.get("temp"), data.get("app_temp"), data.get("weather", {}).get("description"), data.get("wind_spd"))
             if provider == "openweather":
                 key = self._credential("openweather_key")
-                response = await client.get("https://api.openweathermap.org/data/3.0/onecall", params={"lat": lat, "lon": lon, "exclude": "minutely,hourly,alerts", "units": "metric", "appid": key})
+                response = await self._get(client,"https://api.openweathermap.org/data/3.0/onecall", params={"lat": lat, "lon": lon, "exclude": "minutely,hourly,alerts", "units": "metric", "appid": key})
                 data = response.json()
                 current, day = data.get("current", {}), data.get("daily", [{}])[0]
                 return self._normal(provider, location, current.get("dt"), current.get("temp"), current.get("feels_like"), current.get("weather", [{}])[0].get("description"), current.get("wind_speed"), day.get("temp", {}).get("min"), day.get("temp", {}).get("max"), day.get("pop"))

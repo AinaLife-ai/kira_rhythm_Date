@@ -59,7 +59,7 @@ async def main():
     state = await plans.set_day_state("persona-a", tomorrow, {"current_appearance": "浅色外套", "current_mood": "安静"}, "bot")
     assert state["current_appearance"] == "浅色外套"
     await plans.record_experience("persona-a", tomorrow, "梦见一座漂浮图书馆", kind="dream")
-    dreams = await plans.experiences("persona-a", tomorrow, kind if False else "")
+    dreams = await plans.experiences("persona-a", tomorrow)
     assert dreams[0]["kind"] == "dream"
 
     # A failure in the second day must roll back the first day too.

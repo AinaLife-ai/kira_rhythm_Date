@@ -62,6 +62,10 @@
   .modal-backdrop { padding: 12px; align-items: flex-end; }
   .modal-card { max-height: 90vh; border-radius: 19px 19px 12px 12px; padding: 20px; }
   .toast-stack { right: 14px; bottom: 84px; }
+  .calendar-layout > * { min-width: 0; }
+  .calendar-card .section-heading { flex-wrap: wrap; gap: 8px; }
+  .calendar-card .section-heading h2 { flex: 1; min-width: 120px; text-align: center; }
+  .calendar-legend { flex-wrap: wrap; }
   .calendar-legend > span { display: none; }
   .calendar-legend .text-button { margin-left: 0; }
 }

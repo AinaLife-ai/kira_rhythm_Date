@@ -6,9 +6,9 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/调度/缓存/资源测试 | **24 passed** |
-| KiraAI 3.1.2 同一套测试 | **24 passed** |
-| 3.2 真实 PluginManager 生命周期 | 通过：3 工具、31+ 鉴权 API、WS、页面、静态目录 |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **73 passed** |
+| KiraAI 3.1.2 同一套测试 | **73 passed** |
+| 3.2 真实 PluginManager 生命周期 | 通过：3 工具、34 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
 | 3.1.2 真实 IM 工作流 E2E | 同上，通过；含 `resolve_session` 特征回退 |
@@ -32,6 +32,29 @@
 - 动态日程上下文 `persist=False`；notice 短标记按框架默认持久。
 - 无 CDN、无天气密钥进入前端、无 `auth=False`、无旧同步会话 API。
 
+## 第二轮完整审计（v1.0.1）
+
+本轮未使用子代理。除上述双版本测试外，执行了以下额外验收：
+
+| 验收 | 真实结果 |
+|---|---|
+| 真实 HTTP API | 双版本通过 bootstrap、非法配置、DayState、计划、人格 diff 隔离、离线投递失败 |
+| 生产前端 → 真实 API → SQLite | Chromium 无业务数据 mock：创建/修订/跳过、DayState、设置、日型、模板、上传均通过 |
+| 重新进入持久化 | 计划 r3、DayState、配置 r4、头像与横幅均保持；图片实际 `naturalWidth=24` |
+| 头像缓存 | 每次进入产生新 `entry`；`/avatar` 为 `no-store`，普通适配器读取使用缓存，进入时强制后台刷新 |
+| 图片缓存 | 内容哈希 URL、`ETag`、WebP、`Cache-Control: private, max-age=31536000, immutable` |
+| WebSocket | 真实服务诊断 `websocket_clients=1`，变更可到达页面 |
+| 并发与原子性 | 同日创建/同版本修订单赢家；12 路规划去重；事务外读不到未提交数据；导入失败全回滚 |
+| 100 项压力 | 两版 100/100 入队；保存约 52–99ms，整树读取约 2–3ms，100 项派发约 183–382ms |
+| 31 秒空闲长稳 | 跨越人格检测周期；`data_version 2→2`、零新事件、调度器存活，无持续写入 |
+| 桌面/手机全视图 | 五视图和五设置页签实际渲染，零 JS 异常；手机日历 6px 溢出已修复并复测 390px 全通过 |
+
+真实浏览器验收还实际发现并修复了原有 mock 未暴露的问题：完整设置携带只读字段导致必败、月份锚生成 `YYYY-MM-DD-01`、模板应用后展示错误日期，以及保存后差异仍指向旧计划。对应静态发布契约已加入 `tests/audit_contract.py`。
+
+### 本轮外部服务边界
+
+尝试真实 Open-Meteo 时，沙箱直连超时、代理 TLS 失败，因此**不声称外部天气服务实测成功**。九 Provider 的解析代码、HTTP 状态检查、超时、缓存、陈旧回退与首屏/调度不等待网络均有本地测试；线上服务仍需按实际网络与账号验收。
+
 ## 重复执行
 
 ### 领域测试
@@ -52,7 +75,10 @@ python3 tests/framework_smoke.py /path/to/KiraAI /path/to/kira_rhythm_Date
 
 ```sh
 python3 tests/framework_e2e.py /path/to/KiraAI /path/to/kira_rhythm_Date
+python3 tests/api_integration.py /path/to/KiraAI /path/to/kira_rhythm_Date
 ```
+
+百项压力与 31 秒空闲长稳分别使用 `tests/stress_audit.py`、`tests/soak_audit.py`；`tests/run_all.sh` 默认包含双版本单元、真实框架、真实 HTTP API 与百项压力，长稳脚本单独运行以免拖慢每次提交。
 
 ### S/Z 与生态契约
 

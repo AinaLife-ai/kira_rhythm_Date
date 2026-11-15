@@ -5,8 +5,6 @@ from types import SimpleNamespace
 
 from core.adapter.adapter_info import AdapterInfo
 from core.chat import Session
-from core.chat.message_elements import Text
-from core.chat import MessageChain
 
 from krd.context import ContextBuilder
 from krd.plans import PlanService
@@ -62,6 +60,7 @@ class FakeRuntime:
         self.plans = PlanService(self.store, self.policy)
         self.context_builder = ContextBuilder(self.store, self.plans)
         self.scheduler = Scheduler(self)
+        self.plans.on_change = self.scheduler.wake
         self.notices = []
     async def active_persona_id(self): return self.ctx.persona_mgr.active
     async def broadcast(self, kind, payload): self.notices.append((kind, payload))

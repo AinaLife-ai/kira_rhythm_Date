@@ -28,13 +28,19 @@ def main(root: Path):
     assert not any(script.startswith(("http://", "https://", "//")) for script in scripts)
     assert "web/preview.html" not in "\n".join(str(path) for path in root.rglob("*"))
     frontend = "\n".join(path.read_text() for path in (root / "web" / "js").glob("*.js"))
+    app = (root / "web" / "js" / "app.js").read_text()
     assert "eval(" not in frontend and "new Function" not in frontend
     assert "weatherapi_key" not in frontend and "openweather_key" not in frontend
     assert "window.__krdApp = app.mount" not in frontend
     assert "location.search.includes('debug')" in frontend
+    assert "delete payload.schema_version" in app and "delete payload.per_persona" in app
+    assert "this.monthAnchor = state.selectedDate.slice(0, 7)" in app
+    assert "this.monthAnchor = date.slice(0, 7)" in app
+    assert "refresh=1&persona=" in app and "cache: method === 'GET' ? 'no-store'" in frontend
+    assert "const payload = Object.fromEntries(allowed.map" in app
+    assert "await runtime.scheduler.wake()" not in (root / "krd" / "tools.py").read_text()
+    assert "len(metadata) != len(messages)" in (root / "krd" / "runtime.py").read_text()
     assert not list(root.rglob("*.pyc"))
-    views = (root / "web" / "js" / "views.js").read_text()
-    app = (root / "web" / "js" / "app.js").read_text()
     required_bindings = {"settingsTab", "selectedDate", "selectedPlan", "dayStateEditor", "dayTypeEditor", "runs"}
     for name in required_bindings:
         assert re.search(rf"\b{name}\b", app), name

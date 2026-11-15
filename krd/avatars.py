@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -15,8 +16,9 @@ class AvatarService:
         self.store = store
         self.ctx = ctx
         self.assets = AssetService(store, data_dir)
+        self._refresh_lock = asyncio.Lock()
 
-    async def current(self, persona_id: str) -> dict[str, Any]:
+    async def current(self, persona_id: str, *, force_refresh: bool = False) -> dict[str, Any]:
         config = await self.store.get_config(persona_id)
         appearance = config["appearance"]
         asset_id = appearance.get("avatar_asset_id")
@@ -34,17 +36,27 @@ class AvatarService:
                     continue
                 cache_key = f"avatar:{persona_id}:{name}"
                 cached = await self.store.get_setting(cache_key, {})
-                if cached.get("asset_id") and now() - cached.get("fetched_at", 0) < 86400:
-                    row = await self.store.one("SELECT * FROM assets WHERE persona_id=? AND id=?", (persona_id, cached["asset_id"]))
-                    if row:
-                        return {"source": f"adapter:{name}", **self.assets.public(row)}
+                row = None
+                if cached.get("asset_id"):
+                    row = await self.store.one(
+                        "SELECT * FROM assets WHERE persona_id=? AND id=?", (persona_id, cached["asset_id"]))
+                fresh = bool(row and now() - cached.get("fetched_at", 0) < 86400)
+                if fresh and not force_refresh:
+                    return {"source": f"adapter:{name}", **self.assets.public(row)}
                 try:
-                    result = await self._from_adapter(persona_id, name, adapter)
-                    if result:
-                        await self.store.put_setting(cache_key, {"asset_id": result["id"], "fetched_at": now()})
-                        return result
+                    async with self._refresh_lock:
+                        result = await self._from_adapter(persona_id, name, adapter)
+                        if result:
+                            await self.store.put_setting(cache_key, {"asset_id": result["id"], "fetched_at": now()})
+                            return result
                 except Exception:
+                    # A failed foreground refresh must not replace a working
+                    # avatar with a builtin/persona fallback or blank image.
+                    if row:
+                        return {"source": f"adapter:{name}", "stale": True, **self.assets.public(row)}
                     continue
+                if row:
+                    return {"source": f"adapter:{name}", "stale": True, **self.assets.public(row)}
         try:
             path = await self.ctx.persona_mgr.get_reference_image(persona_id)
             if path:

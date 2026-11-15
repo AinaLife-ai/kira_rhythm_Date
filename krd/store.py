@@ -119,8 +119,9 @@ class Store:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.db: aiosqlite.Connection | None = None
+        self.read_db: aiosqlite.Connection | None = None
         self.write_lock = asyncio.Lock()
-        self._tx_state: ContextVar[tuple[aiosqlite.Connection, int] | None] = ContextVar("krd_tx_state", default=None)
+        self._tx_state: ContextVar[tuple[aiosqlite.Connection, int, asyncio.Task] | None] = ContextVar("krd_tx_state", default=None)
 
     async def initialize(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -137,8 +138,15 @@ class Store:
                 "INSERT OR IGNORE INTO settings(key,value_json,revision,updated_at) VALUES('global',?,1,?)",
                 (dumps(normalized({})), now()),
             )
+        self.read_db = await aiosqlite.connect(self.path, timeout=10)
+        self.read_db.row_factory = aiosqlite.Row
+        await self.read_db.execute("PRAGMA query_only=ON")
+        await self.read_db.execute("PRAGMA busy_timeout=10000")
 
     async def close(self) -> None:
+        if self.read_db is not None:
+            await self.read_db.close()
+            self.read_db = None
         if self.db is not None:
             await self.db.close()
             self.db = None
@@ -148,14 +156,28 @@ class Store:
             raise RuntimeError("KRD store is not initialized")
         return self.db
 
+    def read_connection(self) -> aiosqlite.Connection:
+        current = self._tx_state.get()
+        if current and current[2] is asyncio.current_task():
+            return current[0]
+        if self.read_db is None:
+            raise RuntimeError("KRD store is not initialized")
+        return self.read_db
+
+    @property
+    def in_transaction(self) -> bool:
+        current = self._tx_state.get()
+        return bool(current and current[2] is asyncio.current_task())
+
     @asynccontextmanager
     async def transaction(self):
         current = self._tx_state.get()
-        if current and current[0] is self.db:
-            db, depth = current
+        task = asyncio.current_task()
+        if current and current[0] is self.db and current[2] is task:
+            db, depth, _ = current
             savepoint = f"krd_sp_{depth}"
             await db.execute(f"SAVEPOINT {savepoint}")
-            token = self._tx_state.set((db, depth + 1))
+            token = self._tx_state.set((db, depth + 1, task))
             try:
                 yield db
                 await db.execute(f"RELEASE SAVEPOINT {savepoint}")
@@ -169,7 +191,7 @@ class Store:
         async with self.write_lock:
             db = self.require_db()
             await db.execute("BEGIN IMMEDIATE")
-            token = self._tx_state.set((db, 0))
+            token = self._tx_state.set((db, 0, task))
             try:
                 yield db
                 await db.commit()
@@ -180,12 +202,12 @@ class Store:
                 self._tx_state.reset(token)
 
     async def one(self, sql: str, params: Iterable[Any] = ()) -> dict[str, Any] | None:
-        async with self.require_db().execute(sql, tuple(params)) as cursor:
+        async with self.read_connection().execute(sql, tuple(params)) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
 
     async def all(self, sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
-        async with self.require_db().execute(sql, tuple(params)) as cursor:
+        async with self.read_connection().execute(sql, tuple(params)) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
@@ -250,6 +272,9 @@ class Store:
     async def ensure_persona(self, persona_id: str) -> None:
         if not persona_id:
             return
+        row = await self.one("SELECT COUNT(*) AS count FROM day_types WHERE persona_id=? AND builtin=1", (persona_id,))
+        if row and row["count"] == len(BUILTIN_DAY_TYPES):
+            return
         async with self.transaction() as db:
             for entry in BUILTIN_DAY_TYPES:
                 await db.execute(
@@ -265,6 +290,19 @@ class Store:
     async def save_day_type(self, persona_id: str, entry: dict[str, Any]) -> None:
         name = str(entry.get("name", "")).strip()
         identifier = str(entry.get("id", "")).strip()
+        rules = entry.get("rules", {})
+        config = entry.get("config", {})
+        if not isinstance(rules, dict) or not isinstance(config, dict) or not isinstance(config.get("overrides", {}), dict):
+            raise KRDError("invalid_day_type", "Day type rules and config must be objects")
+        weekdays = rules.get("weekdays", [])
+        if not isinstance(weekdays, list) or any(type(day) is not int or not 0 <= day <= 6 for day in weekdays):
+            raise KRDError("invalid_day_type", "Weekdays must be integers from 0 to 6")
+        if type(rules.get("priority", 100)) is not int:
+            raise KRDError("invalid_day_type", "Day type priority must be an integer")
+        if not isinstance(rules.get("dates", []), list) or not isinstance(rules.get("date_ranges", []), list):
+            raise KRDError("invalid_day_type", "Day type dates and ranges must be lists")
+        base = await self.get_config(persona_id)
+        normalized(deep_merge(base, config.get("overrides", {})))
         if not name or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,79}", identifier):
             raise KRDError("invalid_day_type", "Day type ID must use letters, digits, underscore or hyphen")
         if len(name) > 80 or len(dumps(entry)) > 200000:
@@ -286,6 +324,29 @@ class Store:
         if used:
             raise KRDError("day_type_in_use", "This day type is still used by a plan")
         await self.execute("DELETE FROM day_types WHERE persona_id=? AND id=?", (persona_id, identifier))
+
+    async def cleanup(self, persona_id: str, retention_days: int, current_date: str) -> None:
+        """Bounded retention for inactive history; active plans are never cut."""
+        cutoff = now() - retention_days * 86400
+        async with self.transaction() as db:
+            await db.execute(
+                "DELETE FROM runs WHERE persona_id=? AND status NOT IN ('prepared','queued','running') "
+                "AND COALESCE(finalized_at,responded_at,claimed_at)<?", (persona_id, cutoff))
+            await db.execute(
+                "DELETE FROM planning_runs WHERE persona_id=? AND status IN ('completed','failed','no_change') "
+                "AND COALESCE(finished_at,created_at)<?", (persona_id, cutoff))
+            await db.execute("DELETE FROM experiences WHERE persona_id=? AND created_at<?", (persona_id, cutoff))
+            await db.execute("DELETE FROM day_states WHERE persona_id=? AND date<? AND updated_at<?",
+                             (persona_id, current_date, cutoff))
+            await db.execute(
+                "DELETE FROM mutations WHERE created_at<? AND plan_id IN(SELECT id FROM plans WHERE persona_id=?)",
+                (cutoff, persona_id))
+            await db.execute(
+                "DELETE FROM mutations WHERE plan_id IN(SELECT id FROM plans WHERE persona_id=? AND state='archived' AND date<?)",
+                (persona_id, current_date))
+            await db.execute("DELETE FROM plans WHERE persona_id=? AND state='archived' AND date<?",
+                             (persona_id, current_date))
+            await db.execute("DELETE FROM weather_cache WHERE expires_at<?", (now(),))
 
     async def pool_state(self, persona_id: str, kind: str) -> dict[str, Any]:
         return await self.get_setting(f"selection:{persona_id}:{kind}", {})

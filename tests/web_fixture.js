@@ -48,9 +48,35 @@ const data = {
   scheduler: { running: true, next_due: at(18, 36) }, server_time: Date.now() / 1000,
 }
 const response = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+window.__requests = []
 window.fetch = async (url, options = {}) => {
   const path = String(url)
-  if (path.includes('/bootstrap')) return response(data)
+  window.__requests.push({ path, method: options.method || 'GET', body: options.body || null, cache: options.cache })
+  if (path.includes('/bootstrap')) {
+    const snapshot = JSON.parse(JSON.stringify(data))
+    const requested = new URL(path, location.origin).searchParams.get('persona')
+    if (requested) snapshot.persona_id = requested
+    return response(snapshot)
+  }
+  if (path.includes('/config') && options.method === 'PUT') {
+    const payload = JSON.parse(options.body)
+    const merge = (base, patch) => {
+      for (const [key, value] of Object.entries(patch || {})) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) merge(base[key] ||= {}, value)
+        else base[key] = value
+      }
+      return base
+    }
+    merge(data.config, payload.patch)
+    data.config_revision += 1
+    return response({ config: data.config, revision: data.config_revision })
+  }
+  if (path.includes('/avatar?')) return response(data.avatar)
+  if (path.includes('/weather/current')) return response(data.weather)
+  if (path.includes('/day-state/') && options.method === 'POST') {
+    data.day_state = { ...data.day_state, ...JSON.parse(options.body), revision: data.day_state.revision + 1 }
+    return response(data.day_state)
+  }
   if (path.includes('/plans?')) return response([plan])
   if (path.includes('/diff')) return response([{ revision: 4, actor: 'bot', reason: '午后想留白一段时间', created_at: at(14, 30), diff: [{ op: 'changed', title: '随意走走', changes: { scheduled_at: { from: at(18), to: at(18, 36) } } }] }])
   if (path.includes('/runs')) return response([{ item_id: 'i1', status: 'finalized', probability: 1, claimed_at: at(8, 42) }, { item_id: 'i2', status: 'finalized', probability: 1, claimed_at: at(10) }])

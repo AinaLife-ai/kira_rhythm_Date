@@ -49,7 +49,7 @@
         </div>
       </main>
     </div>
-    <section v-else-if="!state.loading" class="empty-state welcome-state"><span class="empty-orbit">✦</span><h1>生活从一个人格开始</h1><p>请先在 KiraAI 中创建并启用一个人格。</p></section>
+    <section v-else-if="!state.loading" class="empty-state welcome-state"><span class="empty-orbit">✦</span><h1>{{ state.loadError ? '暂时无法读取生活节律' : '生活从一个人格开始' }}</h1><p>{{ state.loadError || '请先在 KiraAI 中创建并启用一个人格。' }}</p><button v-if="state.loadError" class="primary" @click="refresh({reset:true, entry:true})">重新加载</button></section>
     <div v-if="state.loading && !data.ready" class="loading-page initial-loading"><div class="loading-orbit"></div><p>正在唤醒生活节律…</p></div>
     <item-editor v-if="state.editor" :editor="state.editor"></item-editor>
     <day-state-editor v-if="state.dayStateEditor"></day-state-editor>

@@ -16,6 +16,7 @@ export const state = Vue.reactive({
   dayTypeEditor: null,
   settingsTab: 'general',
   theme: 'kira_mist',
+  loadError: '',
 })
 
 export function notify(text, type = 'success') {
@@ -27,35 +28,51 @@ export function notify(text, type = 'success') {
   }, 4200)
 }
 
-export async function loadBootstrap(persona = '') {
-  state.loading = true
+let bootstrapEpoch = 0
+let planEpoch = 0
+
+export async function loadBootstrap(persona = '', { reset = true } = {}) {
+  const epoch = ++bootstrapEpoch
+  const showLoading = reset || !state.data
+  if (showLoading) state.loading = true
   try {
     const data = await get(`/bootstrap${persona ? `?persona=${encodeURIComponent(persona)}` : ''}`)
+    if (epoch !== bootstrapEpoch) return null
+    state.loadError = ''
     state.data = data
-    state.selectedPersona = data.persona_id
-    state.selectedDate = data.date
-    state.selectedPlan = data.plan
+    state.selectedPersona = data.persona_id || persona
+    if (reset || !state.selectedDate) {
+      state.selectedDate = data.date || ''
+      state.selectedPlan = data.plan
+    } else if (state.selectedDate === data.date) {
+      state.selectedPlan = data.plan
+    }
     document.documentElement.dataset.themeName = data.config?.appearance?.theme || 'kira_mist'
     return data
+  } catch (error) {
+    if (epoch === bootstrapEpoch) state.loadError = error.message
+    throw error
   } finally {
-    state.loading = false
+    if (epoch === bootstrapEpoch && showLoading) state.loading = false
   }
 }
 
 export async function loadPlan(date, persona = state.selectedPersona) {
   if (!date) return null
-  const plans = await get(`/plans?start=${date}&end=${date}&persona=${encodeURIComponent(persona)}`)
+  const epoch = ++planEpoch
+  const plans = await get(`/plans?start=${encodeURIComponent(date)}&end=${encodeURIComponent(date)}&persona=${encodeURIComponent(persona)}`)
+  if (epoch !== planEpoch || persona !== state.selectedPersona) return null
   state.selectedPlan = plans[0] || null
   state.selectedDate = date
   return state.selectedPlan
 }
 
-export async function saveConfig(patch) {
+export async function saveConfig(patch, expectedRevision = state.data.config_revision) {
   state.saving = true
   try {
     const result = await put(`/config?persona=${encodeURIComponent(state.selectedPersona)}`, {
       patch,
-      expected_revision: state.data.config_revision,
+      expected_revision: expectedRevision,
     })
     state.data.config = result.config
     state.data.config_revision = result.revision

@@ -30,7 +30,7 @@ export const ItemCard = {
         <span v-if="item.category" class="tag">{{ item.category }}</span>
       </div>
       <div class="item-actions">
-        <button class="text-button" @click="$emit('edit', item)">调整</button>
+        <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('edit', item)">调整</button>
         <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('run', item)">立即触发</button>
         <button v-if="item.state === 'scheduled'" class="text-button muted" @click="$emit('skip', item)">跳过</button>
       </div>
@@ -67,7 +67,7 @@ export const TodayView = {
     <section class="hero-card glass" :style="$root.heroStyle">
       <div class="hero-aurora"></div>
       <div class="hero-person">
-        <div class="avatar-wrap"><img :src="$root.data.avatar.url" alt="生活头像"><span class="avatar-status"></span></div>
+        <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span></div>
         <div class="hero-copy">
           <span class="eyebrow">{{ $root.dayTypeName }} · {{ $root.data.date }}</span>
           <h1>{{ $root.data.day_state.current_activity || $root.data.plan?.title || '此刻，生活正在展开' }}</h1>
@@ -93,7 +93,7 @@ export const TodayView = {
         <span class="eyebrow">下一件生活小事</span>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
-        <div class="next-time"><strong>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.data.server_time) }}</strong><span>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</span></div>
+        <div class="next-time"><strong>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.clockNow) }}</strong><span>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</span></div>
       </div>
       <div class="next-card glass empty-next" v-else>
         <span class="eyebrow">接下来</span><h2>给生活一个新想法</h2>
@@ -211,7 +211,7 @@ export const TemplatesView = {
       <div class="theme-grid"><button v-for="theme in $root.themeTemplates" class="theme-card" :class="{active: $root.data.config.appearance.theme === theme.id}" @click="$root.setTheme(theme)">
         <span class="theme-preview" :data-theme-name="theme.id"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
-      <div class="avatar-editor"><img :src="$root.data.avatar.url" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
+      <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
       <div class="avatar-editor"><div><h3>生活横幅与强调色</h3><p>图片只保存在本机；颜色会立即应用到当前人格的界面。</p><div class="data-actions"><label class="soft-button upload-button">上传横幅<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBanner"></label><input type="color" v-model="$root.customAccent" style="width: 100px" @change="$root.applyCustomAccent"></div></div></div>
     </section>
   </div>`,
@@ -350,7 +350,7 @@ export const DayTypeEditor = {
   <div class="modal-backdrop" @click.self="$root.dayTypeEditor = null"><div class="modal-card">
     <div class="modal-heading"><div><span class="eyebrow">日型</span><h2>{{ entry ? '编辑日型' : '创建日型' }}</h2></div><button class="icon-button" @click="$root.dayTypeEditor = null">×</button></div>
     <label class="full-field"><span>名称</span><input v-model="form.name" placeholder="考试周 / 旅行日 / 雨天宅家"></label>
-    <label class="full-field"><span>内部 ID（创建后不可改）</span><input v-model="form.id" :disabled="entry && entry.builtin" placeholder="exam_week"></label>
+    <label class="full-field"><span>内部 ID（创建后不可改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>
     <label class="full-field"><span>此日型规划提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
     <div class="form-grid" style="margin-top: 17px">

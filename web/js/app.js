@@ -5,8 +5,8 @@ import { planTemplates, themeTemplates } from './templates.js'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const dateShift = (date, days) => {
-  const value = new Date(`${date}T12:00:00`)
-  value.setDate(value.getDate() + days)
+  const value = new Date(`${date}T12:00:00Z`)
+  value.setUTCDate(value.getUTCDate() + days)
   return value.toISOString().slice(0, 10)
 }
 
@@ -32,6 +32,14 @@ const app = Vue.createApp({
       monthAnchor: '',
       customTemplates: [],
       customAccent: '',
+      clockNow: Date.now() / 1000,
+      clockTimer: null,
+      avatarNonce: 0,
+      settingsBaseRevision: 0,
+      refreshEpoch: 0,
+      viewEpoch: 0,
+      monthEpoch: 0,
+      diffEpoch: 0,
     }
   },
   computed: {
@@ -65,6 +73,11 @@ const app = Vue.createApp({
       const banner = this.data.banner?.url
       return banner ? { backgroundImage: `linear-gradient(90deg, var(--panel-solid) 0%, transparent 100%), url("${banner}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
     },
+    avatarUrl() {
+      const url = this.data.avatar?.url || ''
+      if (!url.startsWith('/') || !this.avatarNonce) return url
+      return `${url}${url.includes('?') ? '&' : '?'}entry=${this.avatarNonce}`
+    },
     weatherInfo() {
       const weather = this.data.weather || {}
       return weather.real || weather.virtual || null
@@ -72,6 +85,7 @@ const app = Vue.createApp({
     weatherText() {
       if (!this.weatherInfo) return this.data.weather?.mode === 'off' ? '天气未启用' : '等待天气配置'
       if (this.weatherInfo.status === 'location_required') return '尚未设置地点'
+      if (this.weatherInfo.status === 'pending') return '正在后台更新天气'
       if (this.weatherInfo.status === 'unavailable') return '天气暂时不可用'
       return this.weatherInfo.condition || '天气未知'
     },
@@ -118,29 +132,58 @@ const app = Vue.createApp({
     },
   },
   methods: {
-    setView(view) {
+    async setView(view) {
       state.view = view
-      if (view === 'changes') this.loadDiff()
-      if (view === 'settings') this.prepareSettings()
-      if (view === 'calendar') this.loadMonth()
+      const epoch = ++this.viewEpoch
+      try {
+        if (view === 'changes') await Promise.all([this.loadRecentPlans(), this.loadRuns(), this.loadDiff()])
+        if (view === 'settings') this.prepareSettings()
+        if (view === 'calendar') await this.loadMonth()
+        if (view === 'templates') await this.loadCustomTemplates()
+      } catch (error) {
+        if (epoch === this.viewEpoch) notify(error.message, 'error')
+      }
     },
-    async refresh() {
-      await loadBootstrap(state.selectedPersona)
+    async refresh({ persona = state.selectedPersona, reset = false, entry = true } = {}) {
+      const epoch = ++this.refreshEpoch
+      const data = await loadBootstrap(persona, { reset })
+      if (!data || epoch !== this.refreshEpoch || !data.ready) return
       this.applyAppearance()
-      this.monthAnchor = state.selectedDate
-      await Promise.all([this.loadRecentPlans(), this.loadRuns(), this.loadMonth(), this.loadDiff(), this.loadCustomTemplates()])
-      this.prepareSettings()
+      this.clockNow = Date.now() / 1000
+      if (reset) {
+        this.monthAnchor = state.selectedDate.slice(0, 7)
+        this.diffPlanId = state.selectedPlan?.id || ''
+        this.prepareSettings()
+        state.editor = null
+        state.dayStateEditor = false
+        state.dayTypeEditor = null
+      }
+      const jobs = []
+      if (state.view === 'today') jobs.push(this.loadDiff())
+      if (state.view === 'calendar') jobs.push(this.loadMonth())
+      if (state.view === 'changes') jobs.push(this.loadRecentPlans(), this.loadRuns(), this.loadDiff())
+      if (state.view === 'templates') jobs.push(this.loadCustomTemplates())
+      await Promise.all(jobs)
+      if (entry) {
+        this.avatarNonce = Date.now()
+        // Deliberately after first paint: remote refresh must not hold bootstrap.
+        this.refreshAvatar(data.persona_id).catch(() => {})
+        this.loadWeather(data.persona_id).catch(() => {})
+      }
     },
     async selectPersona() {
-      await loadBootstrap(state.selectedPersona)
-      await this.refresh()
+      try {
+        await this.refresh({ persona: state.selectedPersona, reset: true, entry: true })
+      } catch (error) { notify(error.message, 'error') }
     },
     async selectDate(date) {
-      state.selectedDate = date
-      this.monthAnchor = date
-      await loadPlan(date)
-      this.diffPlanId = state.selectedPlan?.id || ''
-      await this.loadDiff()
+      try {
+        state.selectedDate = date
+        this.monthAnchor = date.slice(0, 7)
+        await loadPlan(date)
+        this.diffPlanId = state.selectedPlan?.id || ''
+        await this.loadDiff()
+      } catch (error) { notify(error.message, 'error') }
     },
     async shiftMonth(delta) {
       const [year, month] = this.monthAnchor.split('-').map(Number)
@@ -150,22 +193,43 @@ const app = Vue.createApp({
     },
     async loadMonth() {
       if (!this.monthAnchor) return
-      const [year, month] = this.monthAnchor.split('-').map(Number)
-      const start = `${this.monthAnchor}-01`
+      const epoch = ++this.monthEpoch
+      const anchor = this.monthAnchor
+      const persona = state.selectedPersona
+      const [year, month] = anchor.split('-').map(Number)
+      const start = `${anchor}-01`
       const end = new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10)
-      this.monthPlans = await get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(state.selectedPersona)}`)
+      const plans = await get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(persona)}`)
+      if (epoch === this.monthEpoch && persona === state.selectedPersona && anchor === this.monthAnchor) this.monthPlans = plans
     },
     async loadRecentPlans() {
+      const persona = state.selectedPersona
       const start = dateShift(state.selectedDate, -14)
       const end = dateShift(state.selectedDate, 14)
-      this.recentPlans = await get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(state.selectedPersona)}`)
+      const plans = await get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(persona)}`)
+      if (persona === state.selectedPersona) this.recentPlans = plans
     },
-    async loadRuns() { state.runs = await get(`/runs?limit=60&persona=${encodeURIComponent(state.selectedPersona)}`) },
+    async loadRuns() {
+      const persona = state.selectedPersona
+      const runs = await get(`/runs?limit=60&persona=${encodeURIComponent(persona)}`)
+      if (persona === state.selectedPersona) state.runs = runs
+    },
     async loadDiff() {
       const id = this.diffPlanId || state.selectedPlan?.id || this.data.plan?.id
+      const epoch = ++this.diffEpoch
       if (!id) { this.diffs = []; return }
+      const persona = state.selectedPersona
       this.diffPlanId = id
-      this.diffs = await get(`/plans/${id}/diff?limit=20`)
+      const diffs = await get(`/plans/${encodeURIComponent(id)}/diff?limit=20&persona=${encodeURIComponent(persona)}`)
+      if (epoch === this.diffEpoch && persona === state.selectedPersona) this.diffs = diffs
+    },
+    async refreshAvatar(persona) {
+      const avatar = await get(`/avatar?refresh=1&persona=${encodeURIComponent(persona)}&entry=${Date.now()}`)
+      if (persona === state.selectedPersona) this.data.avatar = avatar
+    },
+    async loadWeather(persona) {
+      const weather = await get(`/weather/current?persona=${encodeURIComponent(persona)}`)
+      if (persona === state.selectedPersona) this.data.weather = weather
     },
     diffSummary(diff) {
       return (diff || []).slice(0, 3).map((entry) => `${entry.op === 'added' ? '新增' : entry.op === 'removed' ? '移除' : '调整'}「${entry.title}」`).join('；') || '保持原计划'
@@ -207,6 +271,7 @@ const app = Vue.createApp({
         plan.expected_revision = plan.revision || 0
         const result = await post(`/plans?persona=${encodeURIComponent(state.selectedPersona)}`, plan)
         state.selectedPlan = result.plan
+        this.diffPlanId = result.plan.id
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
         state.editor = null
         notify('计划已保存')
@@ -219,14 +284,17 @@ const app = Vue.createApp({
     },
     async skipItem(item) {
       try {
-        await post(`/items/${item.id}/skip?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 手动跳过' })
-        await loadPlan(state.selectedDate)
-        await this.refresh()
+        const result = await post(`/items/${item.id}/skip?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 手动跳过' })
+        state.selectedPlan = result.plan
+        if (state.selectedDate === this.data.date) this.data.plan = result.plan
+        await Promise.all([this.loadMonth(), this.loadDiff()])
       } catch (error) { notify(error.message, 'error') }
     },
     async saveDayState(form) {
       try {
-        this.data.day_state = await post(`/day-state/${this.data.date}?persona=${encodeURIComponent(state.selectedPersona)}`, form)
+        const allowed = ['current_appearance', 'current_mood', 'current_location', 'current_activity', 'current_note']
+        const payload = Object.fromEntries(allowed.map((key) => [key, form[key] || '']))
+        this.data.day_state = await post(`/day-state/${this.data.date}?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
         state.dayStateEditor = false
         notify('此刻状态已更新')
       } catch (error) { notify(error.message, 'error') }
@@ -266,10 +334,11 @@ const app = Vue.createApp({
         payload.expected_revision = state.selectedPlan?.revision || 0
         const result = await post(`/plans?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
         state.selectedPlan = result.plan
+        this.diffPlanId = result.plan.id
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
-        await this.refresh()
+        await this.refresh({ entry: false })
         notify(`已应用「${template.name}」`)
-        this.setView('today')
+        this.setView(state.selectedDate === this.data.date ? 'today' : 'calendar')
       } catch (error) { notify(error.message, 'error') }
     },
     previewTemplate(template) {
@@ -350,6 +419,7 @@ const app = Vue.createApp({
     },
     prepareSettings() {
       this.draft = clone(this.data.config || {})
+      this.settingsBaseRevision = this.data.config_revision || 0
       this.allSessions = this.data.sessions || []
       this.diagnostics = null
     },
@@ -368,7 +438,13 @@ const app = Vue.createApp({
       this.draft[kind].push(entry)
     },
     async saveSettings() {
-      try { await saveConfig(this.draft); this.prepareSettings() } catch (_) { /* already notified */ }
+      try {
+        const payload = clone(this.draft)
+        delete payload.schema_version
+        delete payload.per_persona
+        await saveConfig(payload, this.settingsBaseRevision)
+        this.prepareSettings()
+      } catch (_) { /* already notified */ }
     },
     async geocode() {
       if (!this.cityQuery.trim()) return
@@ -416,17 +492,30 @@ const app = Vue.createApp({
     async loadDiagnostics() { this.diagnostics = await get('/diagnostics') },
   },
   async mounted() {
-    await ready()
-    await this.refresh()
-    this.disconnect = socket((message) => {
-      clearTimeout(this.liveTimer)
-      this.liveTimer = setTimeout(() => this.refresh(), 700)
-    })
-    window.PluginPageContext?.onThemeChange?.((dark) => {
-      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-    })
+    try {
+      await ready()
+      await this.refresh({ reset: true, entry: true })
+      this.disconnect = socket(() => {
+        clearTimeout(this.liveTimer)
+        this.liveTimer = setTimeout(() => {
+          this.refresh({ reset: false, entry: false }).catch((error) => notify(error.message, 'error'))
+        }, 400)
+      })
+      this.clockTimer = setInterval(() => { this.clockNow = Date.now() / 1000 }, 1000)
+      this.stopTheme = window.PluginPageContext?.onThemeChange?.((dark) => {
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      })
+    } catch (error) {
+      state.loading = false
+      notify(error.message, 'error')
+    }
   },
-  beforeUnmount() { this.disconnect?.() },
+  beforeUnmount() {
+    this.disconnect?.()
+    this.stopTheme?.()
+    clearTimeout(this.liveTimer)
+    clearInterval(this.clockTimer)
+  },
 })
 
 // Keep the delete helper out of the component's public API surface.
