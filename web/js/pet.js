@@ -460,6 +460,10 @@ export const PetCompanion = {
       window.addEventListener('pointerup', up)
     },
     openPanel() {
+      if (!this.panel && this.action === 'jump') {
+        clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
+        this.action = 'idle'; this.stickyAction = false; this.lift = 8 + Math.random() * 28
+      }
       this.panel = !this.panel
       this.showCare()
       if (this.panel) { this.showLabel(false); this.setSpeech('', 0) }
