@@ -134,7 +134,6 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
-    this.wanderTimer = setInterval(() => this.wander(), 4500)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
@@ -170,7 +169,8 @@ export const PetCompanion = {
       if (/书|阅读|读|学习|复习/.test(text)) return 'read'
       if (/咖啡|吃|餐|食|甜点|喝/.test(text)) return 'eat'
       if (/工作|专注|写|整理|开会|做事/.test(text)) return 'work'
-      if (/音乐|听歌|耳机|散步|出门|走|逛/.test(text)) return 'walk'
+      if (/音乐|听歌|耳机/.test(text)) return 'music'
+      if (/散步|出门|走|逛/.test(text)) return 'look'
       return ''
     },
     chooseAction(force) {
@@ -179,7 +179,7 @@ export const PetCompanion = {
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
       if (this.event === 'imminent') {
-        this.setAction('run', this.speechFor('run'))
+        this.setAction('look', this.speechFor('run'))
         return
       }
       if (this.event === 'live') {
@@ -196,7 +196,6 @@ export const PetCompanion = {
       }
       const keyword = this.keywordAction()
       if (keyword) {
-        if (keyword === 'walk') { this.startWalking(this.nextWalkTarget()); return }
         this.setAction(keyword, this.speechFor(keyword))
         return
       }
@@ -205,12 +204,11 @@ export const PetCompanion = {
         return
       }
       const idle = this.pickIdle()
-      if (idle === 'walk') { this.startWalking(this.nextWalkTarget()); return }
       if (force) this.setAction(idle, this.speechFor(idle))
       else this.action = idle
     },
     pickIdle() {
-      const list = ['idle', 'look', 'stretch', 'dance', 'phone', 'walk']
+      const list = ['idle', 'look', 'stretch', 'dance', 'phone', 'sleep']
       return list[Math.floor(Math.random() * list.length)]
     },
     setAction(action, text) {

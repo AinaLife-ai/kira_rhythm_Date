@@ -52,7 +52,7 @@ export const planTemplates = [
 export const themeTemplates = [
   { id: 'tomato_rain', name: '番茄 · 霓虹雨', description: '黑白双马尾，穿过雨夜霓虹的快步', color: '#ff3f6e', mode: 'dark', art: 'tomato_rain', character: 'tomato', tone: 'tomato' },
   { id: 'tomato_greenhouse', name: '番茄 · 玻璃花房', description: '玻璃温室里，难得的安静坐一会儿', color: '#b990ff', mode: 'dark', art: 'tomato_greenhouse', character: 'tomato', tone: 'dream' },
-  { id: 'tomato_rose', name: '番茄 · 蔷薇', description: '蔷薇花园里，闭眼轻轻休息的番茄', color: '#e06486', mode: 'dark', art: 'tomato_rose', character: 'tomato', tone: 'rose' },
+  { id: 'tomato_archive', name: '番茄 · 黑曜档案', description: '冷灰档案库，倚墙回望的红衣', color: '#d34b5c', mode: 'dark', art: 'tomato_archive', character: 'tomato', tone: 'noir' },
   { id: 'mint_coast', name: '薄荷 · 晨风', description: '海边伸懒腰，青色尾巴扫过晨光', color: '#59d3b7', mode: 'dark', art: 'mint_coast', character: 'mint', tone: 'mint' },
   { id: 'mint_soda', name: '薄荷 · 苏打', description: '午后吧台，一瓶冒着冷气的苏打水', color: '#e8b85e', mode: 'dark', art: 'mint_soda', character: 'mint', tone: 'soda' },
   { id: 'mint_arcade', name: '薄荷 · 雨廊', description: '玻璃拱廊的雨声，透明伞和青绿倒影', color: '#57d9d0', mode: 'dark', art: 'mint_arcade', character: 'mint', tone: 'rainmint' },
