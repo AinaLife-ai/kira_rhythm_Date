@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>生活节律 · 都市异常生活档案</title>
+  <title>生活节律 · 随身生活界面</title>
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/components.css">
@@ -27,19 +27,45 @@
         <div class="boot-grid"></div>
         <div class="boot-glitch">KRD</div>
         <div class="boot-mark"><span>K</span><i></i></div>
-        <div class="boot-word"><strong>生活节律</strong><small>URBAN ANOMALY LIFE ARCHIVE</small></div>
+        <div class="boot-word"><strong>生活节律</strong><small>MOBILE LIFE ARCHIVE</small></div>
         <div class="boot-line"><i></i></div>
-        <div class="boot-status"><span>INITIALIZING CITY LINK</span><b>1.2.0</b></div>
+        <div class="boot-status"><span>STARTING PERSONAL LIFE OS</span><b>1.2.0</b></div>
       </div>
     </transition>
 
     <div class="app-shell" v-if="data.ready">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark"><span>K</span><i></i></div>
-          <div><strong>生活节律</strong><small>都市生活档案</small></div>
+      <header class="topbar">
+        <div class="statusbar">
+          <span class="status-carrier">KRD · 5G</span>
+          <span class="status-time">{{ localClock }}</span>
+          <span class="dynamic-island"></span>
+          <span class="status-icons"><span class="cell-bars"><i></i><i></i><i></i><i></i></span><span class="wifi"></span><span class="battery"><i></i></span></span>
         </div>
-        <div class="nav-caption">都市分区</div>
+        <div class="appbar">
+          <div class="breadcrumb"><span class="crumb-index">{{ state.view === 'today' ? '01' : ({calendar:'02',changes:'03',templates:'04',settings:'05'})[state.view] }}</span><span>{{ state.view === 'today' ? '此刻' : ({calendar:'日历',changes:'变化',templates:'模板',settings:'设置'})[state.view] }}</span><small>{{ data.date }} · {{ dayTypeName }}</small></div>
+          <div class="top-actions">
+            <div class="phase-readout"><small>{{ phaseLabel }}</small><strong>{{ localClock }}</strong></div>
+            <div class="event-chip" :class="'event-' + eventState"><i></i>{{ eventLabel }}</div>
+            <div class="weather-chip"><ui-icon :name="weatherKind" :size="15"></ui-icon><span>{{ weatherText }}</span><b v-if="weatherInfo?.temperature != null">{{ weatherInfo.temperature }}°</b></div>
+            <label class="persona-select"><span class="persona-dot"></span><select v-model="state.selectedPersona" @change="selectPersona" aria-label="选择人格"><option v-for="persona in data.personas" :value="persona.id">{{ persona.name }}{{ persona.active ? ' · 当前' : '' }}</option></select></label>
+            <button class="icon-button" title="刷新" @click="refresh()"><ui-icon name="refresh" :size="16"></ui-icon></button>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-scroll">
+        <div v-if="state.loading" class="loading-page"><div class="loading-orbit"></div><p>正在读取生活节律…</p></div>
+        <div v-show="!state.loading" class="view-host">
+          <today-view v-show="state.view === 'today'"></today-view>
+          <calendar-view v-show="state.view === 'calendar'"></calendar-view>
+          <changes-view v-show="state.view === 'changes'"></changes-view>
+          <templates-view v-show="state.view === 'templates'"></templates-view>
+          <settings-view v-show="state.view === 'settings'"></settings-view>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark"><span>K</span><i></i></div><div><strong>生活节律</strong><small>随身生活</small></div></div>
         <nav class="main-nav" aria-label="生活节律导航">
           <button v-for="(item, index) in navItems" :key="item.id" :class="{active: state.view === item.id}" @click="setView(item.id)">
             <span class="nav-no">0{{ index + 1 }}</span>
@@ -49,36 +75,16 @@
           </button>
         </nav>
         <div class="sidebar-foot">
-          <div class="live-status"><span :class="{online: data.scheduler?.running}"></span><div><strong>{{ data.scheduler?.running ? '生活线运行中' : '调度已暂停' }}</strong><small>{{ data.scheduler?.running ? 'EVENT DRIVEN' : 'STANDBY' }}</small></div></div>
-          <button class="quick-plan" @click="runPlanning"><ui-icon name="plus" :size="15"></ui-icon> <span>给予规划机会</span></button>
-          <div class="build-tag">KRD // 1.2.0 <i></i></div>
+          <div class="live-status"><span :class="{online: data.scheduler?.running}"></span><div><strong>{{ data.scheduler?.running ? '运行中' : '已暂停' }}</strong><small>{{ data.scheduler?.running ? 'LIVE' : 'STANDBY' }}</small></div></div>
+          <button class="quick-plan" @click="runPlanning"><ui-icon name="plus" :size="15"></ui-icon> <span>规划</span></button>
+          <div class="build-tag">1.2.0</div>
         </div>
+        <span class="phone-home-indicator" aria-hidden="true"></span>
       </aside>
 
-      <main class="main-area">
-        <header class="topbar">
-          <div class="breadcrumb"><span class="crumb-index">{{ state.view === 'today' ? '01' : ({calendar:'02',changes:'03',templates:'04',settings:'05'})[state.view] }}</span><span>{{ state.view === 'today' ? '此刻' : ({calendar:'日历',changes:'变化',templates:'模板',settings:'设置'})[state.view] }}</span><small>{{ data.date }} · {{ dayTypeName }}</small></div>
-          <div class="top-actions">
-            <div class="phase-readout"><small>{{ phaseLabel }}</small><strong>{{ localClock }}</strong></div>
-            <div class="event-chip" :class="'event-' + eventState"><i></i>{{ eventLabel }}</div>
-            <div class="weather-chip"><ui-icon :name="weatherKind" :size="15"></ui-icon><span>{{ weatherText }}</span><b v-if="weatherInfo?.temperature != null">{{ weatherInfo.temperature }}°</b></div>
-            <label class="persona-select"><span class="persona-dot"></span><select v-model="state.selectedPersona" @change="selectPersona" aria-label="选择人格"><option v-for="persona in data.personas" :value="persona.id">{{ persona.name }}{{ persona.active ? ' · 当前' : '' }}</option></select></label>
-            <button class="icon-button" title="刷新" @click="refresh()"><ui-icon name="refresh" :size="16"></ui-icon></button>
-          </div>
-        </header>
-        <div class="content-scroll">
-          <div v-if="state.loading" class="loading-page"><div class="loading-orbit"></div><p>正在读取生活节律…</p></div>
-          <div v-show="!state.loading" class="view-host">
-            <today-view v-show="state.view === 'today'"></today-view>
-            <calendar-view v-show="state.view === 'calendar'"></calendar-view>
-            <changes-view v-show="state.view === 'changes'"></changes-view>
-            <templates-view v-show="state.view === 'templates'"></templates-view>
-            <settings-view v-show="state.view === 'settings'"></settings-view>
-          </div>
-        </div>
-        <div class="hud-corner hud-corner-a" aria-hidden="true"></div>
-        <div class="hud-corner hud-corner-b" aria-hidden="true"></div>
-      </main>
+      <pet-companion :variant="petVariant" :next-item="nextItem" :weather="weatherKind" :phase="timePhase" :event="eventState" :activity="data.day_state?.current_activity" :large="state.view === 'today'"></pet-companion>
+      <div class="phone-side-key key-power" aria-hidden="true"></div>
+      <div class="phone-side-key key-volume" aria-hidden="true"></div>
     </div>
 
     <section v-else-if="!state.loading" class="empty-state welcome-state"><span class="empty-orbit"><ui-icon name="sparkle" :size="28"></ui-icon></span><h1>{{ state.loadError ? '暂时无法读取生活节律' : '生活从一个人格开始' }}</h1><p>{{ state.loadError || '请先在 KiraAI 中创建并启用一个人格。' }}</p><button v-if="state.loadError" class="primary" @click="refresh({reset:true, entry:true})">重新加载</button></section>

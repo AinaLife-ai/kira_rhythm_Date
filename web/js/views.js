@@ -112,6 +112,7 @@ export const TodayView = {
         <span class="scene-coord">35.68N / 139.76E</span>
       </div>
       <span class="scene-index">01</span>
+      <div class="phone-lock-clock"><strong>{{ $root.localClock }}</strong><span>{{ $root.data.date }} · {{ $root.dayTypeName }}</span></div>
       <div class="scene-title">
         <span class="kicker">DAILY NARRATIVE // 今日叙事</span>
         <h1><small>{{ $root.dayTypeName }}</small>{{ $root.data.day_state.current_activity || $root.data.plan?.title || '生活正在展开' }}</h1>
@@ -119,7 +120,7 @@ export const TodayView = {
       </div>
       <div class="scene-identity">
         <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span><i></i></div>
-        <div><span class="identity-label">CURRENT PERSONA / 当前人格</span><strong>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '生活人格' }}</strong><small>{{ $root.data.day_state.current_location || '海特洛市 · 生活区' }}</small></div>
+        <div><span class="identity-label">CURRENT PERSONA / 当前人格</span><strong>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '生活人格' }}</strong><small>{{ $root.data.day_state.current_location || '常驻城市 · 生活区' }}</small></div>
       </div>
       <div class="scene-status">
         <div class="scene-weather">
@@ -192,8 +193,8 @@ export const TodayView = {
           <div><strong>{{ change.actor === 'bot' ? 'bot' : '你' }} · {{ change.reason || '调整了计划' }}</strong><p>{{ $root.diffSummary(change.diff) }}</p></div>
         </div>
       </section>
-      <section class="signal-card anomaly-card">
-        <div class="signal-heading"><span>ANOMALY / 环境信号</span><i class="pulse"></i></div>
+      <section class="signal-card environment-card">
+        <div class="signal-heading"><span>ENVIRONMENT / 环境信号</span><i class="pulse"></i></div>
         <div class="anomaly-readout"><strong>{{ $root.weatherText }}</strong><span>{{ $root.phaseLabel.split(' · ')[0] }}</span></div>
         <p>界面光效、城市场景与信号强度会随时间、天气和事件状态实时变化。</p>
       </section>

@@ -2,6 +2,7 @@ import { get, post, put, patch, upload, socket, ready } from './api.js'
 import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js'
 import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor } from './views.js'
 import { planTemplates, themeTemplates } from './templates.js'
+import { PetCompanion } from './pet.js'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
@@ -12,7 +13,7 @@ const dateShift = (date, days) => {
 }
 
 const app = Vue.createApp({
-  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor },
+  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, PetCompanion },
   data() {
     return {
       state,
@@ -102,7 +103,13 @@ const app = Vue.createApp({
       return 'quiet'
     },
     eventLabel() {
-      return ({ imminent: '异象临近', live: '事件执行中', quiet: '城市信号稳定' })[this.eventState]
+      return ({ imminent: '事件临近', live: '事件执行中', quiet: '城市信号稳定' })[this.eventState]
+    },
+    petVariant() {
+      const id = this.data.config?.appearance?.theme || ''
+      if (id.startsWith('mint')) return 'mint'
+      if (id.startsWith('crimson')) return 'crimson'
+      return 'mono'
     },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
@@ -639,7 +646,7 @@ const app = Vue.createApp({
     async loadDiagnostics() { this.diagnostics = await get('/diagnostics') },
   },
   async mounted() {
-    this.bootTimer = setTimeout(() => { this.booted = true }, 1250)
+    this.bootTimer = setTimeout(() => { this.booted = true }, 1800)
     try {
       await ready()
       await this.refresh({ reset: true, entry: true })
