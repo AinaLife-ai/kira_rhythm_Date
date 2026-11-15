@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark" data-theme-name="lacrimosa_dusk">
+<html lang="zh-CN" data-theme="dark" data-theme-name="tomato_rain">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -36,10 +36,10 @@
     <div class="app-shell" v-if="data.ready">
       <header class="topbar">
         <div class="statusbar">
-          <span class="status-carrier">KRD · 5G</span>
+          <span class="status-carrier">KRD</span>
           <span class="status-time">{{ localClock }}</span>
           <span class="dynamic-island"></span>
-          <span class="status-icons"><span class="cell-bars"><i></i><i></i><i></i><i></i></span><span class="wifi"></span><span class="battery"><i></i></span></span>
+          <span class="status-icons"><span class="status-net">{{ networkLabel }}</span><span class="cell-bars" :class="'bars-' + networkSignal"><i></i><i></i><i></i><i></i></span><span class="wifi"></span><span class="battery" :class="{ charging: batteryCharging }" :title="batteryCharging ? '正在充电' : '电池'"><i :style="{ width: (batteryLevel == null ? 0 : batteryLevel) + '%' }"></i><b></b></span><span class="battery-text">{{ batteryText }}</span></span>
         </div>
         <div class="appbar">
           <div class="breadcrumb"><span class="crumb-index">{{ state.view === 'today' ? '01' : ({calendar:'02',changes:'03',templates:'04',settings:'05'})[state.view] }}</span><span>{{ state.view === 'today' ? '此刻' : ({calendar:'日历',changes:'变化',templates:'模板',settings:'设置'})[state.view] }}</span><small>{{ data.date }} · {{ dayTypeName }}</small></div>
@@ -82,7 +82,7 @@
         <span class="phone-home-indicator" aria-hidden="true"></span>
       </aside>
 
-      <pet-companion :variant="petVariant" :next-item="nextItem" :weather="weatherKind" :phase="timePhase" :event="eventState" :activity="data.day_state?.current_activity" :large="state.view === 'today'"></pet-companion>
+      <pet-companion :variant="petVariant" :sprite="petSprite" :next-item="nextItem" :weather="weatherKind" :phase="timePhase" :event="eventState" :activity="data.day_state?.current_activity" :large="state.view === 'today'"></pet-companion>
       <div class="phone-side-key key-power" aria-hidden="true"></div>
       <div class="phone-side-key key-volume" aria-hidden="true"></div>
     </div>

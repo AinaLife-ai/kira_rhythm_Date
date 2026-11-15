@@ -15,7 +15,7 @@ export const state = Vue.reactive({
   dayStateEditor: false,
   dayTypeEditor: null,
   settingsTab: 'general',
-  theme: 'kira_mist',
+  theme: 'tomato_rain',
   loadError: '',
 })
 
@@ -47,7 +47,7 @@ export async function loadBootstrap(persona = '', { reset = true } = {}) {
     } else if (state.selectedDate === data.date) {
       state.selectedPlan = data.plan
     }
-    document.documentElement.dataset.themeName = data.config?.appearance?.theme || 'kira_mist'
+    document.documentElement.dataset.themeName = data.config?.appearance?.theme || 'tomato_rain'
     return data
   } catch (error) {
     if (epoch === bootstrapEpoch) state.loadError = error.message

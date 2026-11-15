@@ -48,6 +48,12 @@ const app = Vue.createApp({
       customAccent: '',
       clockNow: Date.now() / 1000,
       clockTimer: null,
+      batteryLevel: null,
+      batteryCharging: false,
+      online: typeof navigator === 'undefined' ? true : navigator.onLine,
+      networkLabel: '—',
+      signalBars: 0,
+      deviceCleanup: [],
       avatarNonce: 0,
       settingsBaseRevision: 0,
       refreshEpoch: 0,
@@ -102,15 +108,20 @@ const app = Vue.createApp({
       if ((this.data.plan?.blocks || []).some((block) => (block.items || []).some((item) => item.state === 'running'))) return 'live'
       return 'quiet'
     },
+    networkSignal() {
+      if (!this.online || this.signalBars === 0) return 0
+      return Math.max(1, Math.min(4, this.signalBars))
+    },
+    batteryText() { return this.batteryLevel == null ? '—' : `${this.batteryLevel}%` },
     eventLabel() {
       return ({ imminent: '事件临近', live: '事件执行中', quiet: '城市信号稳定' })[this.eventState]
     },
-    petVariant() {
-      const id = this.data.config?.appearance?.theme || ''
-      if (id.startsWith('mint')) return 'mint'
-      if (id.startsWith('crimson')) return 'crimson'
-      return 'mono'
+    activeTheme() {
+      const id = this.data.config?.appearance?.theme || 'tomato_rain'
+      return themeTemplates.find((entry) => entry.id === id) || themeTemplates[0]
     },
+    petVariant() { return this.activeTheme?.character || 'tomato' },
+    petSprite() { return this.assetUrl(`pets/${this.activeTheme?.character || 'tomato'}_walk.webp`) },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]
@@ -220,8 +231,43 @@ const app = Vue.createApp({
     eventState: { immediate: true, handler(value) { document.documentElement.dataset.event = value } },
   },
   methods: {
+    updateNetwork() {
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
+      this.online = navigator.onLine
+      const type = conn?.effectiveType || (this.online ? '4g' : 'offline')
+      this.networkLabel = this.online ? ({ 'slow-2g': '2G', '2g': '2G', '3g': '3G', '4g': '4G' })[type] || '网络' : '离线'
+      this.signalBars = !this.online ? 0 : type === 'slow-2g' ? 1 : type === '2g' ? 2 : type === '3g' ? 3 : 4
+    },
+    async initDeviceStatus() {
+      this.updateNetwork()
+      const onOnline = () => this.updateNetwork()
+      const onOffline = () => this.updateNetwork()
+      window.addEventListener('online', onOnline)
+      window.addEventListener('offline', onOffline)
+      this.deviceCleanup.push(() => window.removeEventListener('online', onOnline), () => window.removeEventListener('offline', onOffline))
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
+      if (conn?.addEventListener) {
+        conn.addEventListener('change', onOnline)
+        this.deviceCleanup.push(() => conn.removeEventListener('change', onOnline))
+      }
+      if (navigator.getBattery) {
+        try {
+          const battery = await navigator.getBattery()
+          const sync = () => {
+            this.batteryLevel = Math.round(battery.level * 100)
+            this.batteryCharging = !!battery.charging
+          }
+          sync()
+          const events = ['levelchange', 'chargingchange']
+          for (const event of events) {
+            battery.addEventListener(event, sync)
+            this.deviceCleanup.push(() => battery.removeEventListener(event, sync))
+          }
+        } catch (_) { this.batteryLevel = null }
+      }
+    },
     assetUrl(path) { return window.__KRD_INLINE_ASSETS__?.[path] || `${assetBase}/${path}` },
-    themeArt(theme) { return this.assetUrl(theme?.customArt || `themes/${theme?.art || 'lacrimosa'}.webp`) },
+    themeArt(theme) { return this.assetUrl(theme?.customArt || `themes/${theme?.art || 'tomato_rain'}.webp`) },
     async setView(view) {
       state.view = view
       const epoch = ++this.viewEpoch
@@ -485,7 +531,7 @@ const app = Vue.createApp({
     },
     applyAppearance() {
       const appearance = this.data.config?.appearance || {}
-      const themeId = appearance.theme || 'lacrimosa_dusk'
+      const themeId = appearance.theme || 'tomato_rain'
       const theme = themeTemplates.find((entry) => entry.id === themeId) || themeTemplates[0]
       document.documentElement.dataset.themeName = theme.id
       document.documentElement.dataset.theme = theme.mode || 'dark'
@@ -493,10 +539,8 @@ const app = Vue.createApp({
       const customBackground = this.data.background?.url
       if (customBackground || theme.art || theme.customArt) {
         root.setProperty('--theme-art', `url("${customBackground || this.themeArt(theme)}")`)
-        root.setProperty('--pixel-sprite', `url("${this.assetUrl(`pixels/${theme.pixel || theme.art}.png`)}")`)
       } else {
         root.removeProperty('--theme-art')
-        root.removeProperty('--pixel-sprite')
       }
       this.customAccent = appearance.custom_accent || ''
       if (appearance.custom_accent) {
@@ -657,6 +701,7 @@ const app = Vue.createApp({
         }, 400)
       })
       this.clockTimer = setInterval(() => { this.clockNow = Date.now() / 1000 }, 1000)
+      this.initDeviceStatus().catch(() => {})
       this.stopTheme = window.PluginPageContext?.onThemeChange?.((dark) => {
         if (document.documentElement.dataset.themeName === 'kira_mist') {
           document.documentElement.dataset.theme = dark ? 'dark' : 'light'
@@ -672,6 +717,8 @@ const app = Vue.createApp({
     this.stopTheme?.()
     clearTimeout(this.liveTimer)
     clearTimeout(this.bootTimer)
+    for (const cleanup of this.deviceCleanup || []) cleanup()
+    clearInterval(this.clockTimer)
     clearInterval(this.clockTimer)
   },
 })

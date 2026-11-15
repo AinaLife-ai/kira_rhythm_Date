@@ -876,9 +876,9 @@ body { background:#08090c; }
 [data-phase="night"] .app-shell:before { background:linear-gradient(180deg,rgba(20,45,110,.34),transparent 48%,rgba(5,12,30,.42)); }
 
 /* Theme-reactive phone shell and launch sequence */
-.app-shell { background:color-mix(in srgb,var(--accent) 3%,#05070b); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),inset 0 0 80px rgba(0,0,0,.55); transition:background .6s ease,box-shadow .6s ease; }
-.statusbar { border-bottom:1px solid color-mix(in srgb,var(--accent) 12%,transparent); background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%,#050608),#050608); transition:background .6s ease; }
-.topbar { background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 5%,#050608),rgba(5,6,8,.96)); transition:background .6s ease; }
+.app-shell { background:color-mix(in srgb,var(--accent) 8%,#05070b); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),inset 0 0 80px rgba(0,0,0,.55); transition:background .6s ease,box-shadow .6s ease; }
+.statusbar { border-bottom:1px solid color-mix(in srgb,var(--accent) 22%,transparent); background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 13%,#050608),#050608); transition:background .6s ease; }
+.topbar { background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 11%,#050608),rgba(5,6,8,.94)); transition:background .6s ease; }
 .sidebar { background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 5%,rgba(6,8,12,.92)),rgba(5,6,9,.99)) !important; border-top-color:color-mix(in srgb,var(--accent) 28%,rgba(255,255,255,.14)); }
 .phone-home-indicator { background:color-mix(in srgb,var(--accent) 55%,#fff); box-shadow:0 0 12px color-mix(in srgb,var(--accent) 55%,transparent); }
 .main-nav button.active { background:color-mix(in srgb,var(--accent) 14%,rgba(255,255,255,.07)); }
@@ -904,3 +904,57 @@ body { background:#08090c; }
 .boot-word { animation:boot-word-rise .72s .18s ease both !important; opacity:1 !important; }
 @keyframes boot-mark-rise { from{transform:translateY(14px) scale(.86)} to{transform:translateY(0) scale(1)} }
 @keyframes boot-word-rise { from{transform:translateY(10px)} to{transform:translateY(0)} }
+
+/* Sprite-sheet companion */
+.pet-figure { position:relative; width:84px; height:150px; }
+.pet-sprite { position:absolute; inset:0; background-repeat:no-repeat; background-size:400% 100%; background-position:-168px 0; image-rendering:auto; }
+.pet-action-walk .pet-sprite { animation:pet-sprite-walk .68s linear infinite; }
+.pet-action-run .pet-sprite { animation:pet-sprite-walk .34s linear infinite; }
+.pet-action-walk { transition:left 2.7s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
+.pet-action-run { transition:left .9s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
+@keyframes pet-sprite-walk { 0%,24%{background-position:0 0}25%,49%{background-position:-84px 0}50%,74%{background-position:-168px 0}75%,100%{background-position:-252px 0} }
+.pet-action-thrown .pet-figure { animation:pet-toss .46s ease-out !important; }
+.pet-action-dizzy .pet-head { animation:none !important; }
+.pet-action-dizzy .pet-figure { animation:pet-dizzy-shake .3s steps(2) infinite !important; }
+@keyframes pet-toss { 0%{transform:translateY(-10px) scaleY(1.04) scaleX(.97)} 55%{transform:translateY(0) scaleY(.9) scaleX(1.08)} 100%{transform:none} }
+@keyframes pet-dizzy-shake { 0%,100%{transform:translateX(-2px)} 50%{transform:translateX(3px)} }
+.pet-prop-book { position:absolute; left:17px; top:60px; width:50px; height:26px; background:#f5eddd; border:2px solid #d7c7b3; transform:rotate(-7deg); }
+.pet-prop-book i { position:absolute; top:3px; bottom:3px; left:50%; width:2px; background:#cdb7aa; }
+.pet-prop-book i:last-child { left:8px; right:8px; top:7px; width:auto; height:2px; background:#a98f9b; box-shadow:0 5px 0 #a98f9b,0 10px 0 #a98f9b; }
+.pet-prop-phone { position:absolute; right:6px; top:48px; width:12px; height:21px; background:#111820; border:1px solid #8b9ca7; transform:rotate(8deg); }
+.pet-prop-phone i { display:block; margin:3px 1px; height:13px; background:#6fe5df; }
+.pet-prop-cup { position:absolute; right:7px; top:58px; width:14px; height:18px; background:#f1d6b4; border-top:3px solid #fff1dc; box-shadow:6px 4px 0 -4px #f1d6b4; }
+.pet-prop-laptop { position:absolute; left:10px; top:62px; width:52px; height:22px; background:#77818b; transform:rotate(-4deg); }
+.pet-prop-laptop i { display:block; margin:2px 4px; height:13px; background:#1b2530; box-shadow:inset 0 0 0 1px #51cbd1; }
+.pet-notes { position:absolute; left:55px; top:27px; width:26px; height:24px; }
+.pet-notes b { position:absolute; width:8px; height:8px; border-radius:50%; background:#ffd25e; animation:pet-note-float 1.5s ease-in-out infinite; }
+.pet-notes b:before { content:''; position:absolute; left:7px; bottom:2px; width:2px; height:12px; background:#ffd25e; }
+.pet-notes b:last-child { left:13px; top:7px; animation-delay:.35s; transform:scale(.7); }
+.pet-zzz { position:absolute; right:2px; top:16px; color:#a8e9ff; font:700 11px/1 "Arial Narrow",sans-serif; }
+.pet-zzz b { position:absolute; left:0; animation:pet-note-float 2s ease-in-out infinite; }
+.pet-zzz b:last-child { left:10px; top:-10px; font-size:8px; animation-delay:.4s; }
+@keyframes pet-note-float { 0%,100%{transform:translateY(0);opacity:.3} 50%{transform:translateY(-6px);opacity:1} }
+.pet-action-read .pet-figure,.pet-action-phone .pet-figure,.pet-action-eat .pet-figure,.pet-action-work .pet-figure { animation:pet-idle-breathe 4.2s ease-in-out infinite; }
+.pet-prop-book { left:21px; top:69px; width:40px; height:19px; border-width:1px; opacity:.94; }
+.pet-prop-book i:last-child { top:5px; box-shadow:0 4px 0 #a98f9b,0 8px 0 #a98f9b; }
+.pet-shadow-label { background:rgba(5,7,11,.9); font-size:7px; }
+
+.status-net { color:rgba(255,255,255,.62); font:700 7px/1 "Arial Narrow",sans-serif; letter-spacing:.04em; }
+.battery-text { color:rgba(255,255,255,.55); font:600 7px/1 monospace; min-width:22px; text-align:right; }
+.cell-bars i { opacity:.22; transition:opacity .3s; }
+.cell-bars.bars-0 i { opacity:.12; }
+.cell-bars.bars-1 i:nth-child(1),.cell-bars.bars-2 i:nth-child(-n+2),.cell-bars.bars-3 i:nth-child(-n+3),.cell-bars.bars-4 i { opacity:1; }
+.battery { position:relative; }
+.battery b { display:none; position:absolute; left:4px; top:1px; width:7px; height:7px; background:#061014; clip-path:polygon(45% 0,100% 0,58% 42%,92% 42%,28% 100%,42% 55%,0 55%); z-index:2; }
+.battery.charging b { display:block; }
+.battery.charging i { background:#7bffd1; }
+@media (max-width:700px) { .battery-text { display:none; } .status-net { font-size:6px; } }
+/* Let the whole phone surface carry each theme's own background color. */
+.app-shell { background:color-mix(in srgb,var(--bg) 86%,#000) !important; }
+.sidebar { background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 12%,var(--bg)),color-mix(in srgb,var(--bg) 82%,#000)) !important; }
+.nt-today { background-color:transparent; }
+.nte-today { background-image:linear-gradient(180deg,color-mix(in srgb,var(--bg) 0%,transparent) 0%,color-mix(in srgb,var(--bg) 18%,transparent) 34%,color-mix(in srgb,var(--bg) 72%,transparent) 56%,var(--bg) 76%),var(--theme-art,none) !important; background-size:100% 100%,auto 520px !important; background-position:center top,center top !important; background-repeat:no-repeat !important; }
+.mission-dock { background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 0%,transparent) 0,color-mix(in srgb,var(--bg) 40%,transparent) 34px,color-mix(in srgb,var(--bg) 88%,transparent) 82px,var(--bg) 135px) !important; }
+.timeline-console,.signal-card,.section-card,.calendar-card,.day-detail,.settings-layout { background:color-mix(in srgb,var(--panel-solid) 86%,transparent) !important; }
+.item-card,.day-cell,.run-row,.diff-card { border-color:color-mix(in srgb,var(--accent) 18%,var(--line)) !important; }
+@media (min-width:1100px) { .view-host > .nte-today { background:var(--bg) !important; } }

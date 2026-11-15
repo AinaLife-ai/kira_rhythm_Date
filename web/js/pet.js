@@ -1,3 +1,41 @@
+const VOICE = {
+  tomato: {
+    read: ['这一页，番茄想再看一遍。', '书里也会写到番茄吗？'],
+    idle: ['番茄，最好了。', '今天也慢慢来。'],
+    sleep: ['番茄城堡……先睡一下。', '别把番茄酱拿走。'],
+    pat: ['摸头可以，番茄要留着。', '再一下下。'],
+    umbrella: ['伞够大，站进来一点。'],
+  },
+  mint: {
+    eat: ['这个甜甜的，你要不要？', '气泡在舌尖跳。'],
+    walk: ['海风把尾巴吹乱了。', '去前面看看。'],
+    sleep: ['尾巴借你当抱枕。', '睡一小会儿。'],
+    pat: ['耳朵、耳朵不能一直摸。', '喵……再摸一下。'],
+    idle: ['今天也要精神一点。'],
+  },
+  garnet: {
+    work: ['先把手头这件事做完。', '专注一会儿。'],
+    phone: ['等一下，我回个消息。', '看到一个有意思的东西。'],
+    sleep: ['别吵，我闭目养神。', '夜里安静。'],
+    pat: ['……只准一下。', '手拿开，我要工作了。'],
+    idle: ['风有点大。'],
+  },
+  xun: {
+    eat: ['坐下来，先吃点热的。', '汤要趁热。'],
+    umbrella: ['雨太大，站进来。', '伞往你那边一点。'],
+    read: ['这一页，讲的是旧城。', '陪我坐一会儿。'],
+    pat: ['老板娘可不是随便摸的。', '……下不为例。'],
+    idle: ['店面今天也照常营业。'],
+  },
+  hathor: {
+    run: ['目标出现，开始行动。', '我先过去，你跟上。'],
+    work: ['配送路线确认。', '按计划执行。'],
+    phone: ['接到一个新单。', '等我回个消息。'],
+    pat: ['翅膀不可以乱碰。', '只准碰一下。'],
+    idle: ['今晚的风很适合出发。'],
+  },
+}
+
 const ACTIONS = {
   idle: '发呆', walk: '散步', read: '看书', eat: '吃点东西', phone: '看手机',
   work: '专注', music: '听歌', sleep: '打盹', umbrella: '撑伞', scarf: '围巾',
@@ -13,6 +51,7 @@ export const PetCompanion = {
     phase: { type: String, default: 'day' },
     event: { type: String, default: 'quiet' },
     activity: { type: String, default: '' },
+    sprite: { type: String, default: '' },
     large: { type: Boolean, default: false },
   },
   data() {
@@ -39,6 +78,11 @@ export const PetCompanion = {
       holdTimer: null,
       suppressClick: false,
       actionLockUntil: 0,
+      labelVisible: true,
+      labelHint: true,
+      careVisible: true,
+      labelTimer: null,
+      careTimer: null,
       sleepiness: 0,
     }
   },
@@ -73,6 +117,8 @@ export const PetCompanion = {
   },
   mounted() {
     if (window.innerWidth >= 1100) this.x = 94
+    this.showLabel(true)
+    this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
     this.wanderTimer = setInterval(() => this.wander(), 7600)
@@ -81,8 +127,21 @@ export const PetCompanion = {
     clearInterval(this.idleTimer)
     clearInterval(this.wanderTimer)
     clearTimeout(this.speechTimer)
+    clearTimeout(this.labelTimer)
+    clearTimeout(this.careTimer)
   },
   methods: {
+    showLabel(hint = false, ms = 3000) {
+      this.labelVisible = true
+      this.labelHint = hint
+      clearTimeout(this.labelTimer)
+      this.labelTimer = setTimeout(() => { this.labelVisible = false }, ms)
+    },
+    showCare(ms = 3000) {
+      this.careVisible = true
+      clearTimeout(this.careTimer)
+      this.careTimer = setTimeout(() => { this.careVisible = false }, ms)
+    },
     setSpeech(text, ms = 4200) {
       if (!text) return
       this.speech = text
@@ -105,19 +164,19 @@ export const PetCompanion = {
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
       if (this.event === 'imminent') {
-        this.setAction('run', '还有一点时间，要出发了。')
+        this.setAction('run', this.speechFor('run'))
         return
       }
       if (this.event === 'live') {
-        this.setAction('work', '正在陪你经历这一小段。')
+        this.setAction('work', this.speechFor('work'))
         return
       }
       if (this.weather === 'rain') {
-        this.setAction('umbrella', '下雨了，我带了伞。')
+        this.setAction('umbrella', this.speechFor('umbrella'))
         return
       }
       if (this.weather === 'snow') {
-        this.setAction('scarf', '下雪了，围巾分你一半。')
+        this.setAction('scarf', this.speechFor('scarf'))
         return
       }
       const keyword = this.keywordAction()
@@ -126,7 +185,7 @@ export const PetCompanion = {
         return
       }
       if (this.phase === 'night' && this.sleepiness > 1) {
-        this.setAction('sleep', '夜深了，我在这里睡一会儿。')
+        this.setAction('sleep', this.speechFor('sleep'))
         return
       }
       if (force) this.setAction(this.pickIdle(), this.speechFor(this.action))
@@ -139,9 +198,11 @@ export const PetCompanion = {
     setAction(action, text) {
       const changed = this.action !== action
       this.action = action
-      if (changed && text) this.setSpeech(text)
+      if (changed) { this.showLabel(true); if (text) this.setSpeech(text) }
     },
     speechFor(action) {
+      const lines = VOICE[this.variant]?.[action]
+      if (lines?.length) return lines[Math.floor(Math.random() * lines.length)]
       return ({
         read: '这一页刚好看到喜欢的地方。', eat: '先认真吃一点东西。', work: '我先安静陪你一会儿。',
         walk: '去窗边走走，顺便看看天气。', phone: '刚好看到一张很想给你看的图。',
@@ -152,7 +213,8 @@ export const PetCompanion = {
     wander() {
       if (this.dragging || this.lift > 0 || this.panel || this.event === 'imminent') return
       if (!['idle', 'look', 'walk', 'phone'].includes(this.action)) return
-      const next = window.innerWidth >= 1100 ? 86 + Math.random() * 8 : 20 + Math.random() * 58
+      let next = window.innerWidth >= 1100 ? 64 + Math.random() * 24 : 20 + Math.random() * 58
+      if (Math.abs(next - this.x) < 12) next = next > this.x ? Math.min(94, this.x + 16) : Math.max(16, this.x - 16)
       this.facing = next > this.x ? 1 : -1
       this.x = next
       if (Math.random() > 0.45) this.setAction('walk', '')
@@ -160,9 +222,12 @@ export const PetCompanion = {
     },
     pat() {
       if (this.dragging || this.suppressClick || this.lift > 0) return
+      this.showLabel(false)
+      this.showCare()
       this.hearts = 4
       this.mood = Math.min(100, this.mood + 2)
-      this.setAction('happy', ['再摸一下。', '今天也很喜欢你。', '嘿嘿，痒。', '我在听。'][Math.floor(Math.random() * 4)])
+      this.action = 'happy'
+      this.setSpeech(this.speechFor('pat'))
       setTimeout(() => { this.hearts = 0 }, 900)
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
@@ -236,7 +301,8 @@ export const PetCompanion = {
     },
     openPanel() {
       this.panel = !this.panel
-      if (this.panel) this.setSpeech('', 0)
+      this.showCare()
+      if (this.panel) { this.showLabel(false); this.setSpeech('', 0) }
     },
   },
   template: `
@@ -249,61 +315,18 @@ export const PetCompanion = {
     <div class="pet-scarf" aria-hidden="true"></div>
     <button class="pet-hit" @click="pat" @pointerdown="startDrag" aria-label="摸摸像素伙伴">
       <span class="pet-shadow"></span>
-      <svg class="pet-figure" viewBox="0 0 72 128" shape-rendering="crispEdges" aria-hidden="true">
-        <g v-if="variant === 'mono'" class="pet-hair-back">
-          <path d="M18 14h8V8h8V4h8v4h8v6h6v10h4v30h-6V36h-4v20h-5V30h-8v-5h-8v5h-8v26h-5V34h-4v24h-6V28h4z" fill="#1b1b23"/>
-          <path d="M48 10h8v6h6v10h4v34h-7V32h-4v26h-5V30h-2z" fill="#f2ebe1"/>
-        </g>
-        <g v-else-if="variant === 'mint'" class="pet-hair-back">
-          <path d="M18 22V8h8V4h20v4h8v14h4v20h-6V26h-4v12h-5V25H25v13h-5V26h-2z" fill="#45b99b"/>
-          <path d="M20 9 24 0l5 10M45 10 50 0l5 10" fill="#45b99b"/>
-          <path d="M56 66c9-5 12 4 8 10-2 4-7 6-9 2z" fill="#45b99b"/>
-        </g>
-        <g v-else class="pet-hair-back">
-          <path d="M17 18V7h9V4h20v3h9v14h4v52h-7V31h-4v33h-5V28H29v29h-5V31h-3v39h-7V23z" fill="#a9243d"/>
-          <path d="M17 25h4v34h-4zM51 27h4v36h-4z" fill="#7d172c"/>
-        </g>
-
-        <g class="pet-head">
-          <rect x="23" y="17" width="26" height="21" rx="2" fill="#f6d6c8"/>
-          <path d="M21 14h30v4H21zM21 18h6v8h-6zM45 18h6v8h-6z" fill="var(--pet-hair)"/>
-          <rect x="27" y="26" width="3" height="5" fill="#2b2229"/><rect x="42" y="26" width="3" height="5" fill="#2b2229"/>
-          <rect x="27" y="26" width="1" height="1" fill="#fff"/><rect x="42" y="26" width="1" height="1" fill="#fff"/>
-          <rect x="24" y="30" width="4" height="2" fill="#e78b8e" opacity=".7"/><rect x="44" y="30" width="4" height="2" fill="#e78b8e" opacity=".7"/>
-          <rect x="34" y="32" width="4" height="1" fill="#b66a72"/>
-          <rect x="31" y="38" width="10" height="3" fill="#f6d6c8"/>
-          <path v-if="variant === 'mint'" d="M21 19h10v3H21zM41 19h10v3H41z" fill="#fff" opacity=".5"/>
-        </g>
-
-        <g class="pet-arm pet-arm-left"><rect x="18" y="43" width="6" height="25" fill="var(--pet-jacket)"/><rect x="18" y="66" width="6" height="4" fill="#f6d6c8"/></g>
-        <g class="pet-arm pet-arm-right"><rect x="48" y="43" width="6" height="25" fill="var(--pet-jacket)"/><rect x="48" y="66" width="6" height="4" fill="#f6d6c8"/></g>
-
-        <g class="pet-body">
-          <path d="M24 40h24v28H24z" fill="var(--pet-jacket)"/>
-          <path d="M31 40h10v24H31z" fill="#f7f1e6"/>
-          <path d="M35 41h2v21h-2z" fill="#c8bfd0" opacity=".55"/>
-          <path d="M24 45h8v3h-8zM40 45h8v3h-8z" fill="var(--pet-jacket-dark)"/>
-          <path v-if="variant === 'crimson'" d="M22 65h28v6H22zM18 69h8v24h-6V76h-2zM46 69h8v24h-6V76h-2z" fill="#181820"/>
-          <path v-if="variant === 'mint'" d="M22 40h28v5H22zM22 63h28v4H22z" fill="#bce8d8" opacity=".55"/>
-          <path d="M22 68h28l3 13H19z" fill="var(--pet-skirt)"/>
-          <path d="M27 69h3v11h-3zM36 69h3v11h-3zM45 69h3v11h-3z" fill="var(--pet-skirt-dark)" opacity=".55"/>
-          <path v-if="variant === 'mono'" d="M30 38h5v4h-5zM38 38h5v4h-5z" fill="#d94960"/>
-          <path v-if="variant === 'mint'" d="M32 38h8v4h-8z" fill="#fff" opacity=".6"/>
-        </g>
-
-        <g class="pet-leg pet-leg-left"><rect x="26" y="81" width="7" height="24" fill="#f6d6c8"/><rect x="26" y="90" width="7" height="14" fill="var(--pet-sock)"/><rect x="23" y="112" width="11" height="4" fill="#1b1b21"/></g>
-        <g class="pet-leg pet-leg-right"><rect x="39" y="81" width="7" height="24" fill="#f6d6c8"/><rect x="39" y="90" width="7" height="14" fill="var(--pet-sock)"/><rect x="38" y="112" width="11" height="4" fill="#1b1b21"/></g>
-
-        <g v-if="isBook" class="pet-prop prop-book"><rect x="19" y="60" width="34" height="18" fill="#f3ead9"/><rect x="35" y="61" width="2" height="16" fill="#d9b6a6"/><rect x="23" y="64" width="10" height="2" fill="#8a6a83"/><rect x="23" y="68" width="8" height="2" fill="#8a6a83"/><rect x="40" y="64" width="9" height="2" fill="#8a6a83"/></g>
-        <g v-if="isPhone" class="pet-prop prop-phone"><rect x="53" y="48" width="9" height="16" fill="#1c2430"/><rect x="54" y="50" width="7" height="12" fill="#72e8e1"/></g>
-        <g v-if="isCup" class="pet-prop prop-cup"><rect x="50" y="57" width="9" height="12" fill="#f1d7b6"/><rect x="52" y="55" width="5" height="3" fill="#b57b57"/><rect x="58" y="60" width="4" height="2" fill="#f1d7b6"/></g>
-        <g v-if="isWork" class="pet-prop prop-laptop"><rect x="17" y="63" width="38" height="5" fill="#7a838e"/><rect x="21" y="52" width="30" height="12" fill="#1c2530"/><rect x="23" y="54" width="26" height="8" fill="#82d8e0" opacity=".45"/></g>
-        <g v-if="isMusic" class="pet-notes"><rect x="57" y="34" width="2" height="10" fill="#ffd25e"/><rect x="59" y="34" width="5" height="2" fill="#ffd25e"/><rect x="14" y="28" width="2" height="7" fill="#ffd25e"/><rect x="10" y="28" width="6" height="2" fill="#ffd25e"/></g>
-        <g v-if="isSleep" class="pet-zzz"><text x="54" y="28">Z</text><text x="60" y="20">z</text></g>
-      </svg>
+      <span class="pet-figure">
+        <span class="pet-sprite" :style="{ backgroundImage: 'url(' + sprite + ')' }"></span>
+        <span class="pet-prop-book" v-if="isBook"><i></i><i></i></span>
+        <span class="pet-prop-phone" v-if="isPhone"><i></i></span>
+        <span class="pet-prop-cup" v-if="isCup"></span>
+        <span class="pet-prop-laptop" v-if="isWork"><i></i></span>
+        <span class="pet-notes" v-if="isMusic"><b></b><b></b></span>
+        <span class="pet-zzz" v-if="isSleep"><b>Z</b><b>z</b></span>
+      </span>
     </button>
-    <span class="pet-shadow-label">{{ label }} · 可拖动</span>
-    <button class="pet-care-toggle" @click="openPanel" :aria-expanded="panel" aria-label="打开陪伴面板"><span></span><span></span></button>
+    <span v-if="labelVisible" class="pet-shadow-label">{{ label }}<template v-if="labelHint"> · 可拖动</template></span>
+    <button v-if="careVisible || panel" class="pet-care-toggle" @click="openPanel" :aria-expanded="panel" aria-label="打开陪伴面板"><span></span><span></span></button>
     <transition name="pet-panel">
       <div v-if="panel" class="pet-panel">
         <div class="pet-panel-head"><span>陪伴模式 / PET</span><button @click="panel = false" aria-label="关闭">×</button></div>
