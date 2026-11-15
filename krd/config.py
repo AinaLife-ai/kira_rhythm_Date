@@ -69,7 +69,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "virtual": {"seed": "krd", "climate": "temperate", "location": ""}
     },
     "appearance": {
-        "theme": "lacrimosa_dusk",
+        "theme": "random",
         "effects": "auto",
         "avatar_source": "auto",
         "avatar_adapter_order": [],

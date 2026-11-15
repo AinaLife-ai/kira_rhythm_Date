@@ -49,6 +49,7 @@ const app = Vue.createApp({
       customTemplates: [],
       customAccent: '',
       clockNow: Date.now() / 1000,
+      randomThemeId: themeTemplates.filter((entry) => !entry.random)[Math.floor(Math.random() * themeTemplates.filter((entry) => !entry.random).length)].id,
       clockTimer: null,
       batteryLevel: null,
       batteryCharging: false,
@@ -119,8 +120,10 @@ const app = Vue.createApp({
       return ({ imminent: '事件临近', live: '事件执行中', quiet: '城市信号稳定' })[this.eventState]
     },
     activeTheme() {
-      const id = this.data.config?.appearance?.theme || 'tomato_rain'
-      return themeTemplates.find((entry) => entry.id === id) || themeTemplates[0]
+      const actual = themeTemplates.filter((entry) => !entry.random)
+      const id = this.data.config?.appearance?.theme || 'random'
+      const chosen = id === 'random' ? this.randomThemeId : id
+      return actual.find((entry) => entry.id === chosen) || actual.find((entry) => entry.id === this.randomThemeId) || actual[0]
     },
     petVariant() { return this.activeTheme?.character || 'tomato' },
     petPoses() {
@@ -550,8 +553,10 @@ const app = Vue.createApp({
     },
     applyAppearance() {
       const appearance = this.data.config?.appearance || {}
-      const themeId = appearance.theme || 'tomato_rain'
-      const theme = themeTemplates.find((entry) => entry.id === themeId) || themeTemplates[0]
+      if (!themeTemplates.some((entry) => entry.id === appearance.theme) || appearance.theme === 'random') {
+        this.data.config.appearance.theme = 'random'
+      }
+      const theme = this.activeTheme
       document.documentElement.dataset.themeName = theme.id
       document.documentElement.dataset.theme = theme.mode || 'dark'
       try { localStorage.setItem('krd_theme', theme.id) } catch (_) {}
@@ -618,6 +623,10 @@ const app = Vue.createApp({
     },
     async setTheme(theme) {
       try {
+        if (theme.id === 'random') {
+          const actual = themeTemplates.filter((entry) => !entry.random)
+          this.randomThemeId = actual[Math.floor(Math.random() * actual.length)].id
+        }
         await saveConfig({ appearance: { theme: theme.id } })
         this.data.config.appearance.theme = theme.id
         this.applyAppearance()
@@ -635,6 +644,7 @@ const app = Vue.createApp({
     },
     prepareSettings() {
       this.draft = clone(this.data.config || {})
+      if (!themeTemplates.some((entry) => entry.id === this.draft.appearance?.theme)) this.draft.appearance.theme = 'random'
       this.settingsBaseRevision = this.data.config_revision || 0
       this.allSessions = this.data.sessions || []
       this.diagnostics = null

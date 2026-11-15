@@ -247,11 +247,13 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
-    this.wanderTimer = setInterval(() => this.wander(), 12000)
+    this.wanderTimer = setInterval(() => this.wander(), 10000)
+    this.initialWalkTimer = setTimeout(() => this.wander(), 4500)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
     clearInterval(this.wanderTimer)
+    clearTimeout(this.initialWalkTimer)
     clearTimeout(this.walkTimer)
     clearInterval(this.walkFrameTimer)
     clearTimeout(this.speechTimer)
@@ -360,7 +362,7 @@ export const PetCompanion = {
     nextWalkTarget() {
       const min = window.innerWidth < 700 ? 12 : 8
       const max = window.innerWidth < 700 ? 78 : 90
-      const distance = 12 + Math.random() * 28
+      const distance = 10 + Math.random() * 22
       let direction = Math.random() < 0.5 ? -1 : 1
       let next = this.x + direction * distance
       if (next < min || next > max) {
@@ -401,7 +403,7 @@ export const PetCompanion = {
       this.facing = target > this.x ? 1 : -1
       this.action = 'walk'
       this.walkFrame = 0
-      this.walkFrameTimer = setInterval(() => { this.walkFrame = (this.walkFrame + 1) % 4 }, 140)
+      this.walkFrameTimer = setInterval(() => { this.walkFrame = (this.walkFrame + 1) % 4 }, 180)
       const step = () => {
         if (!this.walking || this.dragging) { this.walking = false; this.walkTimer = null; return }
         const diff = target - this.x

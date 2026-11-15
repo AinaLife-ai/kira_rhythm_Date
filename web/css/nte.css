@@ -995,3 +995,5 @@ body { background:#08090c; }
 @keyframes refresh-spin { to { transform:rotate(360deg); } }
 .pet-action-jump .pet-figure { animation:pet-jump-hop .5s ease-out; }
 @keyframes pet-jump-hop { 0%,100%{transform:translateY(0)} 45%{transform:translateY(-10px) scaleY(1.04)} 70%{transform:translateY(0) scaleY(.95)} }
+
+.pet-action-walk .pet-figure { animation:none !important; }

@@ -65,4 +65,5 @@ export const themeTemplates = [
   { id: 'hathor_garage', name: '天使 · 夜行', description: '地下车库，机车与白色机械翼', color: '#58e1d1', mode: 'dark', art: 'hathor_garage', character: 'hathor', tone: 'garage' },
   { id: 'hathor_roof', name: '天使 · 天台巡航', description: '雨夜天台，蹲在边缘观察城市', color: '#64b8ff', mode: 'dark', art: 'hathor_roof', character: 'hathor', tone: 'sky' },
   { id: 'hathor_store', name: '天使 · 便利店', description: '玻璃便利店外，一罐热咖啡', color: '#7bffd1', mode: 'dark', art: 'hathor_store', character: 'hathor', tone: 'store' },
+  { id: 'random', name: '随机主题', description: '每次进入 WebUI 随机抽一套', color: '#8f9cff', mode: 'dark', art: '', random: true },
 ]
