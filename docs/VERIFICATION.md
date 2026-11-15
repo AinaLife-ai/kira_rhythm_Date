@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **95 passed** |
-| KiraAI 3.1.2 同一套测试 | **95 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **96 passed** |
+| KiraAI 3.1.2 同一套测试 | **96 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、38 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -42,7 +42,7 @@
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **95 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **96 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -62,6 +62,7 @@
 | 深色下拉 | 天气/模式等 select option 使用深色背景与浅色文字，浏览器 computed style 验证 |
 | 天气凭据 | Provider 切换显示对应字段；A/B 凭据分别保存并切换保留；保存后缓存失效，配置 API 不回传明文 |
 | 城市搜索 | Open-Meteo “桂林”自动补“桂林市”，首条为广西桂林；重名显示国家/省/市/区；阳朔县无结果显示，QWeather GeoAPI 作为中国区县补充 |
+| 规划目标 | 立即规划传当前选中日期；planning focus.date/reason 明确首要日期；LLM 顶层 items/entries 与扁平 at/start/end 自动归一化 |
 | 头像/图标分离 | `icon.svg` 仅作插件图标并透明化；`avatar.svg` 为问号默认生活头像；WebUI 未设置/失败仍显示问号 |
 | 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.2`；上传资产内容哈希 + immutable |
 | 性能/token | 动态 Prompt 仍为尾部 persist=False；静态工具区稳定；首屏不等待 Remote 头像/天气；日历远程刷新后台化 |

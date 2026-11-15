@@ -35,15 +35,15 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_plan",
-        description="创建或修订自己接下来的完整生活计划；已有 Plan 是修订。支持 plans[] 多日原子提交。精确时间 at 与时间窗 start/end 均支持 HH:MM 或 HH:MM:SS；随机间隔可用 interval_seconds 精确到秒。",
-        params={"type": "object", "properties": {"plan": {"type": "object"}, "plans": {"type": "array", "items": {"type": "object"}}, "mode": {"type": "string", "enum": ["create", "create_missing", "revise", "merge", "replace"], "default": "revise"}, "reason": {"type": "string"}}},
+        description="创建或修订自己接下来的完整生活计划；已有 Plan 是修订。plan 必须是 {date, blocks:[{title, items:[...]}]}，小项放在 blocks[].items[]，不要放 plan 顶层 items。支持 plans[] 多日原子提交。用户指定某日时优先处理该日。精确时间 at 与时间窗 start/end 均支持 HH:MM 或 HH:MM:SS；随机间隔可用 interval_seconds 精确到秒。",
+        params={"type": "object", "properties": {"plan": {"type": "object", "description": "Must use date + blocks[].items[]; items cannot be at plan root."}, "plans": {"type": "array", "items": {"type": "object"}}, "mode": {"type": "string", "enum": ["create", "create_missing", "revise", "merge", "replace"], "default": "revise"}, "reason": {"type": "string"}}},
     )
     async def rhythm_plan(self, event, **kwargs):
         return await _tools.rhythm_plan(event, **kwargs)
 
     @register.tool(
         name="rhythm_update",
-        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。",
+        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。新建/修订计划同样使用 blocks[].items[] 结构。",
         params={"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object"}}, "reason": {"type": "string"}}, "required": ["operations"]},
     )
     async def rhythm_update(self, event, **kwargs):

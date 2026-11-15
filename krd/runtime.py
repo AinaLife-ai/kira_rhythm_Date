@@ -16,7 +16,7 @@ from .store import Store
 
 STATIC_TOOL_GUIDE = """
 [KRD 生活节律]
-你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看日程或万年历（农历、节气、法定假期）。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。已有 Plan 是修订，不重复新建。上下文和工具返回的时间字段已转换为当地可读时间（含秒）；修改时间请使用 schedule，精确时间支持 HH:MM 或 HH:MM:SS，时间窗 start/end 同样支持秒。不要回传时间显示字符串。
+你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看日程或万年历（农历、节气、法定假期）。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。rhythm_plan 的 plan 结构必须是 {date, blocks:[{title, items:[...]}]}，小项不能放在 plan 顶层。用户指定某日时优先处理该日；规划运行的 focus.date 是首要目标。已有 Plan 是修订，不重复新建。上下文和工具返回的时间字段已转换为当地可读时间（含秒）；修改时间请使用 schedule，精确时间支持 HH:MM 或 HH:MM:SS，时间窗 start/end 同样支持秒。不要回传时间显示字符串。
 """.strip()
 
 

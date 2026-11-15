@@ -465,9 +465,13 @@ const app = Vue.createApp({
     },
     async runPlanning() {
       try {
-        const date = state.selectedDate === this.data.date ? dateShift(this.data.date, 1) : state.selectedDate
-        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, { date, reason: 'WebUI 手动给予一次规划机会' })
-        notify('已把规划机会交给 bot')
+        const date = state.selectedDate || this.data.date
+        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, {
+          date,
+          reason: `WebUI 手动请求优先规划 ${date}；先处理这一天，同时仍可在配置允许的日期范围内调整其他日期。`,
+          focus_date: date,
+        })
+        notify(`已把 ${date} 的规划机会交给 bot`)
       } catch (error) { notify(error.message, 'error') }
     },
     newItem() {

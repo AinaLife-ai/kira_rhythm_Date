@@ -130,11 +130,18 @@ class PlanService:
         quiet = compiled_windows(day, config["quiet_delivery_windows"], tz_name)
         previous_by_id = existing_items or {}
         raw_blocks = payload.get("blocks", [])
+        if not raw_blocks:
+            for alias in ("items", "entries", "schedule"):
+                if isinstance(payload.get(alias), list) and payload[alias]:
+                    raw_blocks = [{"title": str(payload.get("title", "生活片段"))[:80], "items": payload[alias]}]
+                    break
         if not isinstance(raw_blocks, list):
             raise KRDError("invalid_plan", "blocks must be a list")
         execution_options = None
         prepared = []
         for block_index, raw_block in enumerate(raw_blocks):
+            if isinstance(raw_block, dict) and not raw_block.get("items") and isinstance(raw_block.get("entries"), list):
+                raw_block["items"] = raw_block["entries"]
             if not isinstance(raw_block, dict) or not isinstance(raw_block.get("items", []), list):
                 raise KRDError("invalid_plan", "Each block must be an object with an items list")
             block = {"id": str(raw_block.get("id") or new_id("blk")), "title": str(raw_block.get("title", "生活片段"))[:120],
@@ -146,7 +153,18 @@ class PlanService:
             for raw_item in raw_block.get("items", []):
                 if not isinstance(raw_item, dict):
                     raise KRDError("invalid_item", "Each item must be an object")
+                if not raw_item.get("target") and raw_item.get("session"):
+                    raw_item["target"] = raw_item["session"]
                 schedule = raw_item.get("schedule") or {}
+                if not schedule:
+                    if raw_item.get("at"):
+                        schedule = {"type": "exact", "at": raw_item["at"]}
+                    elif raw_item.get("start") and raw_item.get("end"):
+                        schedule = {"type": "window", "start": raw_item["start"], "end": raw_item["end"]}
+                        for key in ("occurrences", "window_mode", "interval_minutes", "interval_seconds"):
+                            if key in raw_item:
+                                schedule[key] = raw_item[key]
+                    raw_item["schedule"] = schedule
                 if not isinstance(schedule, dict):
                     raise KRDError("invalid_schedule", "schedule must be an object")
                 supplied_id = str(raw_item.get("id") or "")

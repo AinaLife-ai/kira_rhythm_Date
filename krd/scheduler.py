@@ -340,7 +340,8 @@ class Scheduler:
             if kind == "item":
                 metadata.update({"item_id": run["item_id"], "plan_id": run["plan_id"], "date": ""})
             else:
-                metadata.update({"item_id": "", "plan_id": "", "date": run["target_date"], "trigger_id": run["trigger_id"]})
+                metadata.update({"item_id": "", "plan_id": "", "date": run["target_date"],
+                                 "trigger_id": run["trigger_id"], "reason": run.get("reason", "")})
             message = KiraIMMessage(
                 message_id=f"krd:{run_id}", self_id=self_id,
                 chain=MessageChain([Text("[生活节律｜系统触发]\n")]), timestamp=int(time.time()),

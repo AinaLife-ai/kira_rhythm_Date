@@ -95,7 +95,7 @@ class WeatherService:
         async with self._client(6) as client:
             for candidate in candidates:
                 response = await self._get(client, "https://geocoding-api.open-meteo.com/v1/search",
-                                           params={"name": candidate, "count": 50, "language": "zh", "format": "json"})
+                                           params={"name": candidate, "count": 100, "language": "zh", "format": "json"})
                 response.raise_for_status()
                 for row in response.json().get("results", []):
                     item = {
@@ -128,7 +128,7 @@ class WeatherService:
             country = 0 if row.get("country_code") == "CN" or not any("\u4e00" <= char <= "\u9fff" for char in raw) else 1
             feature = {"PPLA": 0, "PPLA2": 0, "PPLA3": 1, "PPLA4": 2, "PPL": 3}.get(str(row.get("feature_code")), 4)
             return (country, cityish, admin_match, exact, feature, -int(row.get("population") or 0), row["name"])
-        return sorted(unique.values(), key=rank)[:20]
+        return sorted(unique.values(), key=rank)
 
     async def _qweather_geocode(self, name: str, key: str) -> list[dict[str, Any]]:
         async with self._client(8) as client:
@@ -149,7 +149,7 @@ class WeatherService:
                 "latitude": lat, "longitude": lon, "timezone": row.get("tz", "auto"),
                 "feature_code": "", "source": "qweather",
             })
-        return result[:20]
+        return result
 
     async def summary(self, persona_id: str, *, allow_network: bool = True) -> dict[str, Any]:
         config = await self.store.get_config(persona_id)

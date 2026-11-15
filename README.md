@@ -134,7 +134,7 @@ KiraAI/
 
 详细命令与结果见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)。核心测试覆盖：
 
-- 双版本各 95 项领域/并发/调度/缓存/导入导出/天气/资源测试；
+- 双版本各 96 项领域/并发/调度/缓存/导入导出/天气/资源测试；
 - 精确时间、时间窗、禁止/安静/必需覆盖时段、随机间隔与检查间隔支持秒级；LLM 工具与 WebUI 同步支持 `HH:MM[:SS]`。
 - 真实 PluginManager 加载、3 工具、38 条鉴权 API/页面/静态路由、WS 与热更新；
 - 真实 HTTP API 与真实 Chromium → 生产前端 → API → SQLite 闭环；

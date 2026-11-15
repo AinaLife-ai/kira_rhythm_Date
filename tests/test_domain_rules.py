@@ -135,3 +135,17 @@ async def test_legacy_session_manager_without_kind_is_supported(runtime):
     runtime.ctx.session_mgr = LegacySessions()
     options = await runtime.policy.session_options("persona-a")
     assert options == [{"sid": "qq:dm:10001", "title": "旧版会话", "adapter": "qq"}]
+
+@pytest.mark.asyncio
+async def test_top_level_items_are_wrapped_into_a_block(runtime):
+    day = (datetime.now().date() + timedelta(days=1)).isoformat()
+    payload = {
+        "date": day, "title": "兼容顶层 items",
+        "items": [
+            {"title": "一", "at": "08:00", "session": "qq:dm:10001"},
+            {"title": "二", "start": "09:00", "end": "09:30", "session": "qq:dm:10001"},
+        ],
+    }
+    result = await runtime.plans.apply_plan("persona-a", payload, expected_revision=0)
+    assert len(result["plan"]["blocks"]) == 1
+    assert [item["title"] for item in result["plan"]["blocks"][0]["items"]] == ["一", "二"]
