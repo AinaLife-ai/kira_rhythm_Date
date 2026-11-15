@@ -54,3 +54,12 @@ async def test_valid_nested_override_still_hot_applies(store):
     assert config["appearance"]["custom_accent"] == "#123456"
     assert config["weather"]["virtual"]["climate"] == "snow"
     assert config["weather"]["timeout_seconds"] == 3
+
+@pytest.mark.asyncio
+async def test_seconds_are_accepted_for_clock_and_windows(store):
+    config, _ = await store.update_config("persona-a", {
+        "planning_time": "23:00:37",
+        "quiet_delivery_windows": [{"start": "23:30:05", "end": "07:00:10"}],
+    }, 0)
+    assert config["planning_time"] == "23:00:37"
+    assert config["quiet_delivery_windows"][0]["end"] == "07:00:10"

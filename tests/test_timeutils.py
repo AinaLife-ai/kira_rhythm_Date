@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 from krd.models import KRDError
-from krd.timeutils import next_daily, sample_window, subtract_window, to_utc, window_utc
+from krd.timeutils import next_daily, parse_clock, sample_window, subtract_window, to_utc, window_utc
 
 
 def test_cross_midnight_window():
@@ -45,3 +45,26 @@ def test_impossible_random_sequence_rejected():
 def test_blocked_interval_subtraction():
     segments = subtract_window(0, 100, [(10, 20), (50, 60)])
     assert segments == [(0, 10), (20, 50), (60, 100)]
+
+
+def test_exact_and_window_seconds_are_preserved():
+    assert parse_clock("09:00:37") == (9, 0, 37)
+    exact = to_utc("2026-11-15", "09:00:37", "Asia/Shanghai")
+    assert datetime.fromtimestamp(exact, __import__('zoneinfo').ZoneInfo("Asia/Shanghai")).second == 37
+    start, end = window_utc("2026-11-15", "09:00:10", "09:00:50", "Asia/Shanghai")
+    assert end - start == 40
+
+
+def test_interval_seconds_are_supported():
+    schedule = {"start": "09:00:00", "end": "09:01:00", "occurrences": 3,
+                "window_mode": "interval_random", "interval_seconds": [10, 20]}
+    points = sample_window(schedule, "2026-11-16", "Asia/Shanghai", random.Random(7))
+    assert len(points) == 3
+    assert all(10 <= b - a <= 20 for a, b in zip(points, points[1:]))
+
+
+def test_next_daily_preserves_seconds():
+    now = to_utc("2026-11-15", "23:00:00", "Asia/Shanghai")
+    due = next_daily(now, "23:00:37", "Asia/Shanghai")
+    local = datetime.fromtimestamp(due, __import__('zoneinfo').ZoneInfo("Asia/Shanghai"))
+    assert (local.day, local.second) == (15, 37)

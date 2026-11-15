@@ -38,6 +38,10 @@ def main(root: Path):
     app = (root / "web" / "js" / "app.js").read_text()
     assert "second: '2-digit'" in app
     assert "includeSeconds" in (root / "web" / "js" / "store.js").read_text()
+    views = (root / "web" / "js" / "views.js").read_text()
+    assert views.count('type="time" step="1"') >= 4
+    assert "interval_seconds" in views
+    assert "%H:%M:%S" in (root / "krd" / "llm_format.py").read_text()
     assert "MIN_REFRESH_SPIN_MS" in app
     assert not list((root / "assets" / "pets").glob("*_walk*.webp"))
     assert "eval(" not in frontend and "new Function" not in frontend

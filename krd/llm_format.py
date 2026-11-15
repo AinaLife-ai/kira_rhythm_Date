@@ -18,14 +18,15 @@ def readable_time(timestamp: Any, tz_name: str) -> str:
         value = float(timestamp)
     except (TypeError, ValueError):
         return str(timestamp)
-    return datetime.fromtimestamp(value, timezone(tz_name)).strftime("%Y-%m-%d %H:%M")
+    return datetime.fromtimestamp(value, timezone(tz_name)).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def humanize_timestamps(value: Any, tz_name: str) -> Any:
     """Recursively replace epoch timestamp fields with local readable text.
 
     The database and HTTP API keep raw epoch values. Only context/tool results
-    sent to the model are transformed so it never has to reason about seconds.
+    sent to the model are transformed; seconds are preserved so the model can
+    revise a schedule without silently dropping precision.
     """
     if isinstance(value, dict):
         result = {}

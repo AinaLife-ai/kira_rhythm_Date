@@ -90,3 +90,37 @@ async def test_triggered_item_cannot_be_rewritten(runtime):
 def asyncio_result(value):
     async def result(): return value
     return result()
+
+
+@pytest.mark.asyncio
+async def test_exact_seconds_survive_plan_storage_and_sampling(runtime):
+    day = (datetime.now().date() + timedelta(days=1)).isoformat()
+    result = await runtime.plans.apply_plan("persona-a", payload_for(day, [
+        exact("秒级一", "08:00:37"), exact("秒级二", "09:00:00"),
+    ]), expected_revision=0)
+    scheduled = sorted(item["scheduled_at"] for item in result["plan"]["blocks"][0]["items"])
+    assert [int(value % 60) for value in scheduled] == [37, 0]
+    window = await runtime.plans.apply_plan("persona-a", payload_for(day, [
+        {"title": "秒窗", "schedule": {"type": "window", "start": "10:00:10", "end": "10:01:10",
+         "occurrences": 2, "window_mode": "interval_random", "interval_seconds": [10, 20]},
+         "target": "qq:dm:10001"}, exact("晚一点", "12:00"),
+    ]), expected_revision=1)
+    window_items = [item for item in window["plan"]["blocks"][0]["items"] if item["title"] == "秒窗"]
+    assert len(window_items) == 2
+    assert all(10 <= b["scheduled_at"] - a["scheduled_at"] <= 20 for a, b in zip(window_items, window_items[1:]))
+
+@pytest.mark.asyncio
+async def test_quiet_window_seconds_are_enforced(runtime):
+    day = (datetime.now().date() + timedelta(days=1)).isoformat()
+    await runtime.store.update_config("persona-a", {
+        "quiet_delivery_windows": [{"start": "23:00:05", "end": "23:00:10"}],
+    }, 0)
+    with pytest.raises(KRDError) as error:
+        await runtime.plans.apply_plan("persona-a", payload_for(day, [
+            exact("秒级安静", "23:00:07", interaction="must_message"), exact("白天", "09:00:00"),
+        ]), expected_revision=0)
+    assert error.value.code == "quiet_delivery_window"
+    accepted = await runtime.plans.apply_plan("persona-a", payload_for(day, [
+        exact("秒级边界前", "23:00:03", interaction="must_message"), exact("白天", "09:00:00"),
+    ]), expected_revision=0)
+    assert accepted["revision"] == 1

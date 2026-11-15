@@ -164,7 +164,7 @@ class PlanService:
                     # unrelated edit after the original wall time has passed.
                     timestamps = [float(previous["scheduled_at"])]
                 elif kind == "exact":
-                    timestamps = [to_utc(day, schedule["at"], tz_name)]
+                    timestamps = [to_utc(day, schedule.get("at"), tz_name)]
                 elif kind == "window":
                     timestamps = sample_window(schedule, day, tz_name, self.rng)
                 else:

@@ -304,7 +304,7 @@ export const SettingsView = {
         <div class="form-grid">
           <label><span>每日最少安排</span><small>太少会显得空，推荐 2 到 4 项。</small><input type="number" min="0" max="500" v-model.number="$root.draft.min_items"></label>
           <label><span>每日最多安排</span><small>避免日程过密，推荐 8 到 12 项。</small><input type="number" min="1" max="500" v-model.number="$root.draft.max_items"></label>
-          <label><span>定时规划</span><input type="time" v-model="$root.draft.planning_time"></label>
+          <label><span>定时规划（可精确到秒）</span><input type="time" step="1" v-model="$root.draft.planning_time"></label>
           <label><span>允许提前规划几天</span><small>默认 14 天已经足够，无需频繁修改。</small><input type="number" min="1" max="366" v-model.number="$root.draft.max_horizon_days"></label>
           <label><span>新日程默认执行概率</span><small>1 表示一定执行；0.8 表示偶尔会自然错过。</small><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.default_probability"></label>
           <label><span>bot 可设置的最低概率</span><small>防止 bot 把所有安排设得太随意，推荐 0.2。</small><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.min_probability"></label>
@@ -325,11 +325,11 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'time'" class="settings-section">
         <span class="eyebrow">时间与夜间</span><h2>执行、打扰与覆盖，分别决定</h2>
-        <p class="field-hint">跨午夜时段可直接填写，例如 23:00 至 07:00。三类时段含义不同，请按说明设置。</p>
+        <p class="field-hint">跨午夜时段可直接填写，例如 23:00:00 至 07:00:00。三类时段含义不同，请按说明设置；时间支持到秒。</p>
         <div v-for="group in [['blocked_execution_windows','禁止执行时段','任何日程都不会在此唤醒'],['quiet_delivery_windows','安静投递时段','允许做梦与思考，但不发可见消息'],['required_coverage_windows','必需覆盖时段','设置时段内的最小/最大项数']]" class="window-group">
           <div class="section-heading"><div><h3>{{ group[1] }}</h3><p>{{ group[2] }}</p></div><button class="soft-button" @click="$root.addWindow(group[0])"><ui-icon name="plus" :size="14" /> 添加</button></div>
           <div v-for="(window, index) in $root.draft[group[0]]" class="window-row">
-            <input type="time" v-model="window.start"><span>至</span><input type="time" v-model="window.end">
+            <input type="time" step="1" v-model="window.start"><span>至</span><input type="time" step="1" v-model="window.end">
             <template v-if="group[0] === 'required_coverage_windows'"><input type="number" min="0" max="100" v-model.number="window.min_items" title="最小项数"><input type="number" min="0" max="100" v-model.number="window.max_items" title="最大项数"><input placeholder="分类（可选）" v-model="window.category"></template>
             <button class="icon-button danger" @click="$root.draft[group[0]].splice(index, 1)"><ui-icon name="close" :size="14" /></button>
           </div>
@@ -387,6 +387,33 @@ export const ItemEditor = {
       if (!this.form.schedule) this.form.schedule = { type: 'exact', at: '09:00' }
       return this.form.schedule
     },
+    intervalMin: {
+      get() {
+        const values = this.schedule.interval_seconds
+        if (Array.isArray(values) && values.length === 2) return Number(values[0])
+        const legacy = this.schedule.interval_minutes
+        if (Array.isArray(legacy) && legacy.length === 2) return Math.round(Number(legacy[0]) * 60)
+        return 300
+      },
+      set(value) { this.setInterval(0, value) },
+    },
+    intervalMax: {
+      get() {
+        const values = this.schedule.interval_seconds
+        if (Array.isArray(values) && values.length === 2) return Number(values[1])
+        const legacy = this.schedule.interval_minutes
+        if (Array.isArray(legacy) && legacy.length === 2) return Math.round(Number(legacy[1]) * 60)
+        return 1800
+      },
+      set(value) { this.setInterval(1, value) },
+    },
+  },
+  methods: {
+    setInterval(index, value) {
+      const values = [Number(this.intervalMin), Number(this.intervalMax)]
+      values[index] = Number(value)
+      this.schedule.interval_seconds = values
+    },
   },
   template: `
   <div class="modal-backdrop" @click.self="$root.closeEditor"><div class="modal-card large">
@@ -397,10 +424,11 @@ export const ItemEditor = {
       <label class="wide"><span>执行指令</span><textarea rows="4" v-model="form.instruction"></textarea></label>
       <label><span>时间模式</span><select v-model="schedule.type"><option value="exact">精确时间</option><option value="window">随机时间窗</option></select></label>
       <label><span>互动方式</span><select v-model="form.interaction"><option value="auto">自由决定</option><option value="must_message">需要发言</option><option value="silent">安静经历</option></select></label>
-      <label v-if="schedule.type === 'exact'"><span>执行时间</span><input type="time" v-model="schedule.at"></label>
-      <template v-else><label><span>窗口开始</span><input type="time" v-model="schedule.start"></label><label><span>窗口结束</span><input type="time" v-model="schedule.end"></label>
+      <label v-if="schedule.type === 'exact'"><span>执行时间（可精确到秒）</span><input type="time" step="1" v-model="schedule.at"></label>
+      <template v-else><label><span>窗口开始（秒）</span><input type="time" step="1" v-model="schedule.start"></label><label><span>窗口结束（秒）</span><input type="time" step="1" v-model="schedule.end"></label>
         <label><span>出现次数</span><input type="number" min="1" max="100" v-model.number="schedule.occurrences"></label>
         <label><span>窗口子模式</span><select v-model="schedule.window_mode"><option value="single_random">随机一次</option><option value="interval_random">随机间隔</option></select></label></template>
+        <template v-if="schedule.window_mode === 'interval_random'"><label><span>最小间隔（秒）</span><input type="number" min="1" step="1" v-model.number="intervalMin"></label><label><span>最大间隔（秒）</span><input type="number" min="1" step="1" v-model.number="intervalMax"></label></template>
       <label><span>执行概率</span><input type="number" min="0" max="1" step="0.05" v-model.number="form.execution_probability"></label>
       <label><span>分类</span><input v-model="form.category" placeholder="dream / reading…"></label>
       <label class="wide"><span>目标会话（留空使用执行池）</span><select v-model="form.target"><option value="">执行会话池自动选择</option><option v-for="session in $root.data.sessions" :value="session.sid">{{ session.title }} · {{ session.sid }}</option></select></label>

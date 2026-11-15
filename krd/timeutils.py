@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import re
 from datetime import date as Date, datetime, time as Time, timedelta
@@ -7,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .models import KRDError
 
-CLOCK_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+CLOCK_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$")
 
 
 def timezone(name: str | None, fallback: str = "Asia/Shanghai") -> ZoneInfo:
@@ -18,11 +19,11 @@ def timezone(name: str | None, fallback: str = "Asia/Shanghai") -> ZoneInfo:
         raise KRDError("invalid_timezone", f"Unknown IANA timezone: {candidate}") from exc
 
 
-def parse_clock(value: str) -> tuple[int, int]:
+def parse_clock(value: str) -> tuple[int, int, int]:
     match = CLOCK_RE.fullmatch(str(value or ""))
     if not match:
-        raise KRDError("invalid_time", f"Expected HH:MM, got {value!r}")
-    return int(match.group(1)), int(match.group(2))
+        raise KRDError("invalid_time", f"Expected HH:MM or HH:MM:SS, got {value!r}")
+    return int(match.group(1)), int(match.group(2)), int(match.group(3) or 0)
 
 
 def parse_date(value: str) -> Date:
@@ -34,8 +35,8 @@ def parse_date(value: str) -> Date:
 
 def local_datetime(day: str, clock: str, tz_name: str, *, fold: int = 0) -> datetime:
     tz = timezone(tz_name)
-    hour, minute = parse_clock(clock)
-    naive = datetime.combine(parse_date(day), Time(hour, minute))
+    hour, minute, second = parse_clock(clock)
+    naive = datetime.combine(parse_date(day), Time(hour, minute, second))
     aware = naive.replace(tzinfo=tz, fold=fold)
     # A nonexistent wall time does not survive a UTC round trip unchanged.
     roundtrip = datetime.fromtimestamp(aware.timestamp(), tz).replace(tzinfo=None)
@@ -101,17 +102,27 @@ def in_active_windows(definitions: list[dict], timestamp: float, tz_name: str) -
 
 
 def sample_window(schedule: dict, day: str, tz_name: str, rng: random.Random) -> list[float]:
-    start, end = window_utc(day, schedule["start"], schedule["end"], tz_name)
+    start, end = window_utc(day, schedule.get("start"), schedule.get("end"), tz_name)
     count = int(schedule.get("occurrences", 1))
     mode = schedule.get("window_mode", "single_random")
     if count < 1 or count > 100:
         raise KRDError("invalid_occurrences", "occurrences must be between 1 and 100")
     if mode == "single_random" or count == 1:
         return [rng.uniform(start, end)]
-    intervals = schedule.get("interval_minutes") or [5, 30]
-    minimum, maximum = float(intervals[0]) * 60, float(intervals[1]) * 60
-    if minimum <= 0 or maximum < minimum:
-        raise KRDError("invalid_interval", "Expected 0 < interval_minutes[0] <= interval_minutes[1]")
+    if schedule.get("interval_seconds"):
+        intervals = schedule["interval_seconds"]
+        factor = 1.0
+    else:
+        intervals = schedule.get("interval_minutes") or [5, 30]
+        factor = 60.0
+    if not isinstance(intervals, (list, tuple)) or len(intervals) != 2:
+        raise KRDError("invalid_interval", "Expected two interval values")
+    try:
+        minimum, maximum = float(intervals[0]) * factor, float(intervals[1]) * factor
+    except (TypeError, ValueError) as exc:
+        raise KRDError("invalid_interval", "Interval values must be numeric") from exc
+    if not math.isfinite(minimum) or not math.isfinite(maximum) or minimum <= 0 or maximum < minimum:
+        raise KRDError("invalid_interval", "Expected 0 < interval_seconds[0] <= interval_seconds[1]")
     if (count - 1) * minimum > end - start:
         raise KRDError("window_capacity", "The requested occurrences and minimum interval do not fit this window")
     latest_first = end - (count - 1) * minimum

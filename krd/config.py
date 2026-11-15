@@ -5,7 +5,7 @@ from typing import Any
 
 from .models import KRDError
 
-DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。
+DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。时间设置支持精确到秒：at/start/end 使用 HH:MM 或 HH:MM:SS。
 你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。
 已有计划时，这是一次重新审视的机会，不要机械重复；无变化也可以保持。提交前检查每日数量、必需时段、禁止执行与安静投递规则。"""
 
@@ -165,8 +165,8 @@ def validate_config(config: dict[str, Any]) -> None:
     if len(config["planning_prompt"]) > 50000 or len(config["execution_prompt"]) > 50000:
         raise KRDError("invalid_config", "Prompt templates are too large")
     import re
-    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", config["planning_time"]):
-        raise KRDError("invalid_time", "planning_time must be HH:MM")
+    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", config["planning_time"]):
+        raise KRDError("invalid_time", "planning_time must be HH:MM or HH:MM:SS")
     if config["timezone"] != "system":
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
         try:
@@ -184,8 +184,8 @@ def validate_config(config: dict[str, Any]) -> None:
             if not isinstance(window, dict):
                 raise KRDError("invalid_config", f"{group} entries must be objects")
             for endpoint in ("start", "end"):
-                if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(window.get(endpoint, ""))):
-                    raise KRDError("invalid_time", f"{group}.{endpoint} must be HH:MM")
+                if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?", str(window.get(endpoint, ""))):
+                    raise KRDError("invalid_time", f"{group}.{endpoint} must be HH:MM or HH:MM:SS")
             if group == "required_coverage_windows":
                 minimum, maximum = window.get("min_items", 0), window.get("max_items", 500)
                 if type(minimum) is not int or type(maximum) is not int or not 0 <= minimum <= maximum <= 500:

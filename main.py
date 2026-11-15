@@ -35,7 +35,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_plan",
-        description="创建或修订自己接下来的完整生活计划；已有 Plan 是修订。支持 plans[] 多日原子提交。",
+        description="创建或修订自己接下来的完整生活计划；已有 Plan 是修订。支持 plans[] 多日原子提交。精确时间 at 与时间窗 start/end 均支持 HH:MM 或 HH:MM:SS；随机间隔可用 interval_seconds 精确到秒。",
         params={"type": "object", "properties": {"plan": {"type": "object"}, "plans": {"type": "array", "items": {"type": "object"}}, "mode": {"type": "string", "enum": ["create", "create_missing", "revise", "merge", "replace"], "default": "revise"}, "reason": {"type": "string"}}},
     )
     async def rhythm_plan(self, event, **kwargs):
@@ -43,7 +43,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_update",
-        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。",
+        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。",
         params={"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object"}}, "reason": {"type": "string"}}, "required": ["operations"]},
     )
     async def rhythm_update(self, event, **kwargs):
