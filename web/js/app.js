@@ -1,9 +1,10 @@
 import { get, post, put, patch, upload, socket, ready } from './api.js'
 import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js'
-import { TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor } from './views.js'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor } from './views.js'
 import { planTemplates, themeTemplates } from './templates.js'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
   value.setUTCDate(value.getUTCDate() + days)
@@ -11,17 +12,29 @@ const dateShift = (date, days) => {
 }
 
 const app = Vue.createApp({
-  components: { TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor },
+  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor },
   data() {
     return {
       state,
       fmt,
       planTemplates,
       themeTemplates,
+      assetBase,
+      booted: false,
+      bootTimer: null,
+      navItems: [
+        { id: 'today', label: '此刻', icon: 'home' },
+        { id: 'calendar', label: '日历', icon: 'calendar' },
+        { id: 'changes', label: '变化', icon: 'changes' },
+        { id: 'templates', label: '模板', icon: 'templates' },
+        { id: 'settings', label: '设置', icon: 'settings' },
+      ],
       diffs: [],
       diffPlanId: '',
       recentPlans: [],
       monthPlans: [],
+      monthCalendar: {},
+      calendarRefreshedYears: {},
       draft: null,
       allSessions: [],
       cityQuery: '',
@@ -95,13 +108,13 @@ const app = Vue.createApp({
       const temperature = info.temperature != null ? `${info.temperature}°C` : ''
       return `${info.location || ''} ${temperature} ${info.status === 'stale' ? '· 缓存' : ''}`.trim()
     },
-    weatherIcon() {
+    weatherKind() {
       const text = this.weatherText
-      if (/雪/.test(text)) return '❄'
-      if (/雨|雷/.test(text)) return '☂'
-      if (/云|阴|雾/.test(text)) return '☁'
-      if (/晴/.test(text)) return '☀'
-      return '✦'
+      if (/雪/.test(text)) return 'snow'
+      if (/雨|雷/.test(text)) return 'rain'
+      if (/云|阴|雾/.test(text)) return 'cloud'
+      if (/晴/.test(text)) return 'sun'
+      return this.isNight ? 'moon' : 'sun'
     },
     isNight() { return new Date().getHours() >= 19 || new Date().getHours() < 6 },
     currentLocation() {
@@ -112,6 +125,15 @@ const app = Vue.createApp({
       if (!this.monthAnchor) return ''
       const [year, month] = this.monthAnchor.split('-')
       return `${year} 年 ${Number(month)} 月`
+    },
+    selectedCalendar() {
+      return this.monthCalendar[state.selectedDate] ||
+        (state.selectedDate === this.data.date ? this.data.calendar_today : null)
+    },
+    todayCalendar() { return this.data.calendar_today || null },
+    todayHoliday() {
+      const day = this.data.calendar_today
+      return day?.holiday ? `${day.holiday.name}${day.holiday.is_off_day ? '' : ' · 调班'}` : ''
     },
     monthCells() {
       if (!this.monthAnchor) return []
@@ -125,7 +147,9 @@ const app = Vue.createApp({
         const iso = date.toISOString().slice(0, 10)
         const plan = this.monthPlans.find((entry) => entry.date === iso)
         const count = plan ? plan.blocks.reduce((sum, block) => sum + block.items.length, 0) : 0
+        const calendar = this.monthCalendar[iso]
         cells.push({ key: iso, date: iso, day: date.getUTCDate(), current: date.getUTCMonth() === month - 1, plan, count,
+          calendar, lunar: calendar?.display || '', holiday: calendar?.holiday,
           color: this.data.day_types?.find((entry) => entry.id === plan?.day_type_id)?.config?.color })
       }
       return cells
@@ -199,8 +223,23 @@ const app = Vue.createApp({
       const [year, month] = anchor.split('-').map(Number)
       const start = `${anchor}-01`
       const end = new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10)
-      const plans = await get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(persona)}`)
-      if (epoch === this.monthEpoch && persona === state.selectedPersona && anchor === this.monthAnchor) this.monthPlans = plans
+      const [plans, calendar] = await Promise.all([
+        get(`/plans?start=${start}&end=${end}&persona=${encodeURIComponent(persona)}`),
+        get(`/calendar?start=${start}&end=${end}`),
+      ])
+      if (epoch === this.monthEpoch && persona === state.selectedPersona && anchor === this.monthAnchor) {
+        this.monthPlans = plans
+        this.monthCalendar = Object.fromEntries(calendar.days.map((day) => [day.date, day]))
+      }
+      if (!this.calendarRefreshedYears[year]) {
+        this.calendarRefreshedYears[year] = true
+        post('/calendar/refresh', { year }).then(async () => {
+          const fresh = await get(`/calendar?start=${start}&end=${end}`)
+          if (anchor === this.monthAnchor && persona === state.selectedPersona) {
+            this.monthCalendar = Object.fromEntries(fresh.days.map((day) => [day.date, day]))
+          }
+        }).catch(() => { this.calendarRefreshedYears[year] = false })
+      }
     },
     async loadRecentPlans() {
       const persona = state.selectedPersona
@@ -376,7 +415,18 @@ const app = Vue.createApp({
     },
     applyAppearance() {
       const appearance = this.data.config?.appearance || {}
-      document.documentElement.dataset.themeName = appearance.theme || 'kira_mist'
+      const themeId = appearance.theme || 'lacrimosa_dusk'
+      const theme = themeTemplates.find((entry) => entry.id === themeId) || themeTemplates[0]
+      document.documentElement.dataset.themeName = theme.id
+      document.documentElement.dataset.theme = theme.mode || 'dark'
+      const root = document.documentElement.style
+      if (theme.art) {
+        root.setProperty('--theme-art', `url("${assetBase}/themes/${theme.art}.webp")`)
+        root.setProperty('--pixel-sprite', `url("${assetBase}/pixels/${theme.art}.png")`)
+      } else {
+        root.removeProperty('--theme-art')
+        root.removeProperty('--pixel-sprite')
+      }
       this.customAccent = appearance.custom_accent || ''
       if (appearance.custom_accent) {
         document.documentElement.style.setProperty('--accent', appearance.custom_accent)
@@ -492,6 +542,7 @@ const app = Vue.createApp({
     async loadDiagnostics() { this.diagnostics = await get('/diagnostics') },
   },
   async mounted() {
+    this.bootTimer = setTimeout(() => { this.booted = true }, 1250)
     try {
       await ready()
       await this.refresh({ reset: true, entry: true })
@@ -503,7 +554,9 @@ const app = Vue.createApp({
       })
       this.clockTimer = setInterval(() => { this.clockNow = Date.now() / 1000 }, 1000)
       this.stopTheme = window.PluginPageContext?.onThemeChange?.((dark) => {
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        if (document.documentElement.dataset.themeName === 'kira_mist') {
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        }
       })
     } catch (error) {
       state.loading = false
@@ -514,6 +567,7 @@ const app = Vue.createApp({
     this.disconnect?.()
     this.stopTheme?.()
     clearTimeout(this.liveTimer)
+    clearTimeout(this.bootTimer)
     clearInterval(this.clockTimer)
   },
 })
@@ -521,5 +575,6 @@ const app = Vue.createApp({
 // Keep the delete helper out of the component's public API surface.
 import { del as requestDelete } from './api.js'
 
+app.component('UiIcon', UiIcon)
 const mounted = app.mount('#app')
 if (location.search.includes('debug')) window.__krdApp = mounted

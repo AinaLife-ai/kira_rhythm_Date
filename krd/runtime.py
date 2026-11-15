@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -14,11 +13,10 @@ from .plans import PlanService
 from .policy import SessionPolicy
 from .scheduler import Scheduler
 from .store import Store
-from .timeutils import compiled_windows, timezone
 
 STATIC_TOOL_GUIDE = """
 [KRD 生活节律]
-你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。已有 Plan 是修订，不重复新建。
+你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看日程或万年历（农历、节气、法定假期）。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。已有 Plan 是修订，不重复新建。
 """.strip()
 
 
@@ -33,6 +31,7 @@ class Runtime:
         self.plans = PlanService(self.store, self.policy)
         self.weather = None
         self.avatars = None
+        self.calendar = None
         self.context_builder = ContextBuilder(self.store, self.plans, None)
         self.scheduler = Scheduler(self)
         self.plans.on_change = self.scheduler.wake
@@ -43,10 +42,18 @@ class Runtime:
         await self.store.initialize()
         from .weather import WeatherService
         from .avatars import AvatarService
+        from .calendar import CalendarService
         self.weather = WeatherService(self.store, self.ctx, self.plugin_cfg)
         self.avatars = AvatarService(self.store, self.ctx, self.data_dir)
+        self.calendar = CalendarService(self.store)
+        self.plans.calendar = self.calendar
         self.context_builder.weather = self.weather
+        self.context_builder.calendar = self.calendar
         await self.scheduler.start()
+        active = await self.active_persona_id()
+        if active:
+            today = await self.plans.current_date(active)
+            self.calendar.refresh_soon(int(today[:4]))
 
     async def close(self) -> None:
         await self.scheduler.stop()
@@ -59,6 +66,8 @@ class Runtime:
                 pass
         if self.weather is not None:
             await self.weather.close()
+        if self.calendar is not None:
+            await self.calendar.close()
         await self.store.close()
 
     def log(self, level: str, event: str, **fields: Any) -> None:
@@ -112,6 +121,8 @@ class Runtime:
             allowed_valid.append(item)
             if item["kind"] == "planning":
                 content = await self.context_builder.planning_prompt(item)
+            elif item["kind"] == "review":
+                content = await self.context_builder.review_prompt(item)
             else:
                 content = await self.context_builder.item_prompt(item)
             req.user_prompt.append(Prompt(
@@ -119,7 +130,8 @@ class Runtime:
                 persist=False, render_template=False,
             ))
             if base_config["history_mode"] == "full":
-                template = base_config["planning_prompt"] if item["kind"] == "planning" else base_config["execution_prompt"]
+                template = (base_config["planning_review"]["prompt"] if item["kind"] == "review" else
+                            base_config["planning_prompt"] if item["kind"] == "planning" else base_config["execution_prompt"])
                 req.user_prompt.append(Prompt(
                     template, name="krd_full_template", source="kira_rhythm_Date", persist=True, render_template=False,
                 ))
@@ -147,38 +159,6 @@ class Runtime:
                     prompt.content += "\n" + STATIC_TOOL_GUIDE
         elif req.tool_set:
             req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
-
-    async def before_llm_response(self, event, response) -> None:
-        # Enforce silence before delivery plugins observe the response, but never
-        # erase a real user's response in an S/Z mixed batch.
-        metadata = self.context_builder.metadata(event)
-        messages = getattr(event, "messages", []) or []
-        if (not metadata or len(metadata) != len(messages) or
-                any(item["kind"] != "item" for item in metadata) or not getattr(response, "text_response", "")):
-            return
-        active = await self.active_persona_id()
-        silence = []
-        for item in metadata:
-            if item["persona_id"] != active:
-                return
-            run = await self.store.one(
-                "SELECT i.interaction,i.scheduled_at,p.date,p.persona_id FROM runs r "
-                "JOIN items i ON i.id=r.item_id JOIN plans p ON p.id=i.plan_id WHERE r.id=?", (item["run_id"],))
-            if not run:
-                return
-            quiet = False
-            if run["interaction"] != "silent":
-                config = await self.store.get_config(run["persona_id"])
-                tz_name = self.policy.timezone_name(config)
-                today = datetime.now(timezone(tz_name)).date()
-                windows = []
-                for day in (today - timedelta(days=1), today):
-                    windows.extend(compiled_windows(day.isoformat(), config["quiet_delivery_windows"], tz_name))
-                timestamp = __import__("time").time()
-                quiet = any(left <= timestamp < right for left, right in windows)
-            silence.append(run["interaction"] == "silent" or quiet)
-        if silence and all(silence):
-            response.text_response = "<msg/>"
 
     async def on_llm_response(self, event, response) -> None:
         active = await self.active_persona_id()

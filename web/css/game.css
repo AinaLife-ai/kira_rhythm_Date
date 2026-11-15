@@ -1,0 +1,121 @@
+/* Urban anime game shell. No pictographic emoji: icons are inline SVG or pixel art. */
+#app { isolation: isolate; }
+body {
+  background-color: var(--bg);
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--bg) 88%, transparent) 0%, color-mix(in srgb, var(--bg) 52%, transparent) 48%, transparent 100%), var(--theme-art, none);
+  background-size: cover, cover;
+  background-position: center, center right;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+}
+[data-theme="light"] body {
+  background-image: linear-gradient(90deg, rgba(255,255,255,.82) 0%, rgba(255,255,255,.38) 52%, transparent 100%), var(--theme-art, none);
+}
+.world-art { display: none !important; }
+
+.glass {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  background: color-mix(in srgb, var(--panel-solid) 90%, transparent) !important;
+}
+.hero-card, .section-card, .calendar-card, .day-detail, .settings-layout, .next-card, .mini-stats { animation: none !important; }
+
+.app-shell { position: relative; z-index: 2; }
+.sidebar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-solid) 72%, transparent), rgba(9,11,23,.5)) !important;
+  border-right: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)) !important;
+  box-shadow: 18px 0 60px rgba(0,0,0,.12);
+}
+.brand-mark { border-radius: 12px 3px 12px 3px; }
+.brand strong { letter-spacing: .14em; }
+.main-nav button { border: 1px solid transparent; }
+.main-nav button.active { border-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+.ui-icon { display: inline-block; flex: 0 0 auto; vertical-align: middle; }
+.nav-icon { width: 23px; height: 23px; }
+.main-nav button.active .nav-icon { filter: drop-shadow(0 0 8px var(--accent)); }
+.topbar { background: color-mix(in srgb, var(--bg) 55%, transparent) !important; border-bottom-color: color-mix(in srgb, var(--accent) 15%, var(--line)); }
+.content-scroll { position: relative; }
+.section-card, .hero-card, .calendar-card, .day-detail, .settings-layout, .next-card, .mini-stats {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 94%, white 2%), color-mix(in srgb, var(--panel) 90%, var(--accent) 2%));
+}
+.hero-card { min-height: 276px; border-radius: 6px 28px 6px 28px; }
+.hero-card::before, .section-card::before, .calendar-card::before, .day-detail::before {
+  content: ""; position: absolute; left: 12px; top: -1px; width: 54px; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent); opacity: .9;
+}
+.hero-card::after {
+  content: ""; position: absolute; inset: 11px; border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 2px 20px 2px 20px; pointer-events: none;
+}
+.eyebrow { color: color-mix(in srgb, var(--accent) 76%, var(--muted)); }
+.primary { border-radius: 4px 12px 4px 12px; background: linear-gradient(135deg, var(--accent-strong), var(--accent)); }
+.soft-button { border-radius: 4px 10px 4px 10px; backdrop-filter: blur(12px); }
+.day-cell { border-radius: 4px 10px 4px 10px; border-color: color-mix(in srgb, var(--line) 65%, transparent); }
+.day-cell.has-plan { background: color-mix(in srgb, var(--accent-soft) 80%, transparent); }
+.day-cell.is-selected { box-shadow: inset 0 0 0 1px var(--accent), 0 7px 22px color-mix(in srgb, var(--accent) 12%, transparent); }
+.pixel-companion, .pixel-runner {
+  position: absolute; right: 18px; bottom: 17px; width: 48px; height: 72px;
+  background-image: var(--pixel-sprite, none); background-repeat: no-repeat; background-size: 96px 72px;
+  image-rendering: pixelated; background-position: 0 0;
+  filter: drop-shadow(0 6px 8px rgba(0,0,0,.3));
+  animation: pixel-walk .9s steps(1, end) infinite, pixel-float 3s ease-in-out infinite;
+}
+.next-card { position: relative; padding-right: 76px; }
+@keyframes pixel-walk { 0%, 49% { background-position: 0 0; } 50%, 100% { background-position: -48px 0; } }
+@keyframes pixel-float { 50% { transform: translateY(-3px); } }
+.calendar-facts {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 13px; margin: -4px 0 18px;
+  padding: 11px 13px; border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 62%, transparent); font-size: 11px;
+}
+.calendar-facts strong { font-size: 13px; }
+.calendar-facts span { color: var(--text-soft); }
+.calendar-facts small { margin-left: auto; color: var(--muted); }
+.lunar-label { display: block; font-size: 9px; color: var(--muted); margin-top: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lunar-label.festival { color: var(--accent); }
+.holiday-mark { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); border-radius: 3px; font-size: 9px; }
+.holiday-mark.work { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 55%, transparent); }
+.is-holiday { background: color-mix(in srgb, var(--accent-soft) 56%, transparent); }
+.theme-preview { background-size: cover; background-position: center right; background-color: var(--bg-soft); }
+.theme-preview i { opacity: .45; }
+.template-icon { border-radius: 4px 12px 4px 12px; }
+.template-card { border-radius: 4px 18px 4px 18px; }
+.item-main { border-radius: 3px 14px 3px 14px; }
+.meta-icon { display: inline-flex; align-items: center; gap: 4px; }
+.state-triggered .item-main { box-shadow: inset 2px 0 0 var(--success); }
+.state-triggered_silent .item-main { box-shadow: inset 2px 0 0 var(--accent); }
+.state-failed .item-main { box-shadow: inset 2px 0 0 var(--danger); }
+.boot-screen {
+  position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 72% 48%, #20234d 0, #0b0d1c 44%, #060711 78%); color: #f7f2ff;
+  overflow: hidden;
+}
+.boot-grid { position: absolute; inset: -30%; background-image: linear-gradient(rgba(158,137,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(158,137,255,.08) 1px, transparent 1px); background-size: 54px 54px; transform: perspective(480px) rotateX(58deg) translateY(22%); mask-image: radial-gradient(circle, black, transparent 68%); }
+.boot-mark { position: relative; z-index: 2; display: grid; place-items: center; width: 86px; height: 94px; border: 1px solid rgba(255,255,255,.22); border-radius: 22px 4px 22px 4px; background: linear-gradient(145deg, #e05a72, #7c5be8); font-size: 38px; font-weight: 800; box-shadow: 0 25px 80px rgba(199,54,89,.35); animation: boot-mark .8s cubic-bezier(.22,.9,.22,1) both; }
+.boot-mark i { position: absolute; inset: 8px; border: 1px solid rgba(255,255,255,.22); border-radius: 15px 2px 15px 2px; }
+.boot-word { position: relative; z-index: 2; text-align: center; margin-top: 25px; animation: rise .6s .2s both; }
+.boot-word strong { display: block; font-size: 13px; letter-spacing: .42em; }
+.boot-word small { display: block; margin-top: 8px; font-size: 8px; letter-spacing: .34em; color: rgba(230,221,255,.6); }
+.boot-line { position: relative; z-index: 2; width: min(280px, 62vw); height: 1px; margin-top: 30px; background: rgba(255,255,255,.12); overflow: hidden; }
+.boot-line i { display: block; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, #f06a82, transparent); animation: boot-scan 1s ease both; }
+.boot-walker { position: relative; z-index: 2; width: 32px; height: 48px; margin-top: 22px; background-image: var(--pixel-sprite, none); background-size: 64px 48px; image-rendering: pixelated; animation: boot-walk .55s steps(1, end) infinite, boot-cross 1.2s ease both; }
+@keyframes boot-mark { from { opacity: 0; transform: translateY(12px) scale(.84); } }
+@keyframes boot-scan { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+@keyframes boot-walk { 0%, 49% { background-position: 0 0; } 50%, 100% { background-position: -32px 0; } }
+@keyframes boot-cross { from { opacity: 0; transform: translateX(-100px); } to { opacity: 1; transform: translateX(100px); } }
+.boot-fade-leave-active { transition: opacity .5s ease, visibility .5s; }
+.boot-fade-leave-to { opacity: 0; visibility: hidden; }
+.scanline { position: absolute; inset: 0; background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(255,255,255,.012) 3px 4px); }
+@media (max-width: 700px) {
+  body { background-size: cover, 128% auto; background-position: center, 72% 8%; background-attachment: fixed, fixed; }
+  [data-theme="light"] .world-art { opacity: .62; }
+  .hero-card { border-radius: 3px 21px 3px 21px; }
+  .pixel-companion, .pixel-runner { width: 32px; height: 48px; background-size: 64px 48px; background-repeat: no-repeat; image-rendering: pixelated; animation: pixel-walk-mobile .9s steps(1, end) infinite, pixel-float 3s ease-in-out infinite; }
+  .lunar-label { font-size: 8px; }
+  .calendar-facts small { margin-left: 0; width: 100%; }
+}
+@keyframes pixel-walk-mobile { 0%, 49% { background-position: 0 0; } 50%, 100% { background-position: -32px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pixel-companion, .boot-walker { animation: none !important; }
+  .boot-screen { display: none; }
+}

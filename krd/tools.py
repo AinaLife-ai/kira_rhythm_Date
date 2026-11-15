@@ -25,7 +25,7 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
         payloads = plans or ([plan] if plan else [])
         results = await runtime.plans.apply_many(persona_id, payloads, actor="bot", mode=mode, reason=reason)
         for metadata in runtime.context_builder.metadata(event):
-            if metadata["kind"] == "planning":
+            if metadata["kind"] in {"planning", "review"}:
                 await runtime.store.execute("UPDATE planning_runs SET status='completed',finished_at=? WHERE id=?", (__import__('time').time(), metadata["run_id"]))
         await runtime.broadcast("plan_changed", {"persona_id": persona_id, "days": [r["plan"]["date"] for r in results]})
         return dumps({"ok": True, "days": [{"plan_id": r["plan"]["id"], "date": r["plan"]["date"], "revision": r["revision"],
@@ -41,6 +41,7 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
         if not isinstance(operations, list) or not operations or len(operations) > 50:
             raise KRDError("invalid_operations", "Provide 1–50 operations")
         results = []
+        changed_plan_ids = set()
         async with runtime.store.transaction():
             for operation in operations:
                 if not isinstance(operation, dict):
@@ -59,6 +60,7 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                 elif kind == "update_item":
                     patch = operation.get("patch") or {key: value for key, value in operation.items() if key not in {"type", "item_id"}}
                     result = await runtime.plans.update_item(persona_id, operation["item_id"], patch, actor="bot", reason=reason)
+                    changed_plan_ids.add(result["plan"]["id"])
                 elif kind == "append_item":
                     result = await runtime.plans.append_item(
                         persona_id, operation["plan_id"], operation.get("block_title", "生活片段"),
@@ -66,6 +68,8 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                 else:
                     raise KRDError("invalid_operation", f"Unknown operation type: {kind}")
                 results.append({"type": kind, "result": result})
+        for plan_id in changed_plan_ids:
+            await runtime.scheduler.check_all_triggered(plan_id)
         runtime.scheduler.wake()
         await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "rhythm_update"})
         return dumps({"ok": True, "results": results})
@@ -81,7 +85,11 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
         plans_service = runtime.plans
         today = date or await plans_service.current_date(persona_id)
         limit = max(1, min(100, int(limit)))
-        if scope in {"current", "today"}:
+        if scope == "calendar":
+            end = end or date or today
+            start = start or end
+            result = await runtime.calendar.range(start, end, allow_network=False)
+        elif scope in {"current", "today"}:
             result = {"date": today, "day_state": await plans_service.day_state(persona_id, today),
                       "plan": await plans_service.get_plan_by_date(persona_id, today)}
         elif scope == "block":

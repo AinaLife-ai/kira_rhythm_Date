@@ -52,7 +52,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
     @register.tool(
         name="rhythm_view",
         description="按需查看当前日型、DayState、本组、计划、历史、diff、预算或私有体验。",
-        params={"type": "object", "properties": {"scope": {"type": "string", "enum": ["current", "today", "block", "day", "range", "history", "diff", "quota", "experiences"], "default": "current"}, "date": {"type": "string"}, "start": {"type": "string"}, "end": {"type": "string"}, "plan_id": {"type": "string"}, "item_id": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}},
+        params={"type": "object", "properties": {"scope": {"type": "string", "enum": ["calendar", "current", "today", "block", "day", "range", "history", "diff", "quota", "experiences"], "default": "current"}, "date": {"type": "string"}, "start": {"type": "string"}, "end": {"type": "string"}, "plan_id": {"type": "string"}, "item_id": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}},
     )
     async def rhythm_view(self, event, **kwargs):
         return await _tools.rhythm_view(event, **kwargs)
@@ -61,11 +61,6 @@ class KRDPlugin(ApiMixin, BasePlugin):
     async def inject_rhythm_context(self, event, req, *_):
         if self.runtime is not None:
             await self.runtime.on_llm_request(event, req)
-
-    @on.llm_response(priority=Priority.HIGH + 10)
-    async def enforce_rhythm_silence(self, event, response, *_):
-        if self.runtime is not None:
-            await self.runtime.before_llm_response(event, response)
 
     @on.llm_response(priority=Priority.MEDIUM)
     async def record_rhythm_response(self, event, response, *_):

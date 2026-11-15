@@ -1,6 +1,6 @@
 export const planTemplates = [
   {
-    id: 'gentle_workday', name: '从容工作日', icon: '☁', tone: 'violet',
+    id: 'gentle_workday', name: '从容工作日', icon: 'cloud', tone: 'violet',
     description: '专注、留白和一点生活中的联系，不把时间表塞满。',
     plan: {
       title: '从容工作日', overview: '上午专注一点，午后留白，夜里给自己安静收尾。',
@@ -19,7 +19,7 @@ export const planTemplates = [
     },
   },
   {
-    id: 'dreamer', name: '梦境与分享', icon: '☾', tone: 'night',
+    id: 'dreamer', name: '梦境与分享', icon: 'moon', tone: 'night',
     description: '夜间安静做梦，醒后自由选择是否分享。',
     plan: {
       title: '有梦的一天', overview: '给夜里的想象留位置，也给醒来的分享留选择。',
@@ -33,7 +33,7 @@ export const planTemplates = [
     },
   },
   {
-    id: 'slow_holiday', name: '慢生活假日', icon: '✿', tone: 'green',
+    id: 'slow_holiday', name: '慢生活假日', icon: 'flower', tone: 'green',
     description: '天气、散步、阅读和随心所欲的陪伴。',
     plan: {
       title: '慢生活假日', overview: '没有必须完成的清单，跟随天气和心情慢慢生活。',
@@ -50,8 +50,11 @@ export const planTemplates = [
 ]
 
 export const themeTemplates = [
-  { id: 'kira_mist', name: '雾紫手账', description: '柔雾、纸张与微光', color: '#9b8cff' },
-  { id: 'starlit', name: '星夜漫游', description: '深蓝夜色与梦境星点', color: '#6d7de9' },
-  { id: 'paper', name: '晨光手账', description: '温暖纸张与清新绿意', color: '#6eb79e' },
-  { id: 'rain', name: '雨后玻璃', description: '冷色水雾与安静雨滴', color: '#65a7c4' },
+  { id: 'lacrimosa_dusk', name: '安魂曲 · 夜巡', description: '黑白双马尾与番茄红霓虹的都市夜曲', color: '#e0526e', mode: 'dark', art: 'lacrimosa', tone: 'lacrimosa' },
+  { id: 'lacrimosa_dream', name: '安魂曲 · 小憩', description: '紫蓝暮色里的一段安静梦境', color: '#a980ff', mode: 'dark', art: 'lacrimosa', tone: 'dream' },
+  { id: 'mint_morning', name: '薄荷 · 晨风', description: '青绿猫耳与清晨玻璃露台', color: '#45b99b', mode: 'light', art: 'mint', tone: 'mint' },
+  { id: 'mint_soda', name: '薄荷 · 苏打', description: '清透海盐青与轻盈气泡', color: '#49a9b9', mode: 'light', art: 'mint', tone: 'soda' },
+  { id: 'crimson_sunset', name: '真红 · 赤锋', description: '雨后晚霞与赤色都市锋芒', color: '#c7444c', mode: 'dark', art: 'crimson', tone: 'crimson' },
+  { id: 'crimson_rain', name: '真红 · 雨幕', description: '深蓝雨夜中的绯红倒影', color: '#9d3f66', mode: 'dark', art: 'crimson', tone: 'rain' },
+  { id: 'kira_mist', name: '雾紫手账', description: '柔雾纸张与安静微光', color: '#9b8cff', mode: 'dark', art: '', tone: 'mist' },
 ]

@@ -21,18 +21,25 @@ async def runtime(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_silent_pure_run_is_enforced(runtime):
+async def test_silent_output_is_prompt_only_and_visible_text_is_diagnosed(runtime):
     plan = await create_due_plan(runtime, interaction="silent", count=1)
     item = plan["blocks"][0]["items"][0]
-    await runtime.scheduler.claim_item(item["id"])
+    run = await runtime.scheduler.claim_item(item["id"])
     event = runtime.ctx.event_bus.events[-1]
-    response = SimpleNamespace(text_response="<msg><text>不应可见</text></msg>")
-    await runtime.before_llm_response(event, response)
-    assert response.text_response == "<msg/>"
+    prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
+    assert '"effective_interaction":"silent"' in prompt
+    assert '"enforcement":"prompt_only"' in prompt
+    assert "不得为了本日程删除或改写给用户的回答" in prompt
+    response = SimpleNamespace(text_response="<msg><text>模型自己泄漏的文字</text></msg>", tool_calls=[], status="success")
+    await runtime.on_llm_response(event, response)
+    assert "模型自己泄漏的文字" in response.text_response
+    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
+    stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
+    assert receipt["error"] == "silence_unmet" and stored["state"] == "triggered"
 
 
 @pytest.mark.asyncio
-async def test_silent_item_never_erases_mixed_user_response(runtime):
+async def test_mixed_user_response_is_never_rewritten(runtime):
     plan = await create_due_plan(runtime, interaction="silent", count=1)
     item = plan["blocks"][0]["items"][0]
     await runtime.scheduler.claim_item(item["id"])
@@ -40,22 +47,25 @@ async def test_silent_item_never_erases_mixed_user_response(runtime):
     event.messages.append(KiraIMMessage(
         message_id="real-user", self_id="99999", chain=MessageChain([Text("用户问题")]), timestamp=1,
         sender=User("user", "用户"), is_notice=False, is_mentioned=True))
-    response = SimpleNamespace(text_response="<msg><text>给用户和我的回复</text></msg>")
-    await runtime.before_llm_response(event, response)
-    assert "给用户和我的回复" in response.text_response
+    response = SimpleNamespace(text_response="<msg><text>给用户和我的回复</text></msg>", tool_calls=[], status="success")
+    original = response.text_response
+    await runtime.on_llm_response(event, response)
+    assert response.text_response == original
 
 
 @pytest.mark.asyncio
-async def test_auto_item_is_quiet_when_delivery_window_is_active(runtime):
+async def test_auto_quiet_guidance_and_actual_silent_result(runtime):
     await runtime.store.update_config("persona-a", {
         "quiet_delivery_windows": [{"start": "00:00", "end": "23:59"}]}, 0)
     plan = await create_due_plan(runtime, interaction="auto", count=1)
     item = plan["blocks"][0]["items"][0]
-    await runtime.scheduler.claim_item(item["id"])
+    run = await runtime.scheduler.claim_item(item["id"])
     event = runtime.ctx.event_bus.events[-1]
-    response = SimpleNamespace(text_response="<msg><text>白天也不可见</text></msg>", tool_calls=[], status="success")
-    await runtime.before_llm_response(event, response)
-    assert response.text_response == "<msg/>"
+    prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
+    assert '"quiet_now":true' in prompt and '"effective_interaction":"silent"' in prompt
+    response = SimpleNamespace(text_response="<msg/>", tool_calls=[], status="success")
     await runtime.on_llm_response(event, response)
-    run = await runtime.store.one("SELECT * FROM runs WHERE item_id=?", (item["id"],))
-    assert run["status"] == "responded"
+    assert response.text_response == "<msg/>"
+    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
+    stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
+    assert receipt["error"] == "" and stored["state"] == "triggered_silent"

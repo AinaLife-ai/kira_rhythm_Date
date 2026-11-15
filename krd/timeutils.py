@@ -91,6 +91,15 @@ def compiled_windows(day: str, definitions: list[dict], tz_name: str) -> list[tu
     return result
 
 
+def in_active_windows(definitions: list[dict], timestamp: float, tz_name: str) -> bool:
+    """Check both today and yesterday so cross-midnight windows work at 02:00."""
+    current_day = datetime.fromtimestamp(timestamp, timezone(tz_name)).date()
+    for day in (current_day - timedelta(days=1), current_day):
+        if any(left <= timestamp < right for left, right in compiled_windows(day.isoformat(), definitions, tz_name)):
+            return True
+    return False
+
+
 def sample_window(schedule: dict, day: str, tz_name: str, rng: random.Random) -> list[float]:
     start, end = window_utc(day, schedule["start"], schedule["end"], tz_name)
     count = int(schedule.get("occurrences", 1))

@@ -39,8 +39,15 @@ def main(root: Path):
     assert "refresh=1&persona=" in app and "cache: method === 'GET' ? 'no-store'" in frontend
     assert "const payload = Object.fromEntries(allowed.map" in app
     assert "await runtime.scheduler.wake()" not in (root / "krd" / "tools.py").read_text()
-    assert "len(metadata) != len(messages)" in (root / "krd" / "runtime.py").read_text()
+    runtime_source = (root / "krd" / "runtime.py").read_text()
+    assert "before_llm_response" not in runtime_source
+    assert 'response.text_response = "<msg/>"' not in runtime_source
     assert not list(root.rglob("*.pyc"))
+    assert not any(ord(char) > 0x1F000 for char in frontend), "emoji is forbidden in frontend"
+    for theme in ("lacrimosa", "mint", "crimson"):
+        assert (root / "assets" / "themes" / f"{theme}.webp").is_file(), theme
+        assert (root / "assets" / "pixels" / f"{theme}.png").is_file(), theme
+    assert "planning_review" in (root / "krd" / "config.py").read_text()
     required_bindings = {"settingsTab", "selectedDate", "selectedPlan", "dayStateEditor", "dayTypeEditor", "runs"}
     for name in required_bindings:
         assert re.search(rf"\b{name}\b", app), name

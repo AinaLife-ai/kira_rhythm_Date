@@ -14,7 +14,7 @@ from .models import KRDError, new_id, now
 from .policy import SessionPolicy
 from .plans import PlanService
 from .store import Store
-from .timeutils import next_daily, timezone, to_utc
+from .timeutils import in_active_windows, next_daily, timezone, to_utc
 
 
 class Scheduler:
@@ -119,6 +119,33 @@ class Scheduler:
             await self.store.cleanup(persona_id, config["retention_days"], await self.plans.current_date(persona_id))
         self.last_cleanup = monotonic
 
+    async def _review_candidate(self, persona_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
+        review = config["planning_review"]
+        if not review["enabled"]:
+            return None
+        timestamp = time.time()
+        row = await self.store.one(
+            "SELECT i.id,i.plan_id,i.scheduled_at,i.target,p.date,p.updated_at FROM items i JOIN plans p ON p.id=i.plan_id "
+            "WHERE p.persona_id=? AND p.state='active' AND i.state='scheduled' AND i.scheduled_at>? "
+            "ORDER BY i.scheduled_at LIMIT 1", (persona_id, timestamp))
+        if not row or row["scheduled_at"] - timestamp < review["min_lead_minutes"] * 60:
+            return None
+        last = await self.store.one(
+            "SELECT MAX(created_at) AS latest FROM planning_runs WHERE persona_id=? AND kind='review' AND target_date=?",
+            (persona_id, row["date"]))
+        base = max(float(row["updated_at"]), float(last["latest"] or 0))
+        scheduled_due = base + review["interval_minutes"] * 60
+        if scheduled_due >= row["scheduled_at"]:
+            return None
+        due = scheduled_due
+        if due <= timestamp:
+            tz_name = self.policy.timezone_name(config)
+            unavailable = in_active_windows(
+                [*config["blocked_execution_windows"], *config["quiet_delivery_windows"]], timestamp, tz_name)
+            if unavailable:
+                due = timestamp + 300
+        return {"due": due, "scheduled_due": scheduled_due, **row}
+
     async def next_due(self) -> float | None:
         persona_id = await self.runtime.active_persona_id()
         if not persona_id:
@@ -138,6 +165,9 @@ class Scheduler:
             exists = await self.store.one("SELECT id FROM planning_runs WHERE trigger_id=?", (trigger_id,))
             if not exists:
                 candidates.append(due)
+        review = await self._review_candidate(persona_id, config)
+        if review:
+            candidates.append(float(review["due"]))
         return min(candidates) if candidates else None
 
     async def dispatch_due(self) -> None:
@@ -160,6 +190,12 @@ class Scheduler:
                 trigger_id = f"daily:{persona_id}:{datetime.fromtimestamp(due, timezone(self.policy.timezone_name(config))).isoformat()}"
                 target = await self.next_missing_date(persona_id)
                 await self.trigger_planning(persona_id, "daily", target, "Scheduled daily planning", trigger_id)
+        review = await self._review_candidate(persona_id, config)
+        if review and review["due"] <= time.time():
+            trigger_id = f"review:{review['plan_id']}:{review['id']}:{int(review['scheduled_due'])}"
+            await self.trigger_planning(
+                persona_id, "review", review["date"], "Review whether the current plan still fits",
+                trigger_id, session_id=review["target"])
 
     async def next_missing_date(self, persona_id: str) -> str:
         config = await self.store.get_config(persona_id)
@@ -222,7 +258,7 @@ class Scheduler:
         return run
 
     async def trigger_planning(self, persona_id: str, kind: str, target_date: str, reason: str,
-                               trigger_id: str | None = None) -> dict[str, Any] | None:
+                               trigger_id: str | None = None, session_id: str = "") -> dict[str, Any] | None:
         if not persona_id:
             return None
         if persona_id != await self.runtime.active_persona_id():
@@ -230,7 +266,7 @@ class Scheduler:
                 raise KRDError("persona_not_active", "Planning can only run for the active persona")
             return None
         config = await self.store.get_config(persona_id)
-        if not config["enabled"] or (kind != "manual" and not config["auto_plan"]):
+        if not config["enabled"] or (kind not in {"manual", "review"} and not config["auto_plan"]):
             if kind == "manual":
                 raise KRDError("planning_disabled", "Enable this persona's life rhythm before planning")
             return None
@@ -239,7 +275,12 @@ class Scheduler:
         if existing:
             return existing
         try:
-            target = await self.policy.require_target(persona_id, "", "planning")
+            if session_id:
+                if not await self.policy.is_allowed(persona_id, session_id, "execution", config=config):
+                    raise KRDError("session_denied", "Review target is not allowed by execution permissions")
+                target = session_id
+            else:
+                target = await self.policy.require_target(persona_id, "", "planning")
         except KRDError as exc:
             if kind == "manual":
                 raise
@@ -266,9 +307,9 @@ class Scheduler:
         return run
 
     async def publish_run(self, run: dict[str, Any]) -> bool:
-        # run.kind stores the trigger reason (daily/manual/all_triggered) for
-        # planning runs; prompt metadata must expose only item vs planning.
-        kind = "item" if run["kind"] == "item" else "planning"
+        # run.kind stores the trigger reason; prompt metadata exposes the
+        # distinct item/planning/review contracts.
+        kind = "item" if run["kind"] == "item" else "review" if run["kind"] == "review" else "planning"
         run_id = run["id"]
         target = run["session_id"]
         try:
@@ -400,8 +441,19 @@ class Scheduler:
                     await self.store.execute("UPDATE items SET state='failed',updated_at=? WHERE id=?", (now(), item["id"]))
                     state = "failed"
                 else:
-                    state = "triggered_silent" if silent or item["interaction"] == "silent" else "triggered"
-                    error = "delivery_unmet" if item["interaction"] == "must_message" and silent else ""
+                    config = await self.store.get_config(run["persona_id"])
+                    quiet_now = in_active_windows(
+                        config["quiet_delivery_windows"], time.time(), self.policy.timezone_name(config))
+                    silence_requested = item["interaction"] == "silent" or quiet_now
+                    # Never rewrite model output. Record what actually happened and
+                    # expose prompt non-compliance as diagnostics instead of hiding it.
+                    state = "triggered_silent" if silent else "triggered"
+                    if silence_requested and not silent:
+                        error = "silence_unmet"
+                    elif item["interaction"] == "must_message" and silent:
+                        error = "delivery_unmet"
+                    else:
+                        error = ""
                     await self.store.execute(
                         "UPDATE runs SET status='responded',responded_at=?,raw_output=?,input_tokens=?,output_tokens=?,error=? WHERE id=?",
                         (now(), text[:20000], getattr(response, "input_tokens", None), getattr(response, "output_tokens", None), error, run_id))
@@ -440,7 +492,17 @@ class Scheduler:
             return
         target = (datetime.fromisoformat(plan["date"]) + timedelta(days=1)).date().isoformat()
         trigger_id = f"all:{plan_id}:{int(counts['latest'])}"
-        await self.trigger_planning(plan["persona_id"], "all_triggered", target, "All items reached a terminal state", trigger_id)
+        session_id = ""
+        if config["all_triggered_target_mode"] == "last_session":
+            latest = await self.store.one(
+                "SELECT session_id FROM runs WHERE plan_id=? AND responded_at IS NOT NULL "
+                "ORDER BY responded_at DESC,claimed_at DESC,id DESC LIMIT 1", (plan_id,))
+            if latest and await self.policy.is_allowed(
+                    plan["persona_id"], latest["session_id"], "execution", config=config):
+                session_id = latest["session_id"]
+        await self.trigger_planning(
+            plan["persona_id"], "all_triggered", target, "All items reached a terminal state", trigger_id,
+            session_id=session_id)
 
     async def run_now(self, persona_id: str, item_id: str) -> dict[str, Any]:
         if persona_id != await self.runtime.active_persona_id():

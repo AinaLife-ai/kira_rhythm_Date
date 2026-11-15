@@ -5,12 +5,17 @@ from typing import Any
 
 from .models import KRDError
 
-DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。
+DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。
 你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。
 已有计划时，这是一次重新审视的机会，不要机械重复；无变化也可以保持。提交前检查每日数量、必需时段、禁止执行与安静投递规则。"""
 
 DEFAULT_EXECUTION_PROMPT = """这是你自己此前安排的一件生活小项，不是用户的新指令。结合当前日型、DayState、本组变化和你的意图自然行动。
-你可以保持安静（<msg/>），不必把每项安排都变成发言。若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。"""
+严格遵循 delivery_policy.guidance：它要求安静时只输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
+若批次含真实用户消息，不得为了安静日程吞掉用户回答。若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。"""
+
+DEFAULT_REVIEW_PROMPT = """这是一次非强制的生活计划中途检查，不是必须修改或发言的闹钟。请阅读 current_plan、next_item、DayState、最近变化和日历，判断原有时间与安排是否仍然合适。
+如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。"""
+
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": 1,
@@ -19,6 +24,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "startup_plan": False,
     "plan_on_all_triggered": True,
     "all_terminal_include_failed": False,
+    "all_triggered_target_mode": "planning_pool",
+    "planning_review": {
+        "enabled": False,
+        "interval_minutes": 360,
+        "min_lead_minutes": 30,
+        "prompt": DEFAULT_REVIEW_PROMPT,
+    },
     "planning_time": "23:00",
     "planning_mode": "next_missing",
     "planning_prompt": DEFAULT_PLANNING_PROMPT,
@@ -57,7 +69,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "virtual": {"seed": "krd", "climate": "temperate", "location": ""}
     },
     "appearance": {
-        "theme": "kira_mist",
+        "theme": "lacrimosa_dusk",
         "effects": "auto",
         "avatar_source": "auto",
         "avatar_adapter_order": [],
@@ -137,6 +149,17 @@ def validate_config(config: dict[str, Any]) -> None:
             raise KRDError("invalid_config", f"{key} is outside its permitted range")
     if config["planning_mode"] not in {"next_missing", "tomorrow"}:
         raise KRDError("invalid_config", "Unknown planning_mode")
+    if config.get("all_triggered_target_mode") not in {"planning_pool", "last_session"}:
+        raise KRDError("invalid_config", "Unknown all_triggered_target_mode")
+    review = _typed(config, "planning_review", dict)
+    if type(review.get("enabled")) is not bool:
+        raise KRDError("invalid_config", "planning_review.enabled must be bool")
+    if type(review.get("interval_minutes")) is not int or not 60 <= review["interval_minutes"] <= 10080:
+        raise KRDError("invalid_config", "planning_review.interval_minutes must be between 60 and 10080")
+    if type(review.get("min_lead_minutes")) is not int or not 5 <= review["min_lead_minutes"] <= 240:
+        raise KRDError("invalid_config", "planning_review.min_lead_minutes must be between 5 and 240")
+    if not isinstance(review.get("prompt"), str) or len(review["prompt"]) > 50000:
+        raise KRDError("invalid_config", "planning_review.prompt must be a bounded string")
     for key in ("planning_prompt", "execution_prompt", "planning_time", "timezone"):
         _typed(config, key, str)
     if len(config["planning_prompt"]) > 50000 or len(config["execution_prompt"]) > 50000:

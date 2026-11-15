@@ -41,6 +41,21 @@ class ApiMixin:
     async def api_bootstrap(self, persona: str = ""):
         return await self._call(lambda: webapi.bootstrap(self.runtime, persona))
 
+    @register.api(method="GET", path="/v1/calendar")
+    async def api_calendar(self, start: str, end: str):
+        return await self._call(self.runtime.calendar.range, start, end, allow_network=False)
+
+    @register.api(method="POST", path="/v1/calendar/refresh")
+    async def api_calendar_refresh(self, payload: dict):
+        async def refresh():
+            year = int(payload.get("year", 0))
+            if not 1900 <= year <= 2100:
+                raise KRDError("invalid_calendar_year", "Year must be between 1900 and 2100")
+            result = await self.runtime.calendar.year(year, force_refresh=True)
+            await self.runtime.broadcast("calendar_changed", {"year": year, "status": result["status"]})
+            return result
+        return await self._call(refresh)
+
     @register.api(method="GET", path="/v1/plans")
     async def api_plans(self, start: str, end: str, persona: str = ""):
         persona_id = await self._persona(persona)
@@ -101,6 +116,7 @@ class ApiMixin:
             reason = (payload or {}).get("reason", "Skipped by user")
             result = await self.runtime.plans.update_item(
                 persona_id, item_id, {"action": "skip", "reason": reason}, actor="user", reason=reason)
+            await self.runtime.scheduler.check_all_triggered(result["plan"]["id"])
             await self._notify("plan_changed", persona_id, items=[item_id])
             return result
         return await self._call(skip)

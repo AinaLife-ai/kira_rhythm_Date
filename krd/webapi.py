@@ -27,7 +27,8 @@ async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
         personas.append({"id": persona.id, "name": persona.name or persona.id, "active": persona.id == active})
     return {
         "ready": True, "persona_id": persona_id, "active_persona_id": active, "personas": personas,
-        "date": day, "plan": plan, "day_state": await runtime.plans.day_state(persona_id, day),
+        "date": day, "calendar_today": await runtime.calendar.day(day, allow_network=False),
+        "plan": plan, "day_state": await runtime.plans.day_state(persona_id, day),
         "day_types": await runtime.store.list_day_types(persona_id),
         "config": config, "config_revision": await runtime.store.config_revision(persona_id),
         "global_revision": await runtime.store.config_revision(""),

@@ -1,6 +1,47 @@
 import { fmt } from './store.js'
 import { planTemplates, themeTemplates } from './templates.js'
 
+const ICON_PATHS = {
+  home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
+  calendar: ['M5 5h14a1 1 0 0 1 1 1v13H4V6a1 1 0 0 1 1-1Z', 'M8 3v4M16 3v4M4 9h16', 'M8 13h2M14 13h2M8 17h2M14 17h2'],
+  changes: ['M4 7h11l-3-3M20 17H9l3 3', 'M15 7l5 5-5 5'],
+  templates: ['M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v6H4zM13 14h7v6h-7z'],
+  settings: ['M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z', 'M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.7 5.7l1.5 1.5M16.8 16.8l1.5 1.5M18.3 5.7l-1.5 1.5M7.2 16.8l-1.5 1.5'],
+  plus: ['M12 5v14M5 12h14'],
+  refresh: ['M20 7v5h-5', 'M4 17v-5h5', 'M6.2 8a7 7 0 0 1 11.3-.8L20 12M4 12l2.5 4.8A7 7 0 0 0 18 16'],
+  clock: ['M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16Z', 'M12 8v4.5l3 2'],
+  play: ['M8 5l11 7-11 7z'],
+  skip: ['M6 5l9 7-9 7zM18 5v14'],
+  edit: ['M4 20h4l11-11-4-4L4 16v4Z', 'M13 7l4 4'],
+  close: ['M6 6l12 12M18 6 6 18'],
+  left: ['M14.5 5 7.5 12l7 7'],
+  right: ['M9.5 5l7 7-7 7'],
+  sun: ['M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z', 'M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4'],
+  cloud: ['M7 18h10a4 4 0 0 0 .2-8A6 6 0 0 0 5.6 12 3 3 0 0 0 7 18Z'],
+  rain: ['M7 15h10a4 4 0 0 0 0-8 6 6 0 0 0-11.2 2A3 3 0 0 0 7 15Z', 'M8 18l-1 2M12 18l-1 2M16 18l-1 2'],
+  snow: ['M12 3v18M4.5 7l15 10M19.5 7l-15 10', 'M9.5 5 12 7l2.5-2M9.5 19l2.5-2 2.5 2'],
+  moon: ['M19 15.5A8 8 0 0 1 8.5 5 8 8 0 1 0 19 15.5Z'],
+  flower: ['M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z', 'M12 9C9 8 8 4 12 4s3 4 0 5ZM15 12c1-3 5-3 5 0s-4 3-5 0ZM12 15c3 1 4 5 0 5s-3-4 0-5ZM9 12c-1 3-5 3-5 0s4-3 5 0Z'],
+  sparkle: ['M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z', 'M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z'],
+  pin: ['M12 21s6-6.2 6-11a6 6 0 1 0-12 0c0 4.8 6 11 6 11Z', 'M12 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z'],
+  stats: ['M5 19V9M12 19V5M19 19v-7'],
+  check: ['M5 12.5 9.5 17 19 6.5'],
+  alert: ['M12 3 2.8 20h18.4L12 3Z', 'M12 9v5M12 17v.2'],
+  upload: ['M12 16V4M7 9l5-5 5 5', 'M4 16v4h16v-4'],
+  download: ['M12 4v12M7 11l5 5 5-5', 'M4 16v4h16v-4'],
+  trash: ['M5 7h14M9 7V4h6v3M8 7l1 13h6l1-13', 'M10 11v5M14 11v5'],
+  chevron: ['M8 5l7 7-7 7'],
+  heart: ['M12 20S4 15 4 9.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8 3.5C20 15 12 20 12 20Z'],
+}
+
+export const UiIcon = {
+  props: { name: { type: String, default: 'sparkle' }, size: { type: Number, default: 18 } },
+  computed: {
+    paths() { return ICON_PATHS[this.name] || ICON_PATHS.sparkle },
+  },
+  template: `<svg class="ui-icon" :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path v-for="(d, index) in paths" :key="index" :d="d" /></svg>`,
+}
+
 export const ItemCard = {
   props: ['item', 'serverTime'],
   emits: ['edit', 'run', 'skip'],
@@ -24,8 +65,8 @@ export const ItemCard = {
         <span class="state-pill">{{ $root.fmt.state(item.state) }}</span>
       </div>
       <div class="item-meta">
-        <span>◷ {{ scheduleText }}</span>
-        <span v-if="item.execution_probability < 1">🎲 {{ Math.round(item.execution_probability * 100) }}%</span>
+        <span class="meta-icon"><ui-icon name="clock" :size="13" /> {{ scheduleText }}</span>
+        <span v-if="item.execution_probability < 1">概率 {{ Math.round(item.execution_probability * 100) }}%</span>
         <span>{{ $root.fmt.interaction(item.interaction) }}</span>
         <span v-if="item.category" class="tag">{{ item.category }}</span>
       </div>
@@ -54,7 +95,7 @@ export const Timeline = {
     </section>
   </div>
   <div v-else class="empty-state">
-    <span class="empty-orbit">✦</span><h3>今天还没有安排</h3>
+    <span class="empty-orbit"><ui-icon name="sparkle" :size="27" /></span><h3>今天还没有安排</h3>
     <p>给生活留一点空白，或者让 bot 规划接下来的节奏。</p>
     <button class="primary" @click="$root.runPlanning()">现在规划</button>
   </div>`,
@@ -69,18 +110,18 @@ export const TodayView = {
       <div class="hero-person">
         <div class="avatar-wrap"><img :src="$root.avatarUrl" alt="生活头像"><span class="avatar-status"></span></div>
         <div class="hero-copy">
-          <span class="eyebrow">{{ $root.dayTypeName }} · {{ $root.data.date }}</span>
+          <span class="eyebrow">{{ $root.dayTypeName }} · {{ $root.todayCalendar?.lunar?.text || $root.data.date }}<template v-if="$root.todayHoliday"> · {{ $root.todayHoliday }}</template></span>
           <h1>{{ $root.data.day_state.current_activity || $root.data.plan?.title || '此刻，生活正在展开' }}</h1>
           <p>{{ $root.data.day_state.current_note || $root.data.plan?.overview || '没有安排也很好，给自己一点自由。' }}</p>
           <div class="state-chips">
-            <span v-if="$root.data.day_state.current_appearance">👕 {{ $root.data.day_state.current_appearance }}</span>
-            <span v-if="$root.data.day_state.current_mood">☁ {{ $root.data.day_state.current_mood }}</span>
+            <span v-if="$root.data.day_state.current_appearance">{{ $root.data.day_state.current_appearance }}</span>
+            <span v-if="$root.data.day_state.current_mood"><ui-icon name="cloud" :size="13" /> {{ $root.data.day_state.current_mood }}</span>
           </div>
         </div>
       </div>
       <div class="hero-side">
         <div class="weather-orb" :class="{'is-night': $root.isNight}">
-          <span class="weather-icon">{{ $root.weatherIcon }}</span>
+          <ui-icon class="weather-icon" :name="$root.weatherKind" :size="34" />
           <strong>{{ $root.weatherText }}</strong>
           <small>{{ $root.weatherDetail }}</small>
         </div>
@@ -89,7 +130,7 @@ export const TodayView = {
     </section>
 
     <section class="quick-grid">
-      <div class="next-card glass" v-if="$root.nextItem">
+      <div class="next-card glass" v-if="$root.nextItem"><span class="pixel-runner" aria-hidden="true"></span>
         <span class="eyebrow">下一件生活小事</span>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
@@ -109,7 +150,7 @@ export const TodayView = {
 
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">今日时间轴</span><h2>生活的节奏</h2></div>
-        <button class="soft-button" @click="$root.newItem()">＋ 添加小项</button>
+        <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 添加小项</button>
       </div>
       <timeline :plan="$root.data.plan" :server-time="$root.data.server_time"
         @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
@@ -134,25 +175,27 @@ export const CalendarView = {
   <div class="calendar-layout">
     <section class="calendar-card glass">
       <div class="section-heading">
-        <button class="icon-button" @click="$root.shiftMonth(-1)">‹</button>
+        <button class="icon-button" @click="$root.shiftMonth(-1)"><ui-icon name="left" :size="16" /></button>
         <h2>{{ $root.monthTitle }}</h2>
-        <button class="icon-button" @click="$root.shiftMonth(1)">›</button>
+        <button class="icon-button" @click="$root.shiftMonth(1)"><ui-icon name="right" :size="16" /></button>
         <button class="soft-button today-button" @click="$root.selectDate($root.data.date)">回到今天</button>
       </div>
       <div class="weekday-row"><span v-for="day in ['一','二','三','四','五','六','日']">周{{ day }}</span></div>
       <div class="month-grid">
-        <button v-for="cell in $root.monthCells" :key="cell.key" class="day-cell" :class="{'other-month': !cell.current, 'is-today': cell.date === $root.data.date, 'is-selected': cell.date === $root.selectedDate, 'has-plan': cell.plan}"
+        <button v-for="cell in $root.monthCells" :key="cell.key" class="day-cell" :class="{'other-month': !cell.current, 'is-today': cell.date === $root.data.date, 'is-selected': cell.date === $root.selectedDate, 'has-plan': cell.plan, 'is-holiday': cell.holiday?.is_off_day, 'is-workday': cell.holiday && !cell.holiday.is_off_day}"
           @click="$root.selectDate(cell.date)">
           <span class="day-number">{{ cell.day }}</span>
-          <span v-if="cell.plan" class="day-type-dot" :style="{background: cell.color || 'var(--accent)'}"></span>
-          <small v-if="cell.plan">{{ cell.count }} 项</small><small v-else>·</small>
+          <span v-if="cell.holiday" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span>
+          <span class="lunar-label" :class="{festival: cell.lunar && cell.lunar !== '初一'}">{{ cell.lunar }}</span>
+          <small v-if="cell.plan">{{ cell.count }} 项</small>
         </button>
       </div>
       <div class="calendar-legend"><span><i class="legend-dot"></i> 有计划</span><span><i class="legend-ring"></i> 今天</span><button class="text-button" @click="$root.newPlanForDate()">为 {{ $root.selectedDate }} 安排 →</button></div>
     </section>
     <section class="day-detail glass">
       <div class="section-heading"><div><span class="eyebrow">{{ $root.selectedDate }}</span><h2>{{ $root.selectedPlan?.title || '未安排的一天' }}</h2></div>
-        <button class="soft-button" @click="$root.newItem()">＋ 小项</button></div>
+        <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div>
+      <div v-if="$root.selectedCalendar" class="calendar-facts"><strong>{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="$root.selectedCalendar.holiday">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-for="name in $root.selectedCalendar.solar_festivals" :key="name">{{ name }}</span><span v-for="name in $root.selectedCalendar.lunar_festivals" :key="name">{{ name }}</span><small>{{ $root.selectedCalendar.data_status === 'fresh' ? '法定假期已在线更新' : '法定假期本地回退' }}</small></div>
       <p v-if="$root.selectedPlan" class="plan-overview">{{ $root.selectedPlan.overview }}</p>
       <timeline :plan="$root.selectedPlan" :server-time="$root.data.server_time"
         @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
@@ -172,7 +215,7 @@ export const ChangesView = {
         <div class="diff-revision"><span>r{{ change.revision }}</span><small>{{ change.actor }}</small></div>
         <div class="diff-body"><h3>{{ change.reason || '调整生活安排' }}</h3><time>{{ $root.fmt.date(change.created_at) }}</time>
           <div v-for="entry in change.diff" class="diff-entry" :class="'op-' + entry.op">
-            <strong>{{ entry.op === 'added' ? '＋' : entry.op === 'removed' ? '−' : '～' }} {{ entry.title }}</strong>
+            <strong>{{ entry.op === 'added' ? '+' : entry.op === 'removed' ? '-' : '~' }} {{ entry.title }}</strong>
             <span v-for="(value, field) in entry.changes">{{ field }}: {{ $root.shortValue(value.from) }} → {{ $root.shortValue(value.to) }}</span>
           </div>
         </div>
@@ -191,16 +234,16 @@ export const TemplatesView = {
   template: `
   <div class="view-stack">
     <section class="section-card glass">
-      <div class="section-heading"><div><span class="eyebrow">生活模板</span><h2>从一种节奏开始，再变成自己的</h2></div><button class="soft-button" @click="$root.saveCurrentTemplate">＋ 保存当前为模板</button></div>
+      <div class="section-heading"><div><span class="eyebrow">生活模板</span><h2>从一种节奏开始，再变成自己的</h2></div><button class="soft-button" @click="$root.saveCurrentTemplate"><ui-icon name="plus" :size="14" /> 保存当前为模板</button></div>
       <div class="template-grid">
         <article v-for="template in $root.allPlanTemplates" :key="template.id" class="template-card" :class="'tone-' + (template.tone || 'violet')">
-          <span class="template-icon">{{ template.icon }}</span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
+          <span class="template-icon"><ui-icon :name="template.icon" :size="21" /></span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
           <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用到 {{ $root.selectedDate }}</button><button class="text-button" @click="$root.previewTemplate(template)">预览结构</button><button v-if="template.custom" class="text-button muted" @click="$root.deleteTemplate(template)">删除我的模板</button></div>
         </article>
       </div>
     </section>
     <section class="section-card glass">
-      <div class="section-heading"><div><span class="eyebrow">日型</span><h2>每一天都可以有自己的名字</h2></div><button class="soft-button" @click="$root.newDayType">＋ 自定义日型</button></div>
+      <div class="section-heading"><div><span class="eyebrow">日型</span><h2>每一天都可以有自己的名字</h2></div><button class="soft-button" @click="$root.newDayType"><ui-icon name="plus" :size="14" /> 自定义日型</button></div>
       <div class="day-type-grid"><article v-for="entry in $root.data.day_types" class="day-type-card" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
         <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ entry.builtin ? '内置日型' : entry.id }}</small>
         <button class="text-button" @click="$root.editDayType(entry)">编辑</button><button v-if="!entry.builtin" class="text-button muted" @click="$root.deleteDayType(entry)">删除</button>
@@ -209,7 +252,7 @@ export const TemplatesView = {
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">外观与头像</span><h2>让界面也拥有生活感</h2></div></div>
       <div class="theme-grid"><button v-for="theme in $root.themeTemplates" class="theme-card" :class="{active: $root.data.config.appearance.theme === theme.id}" @click="$root.setTheme(theme)">
-        <span class="theme-preview" :data-theme-name="theme.id"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
+        <span class="theme-preview" :data-theme-name="theme.id" :style="theme.art ? {backgroundImage: 'linear-gradient(180deg, transparent, rgba(5,8,18,.6)), url(' + $root.assetBase + '/themes/' + theme.art + '.webp)'} : {}"><i></i><i></i><i></i></span><strong>{{ theme.name }}</strong><small>{{ theme.description }}</small>
       </button></div>
       <div class="avatar-editor"><img :src="$root.avatarUrl" alt="当前头像"><div><h3>生活头像</h3><p>默认自动获取适配器头像，也可以为此人格上传专属图片。</p><label class="soft-button upload-button">上传头像<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadAvatar"></label></div></div>
       <div class="avatar-editor"><div><h3>生活横幅与强调色</h3><p>图片只保存在本机；颜色会立即应用到当前人格的界面。</p><div class="data-actions"><label class="soft-button upload-button">上传横幅<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" @change="$root.uploadBanner"></label><input type="color" v-model="$root.customAccent" style="width: 100px" @change="$root.applyCustomAccent"></div></div></div>
@@ -242,20 +285,27 @@ export const SettingsView = {
           <label class="switch-row"><span>普通会话注入 DayState</span><input type="checkbox" v-model="$root.draft.inject_day_state"></label>
         </div>
         <label class="full-field"><span>历史模式</span><select v-model="$root.draft.history_mode"><option value="notice">notice · 系统短标记</option><option value="full">full · 额外保留模板</option><option value="none">none · 全非持久（空 user 边界）</option></select></label>
+        <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">最后会话没有真实响应、已越权或适配器不可用时自动回退规划池。</small></label>
         <label class="full-field"><span>完整规划提示词</span><textarea rows="7" v-model="$root.draft.planning_prompt"></textarea></label>
         <label class="full-field"><span>小项执行提示词</span><textarea rows="6" v-model="$root.draft.execution_prompt"></textarea></label>
       </section>
       <section v-if="$root.settingsTab === 'time'" class="settings-section">
         <span class="eyebrow">时间与夜间</span><h2>执行、打扰与覆盖，分别决定</h2>
         <div v-for="group in [['blocked_execution_windows','禁止执行时段','任何日程都不会在此唤醒'],['quiet_delivery_windows','安静投递时段','允许做梦与思考，但不发可见消息'],['required_coverage_windows','必需覆盖时段','设置时段内的最小/最大项数']]" class="window-group">
-          <div class="section-heading"><div><h3>{{ group[1] }}</h3><p>{{ group[2] }}</p></div><button class="soft-button" @click="$root.addWindow(group[0])">＋ 添加</button></div>
+          <div class="section-heading"><div><h3>{{ group[1] }}</h3><p>{{ group[2] }}</p></div><button class="soft-button" @click="$root.addWindow(group[0])"><ui-icon name="plus" :size="14" /> 添加</button></div>
           <div v-for="(window, index) in $root.draft[group[0]]" class="window-row">
             <input type="time" v-model="window.start"><span>至</span><input type="time" v-model="window.end">
             <template v-if="group[0] === 'required_coverage_windows'"><input type="number" min="0" max="100" v-model.number="window.min_items" title="最小项数"><input type="number" min="0" max="100" v-model.number="window.max_items" title="最大项数"><input placeholder="分类（可选）" v-model="window.category"></template>
-            <button class="icon-button danger" @click="$root.draft[group[0]].splice(index, 1)">×</button>
+            <button class="icon-button danger" @click="$root.draft[group[0]].splice(index, 1)"><ui-icon name="close" :size="14" /></button>
           </div>
         </div>
         <div class="form-grid"><label><span>过期宽限（秒）</span><input type="number" min="0" v-model.number="$root.draft.recovery_grace_seconds"></label><label><span>时区（system 或 IANA）</span><input v-model="$root.draft.timezone" placeholder="Asia/Shanghai"></label></div>
+        <div class="review-setting">
+          <label class="switch-row"><span>计划中途检查提醒</span><input type="checkbox" v-model="$root.draft.planning_review.enabled"></label>
+          <p class="field-hint">默认关闭。开启后向距离下一小项最近的会话提供完整计划与调整引导，不强制修改。</p>
+          <div class="form-grid"><label><span>检查间隔（分钟）</span><input type="number" min="60" max="10080" v-model.number="$root.draft.planning_review.interval_minutes"></label><label><span>触发前最小余量（分钟）</span><input type="number" min="5" max="240" v-model.number="$root.draft.planning_review.min_lead_minutes"></label></div>
+          <label class="full-field"><span>检查提示词</span><textarea rows="5" v-model="$root.draft.planning_review.prompt"></textarea></label>
+        </div>
       </section>
       <section v-if="$root.settingsTab === 'sessions'" class="settings-section">
         <span class="eyebrow">会话权限</span><h2>允许生活在哪些地方发生</h2>
@@ -302,7 +352,7 @@ export const ItemEditor = {
   },
   template: `
   <div class="modal-backdrop" @click.self="$root.closeEditor"><div class="modal-card large">
-    <div class="modal-heading"><div><span class="eyebrow">生活小项</span><h2>{{ editor.item ? '调整安排' : '添加安排' }}</h2></div><button class="icon-button" @click="$root.closeEditor">×</button></div>
+    <div class="modal-heading"><div><span class="eyebrow">生活小项</span><h2>{{ editor.item ? '调整安排' : '添加安排' }}</h2></div><button class="icon-button" @click="$root.closeEditor"><ui-icon name="close" :size="16" /></button></div>
     <div class="form-grid">
       <label class="wide"><span>标题</span><input v-model="form.title" autofocus></label>
       <label class="wide"><span>为什么安排</span><textarea rows="2" v-model="form.intent"></textarea></label>
@@ -325,7 +375,7 @@ export const DayStateEditor = {
   data() { return { form: JSON.parse(JSON.stringify(this.$root.data.day_state)) } },
   template: `
   <div class="modal-backdrop" @click.self="$root.dayStateEditor = false"><div class="modal-card">
-    <div class="modal-heading"><div><span class="eyebrow">DayState</span><h2>此刻的我</h2></div><button class="icon-button" @click="$root.dayStateEditor = false">×</button></div>
+    <div class="modal-heading"><div><span class="eyebrow">DayState</span><h2>此刻的我</h2></div><button class="icon-button" @click="$root.dayStateEditor = false"><ui-icon name="close" :size="16" /></button></div>
     <label class="full-field"><span>现在的服装</span><input v-model="form.current_appearance"></label>
     <label class="full-field"><span>现在的心情</span><input v-model="form.current_mood"></label>
     <label class="full-field"><span>现在的地点</span><input v-model="form.current_location"></label>
@@ -348,7 +398,7 @@ export const DayTypeEditor = {
   },
   template: `
   <div class="modal-backdrop" @click.self="$root.dayTypeEditor = null"><div class="modal-card">
-    <div class="modal-heading"><div><span class="eyebrow">日型</span><h2>{{ entry ? '编辑日型' : '创建日型' }}</h2></div><button class="icon-button" @click="$root.dayTypeEditor = null">×</button></div>
+    <div class="modal-heading"><div><span class="eyebrow">日型</span><h2>{{ entry ? '编辑日型' : '创建日型' }}</h2></div><button class="icon-button" @click="$root.dayTypeEditor = null"><ui-icon name="close" :size="16" /></button></div>
     <label class="full-field"><span>名称</span><input v-model="form.name" placeholder="考试周 / 旅行日 / 雨天宅家"></label>
     <label class="full-field"><span>内部 ID（创建后不可改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>

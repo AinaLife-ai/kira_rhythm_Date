@@ -63,6 +63,10 @@ def run(framework: Path, plugin_root: Path):
             assert response.status_code == 200, response.text
             avatar = await client.get(f"{base}/avatar?refresh=1")
             assert avatar.status_code == 200 and avatar.headers["cache-control"] == "no-store, max-age=0"
+            calendar = await client.get(f"{base}/calendar?start=2026-02-17&end=2026-02-18")
+            assert calendar.status_code == 200, calendar.text
+            solar_days = calendar.json()["days"]
+            assert solar_days[0]["holiday"] == {"name": "春节", "is_off_day": True}
             invalid = await client.put(f"{base}/config", json={"patch": {"weather": None}, "expected_revision": 0})
             assert invalid.status_code == 400 and invalid.json()["detail"]["code"] == "invalid_config"
             today = datetime.now().date().isoformat()

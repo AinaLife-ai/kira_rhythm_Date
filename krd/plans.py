@@ -28,6 +28,7 @@ class PlanService:
         self.policy = policy
         self.rng = random.Random()
         self.on_change = None
+        self.calendar = None
 
     def _changed(self) -> None:
         # A new earlier item must interrupt the scheduler's current wait. The
@@ -66,6 +67,10 @@ class PlanService:
                 candidates.append((priority, entry["id"]))
         if candidates:
             return sorted(candidates)[0][1]
+        if self.calendar is not None:
+            calendar_day = await self.calendar.day(day, allow_network=False)
+            if calendar_day.get("holiday"):
+                return calendar_day["suggested_day_type"]
         return "weekend" if weekday >= 5 else "weekday"
 
     @staticmethod
@@ -498,7 +503,11 @@ class PlanService:
                 "SELECT r.revision,r.diff_json,r.actor,r.reason,r.created_at FROM plan_revisions r "
                 "JOIN plans p ON p.id=r.plan_id WHERE r.plan_id=? AND p.persona_id=? ORDER BY r.revision DESC LIMIT ?",
                 (plan_id, persona_id, max(1, min(20, limit))))
-        return [{**row, "diff": loads(row.pop("diff_json"), [])} for row in rows]
+        result = []
+        for row in rows:
+            diff = loads(row.pop("diff_json"), [])
+            result.append({**row, "diff": diff})
+        return result
 
     async def update_item(self, persona_id: str, item_id: str, patch: dict[str, Any], *, actor: str, reason: str = "") -> dict[str, Any]:
         row = await self.store.one("SELECT plan_id FROM items WHERE id=?", (item_id,))

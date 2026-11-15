@@ -25,7 +25,7 @@ const plan = {
   ],
 }
 const config = {
-  schema_version: 1, enabled: true, auto_plan: true, startup_plan: false, plan_on_all_triggered: true, planning_time: '23:00', planning_mode: 'next_missing',
+  schema_version: 1, enabled: true, auto_plan: true, startup_plan: false, plan_on_all_triggered: true, all_triggered_target_mode: 'planning_pool', planning_review: { enabled: false, interval_minutes: 360, min_lead_minutes: 30, prompt: '检查当前计划是否仍然合适。' }, planning_time: '23:00', planning_mode: 'next_missing',
   min_items: 2, max_items: 12, max_horizon_days: 14, allow_exact: true, allow_window: true, allow_probability: true,
   default_probability: 1, min_probability: .2, session_access: { mode: 'deny_list', sessions: [] },
   planning_pool: { sessions: [], strategy: 'pure_random' }, execution_pool: { sessions: [], strategy: 'pure_random' },
@@ -34,11 +34,11 @@ const config = {
   blocked_execution_windows: [], quiet_delivery_windows: [{ start: '23:30', end: '07:00' }], required_coverage_windows: [],
   planning_prompt: '根据日型、天气与最近生活规划接下来的一天。', execution_prompt: '自然行动，也可保持安静。',
   weather: { mode: 'real', provider: 'open_meteo', locations: {}, current_ttl_seconds: 1800, forecast_ttl_seconds: 21600, timeout_seconds: 3, virtual: { seed: 'krd', climate: 'temperate', location: '' } },
-  appearance: { theme: 'kira_mist', effects: 'auto', avatar_source: 'auto', avatar_adapter_order: [], avatar_asset_id: '' }, retention_days: 180, per_persona: {},
+  appearance: { theme: 'lacrimosa_dusk', effects: 'auto', avatar_source: 'auto', avatar_adapter_order: [], avatar_asset_id: '' }, retention_days: 180, per_persona: {},
 }
 const data = {
   ready: true, persona_id: 'aina', active_persona_id: 'aina', personas: [{ id: 'aina', name: '爱奈', active: true }, { id: 'mio', name: '美羽', active: false }],
-  date: iso, plan, day_state: { current_appearance: '雾蓝色针织衫', current_mood: '安静而期待', current_activity: '刚刚读完一章', current_note: '上午专注于喜欢的事，傍晚出去走一走。', revision: 2 },
+  date: iso, calendar_today: { date: iso, lunar: { text: '二〇二六年十月初六' }, solar_term: '', solar_festivals: [], lunar_festivals: [], holiday: null, display: '初六', data_status: 'fresh' }, plan, day_state: { current_appearance: '雾蓝色针织衫', current_mood: '安静而期待', current_activity: '刚刚读完一章', current_note: '上午专注于喜欢的事，傍晚出去走一走。', revision: 2 },
   day_types: [{ id: 'weekday', name: '工作日', builtin: 1, rules: {}, config: { color: '#7c8cf8' } }, { id: 'weekend', name: '周末', builtin: 1, rules: {}, config: { color: '#ad7cf8' } }, { id: 'dream_day', name: '做梦的日子', builtin: 0, rules: {}, config: { color: '#77d6b3' } }],
   config, config_revision: 3, global_revision: 3,
   sessions: [{ sid: 'qq:dm:10001', title: '与爱奈的夜晚', adapter: 'qq' }, { sid: 'qq:gm:70001', title: '小小读书会', adapter: 'qq' }],
@@ -73,6 +73,19 @@ window.fetch = async (url, options = {}) => {
   }
   if (path.includes('/avatar?')) return response(data.avatar)
   if (path.includes('/weather/current')) return response(data.weather)
+  if (path.includes('/calendar?')) {
+    const params = new URL(path, location.origin).searchParams
+    const start = new Date(`${params.get('start')}T12:00:00Z`)
+    const end = new Date(`${params.get('end')}T12:00:00Z`)
+    const days = []
+    for (let d = new Date(start), i = 0; d <= end; d.setUTCDate(d.getUTCDate() + 1), i++) {
+      const date = d.toISOString().slice(0, 10)
+      const holiday = i === 14 ? { name: '法定假日', is_off_day: true } : (i === 16 ? { name: '调班', is_off_day: false } : null)
+      days.push({ date, lunar: { text: `二〇二六年十月${['初一','初二','初三','初四','初五','初六','初七'][i % 7]}` }, solar_term: i === 5 ? '小雪' : '', solar_festivals: i === 15 ? ['测试节日'] : [], lunar_festivals: [], holiday, display: holiday?.name || (i === 5 ? '小雪' : ['初一','初二','初三','初四','初五','初六','初七'][i % 7]), data_status: 'fresh' })
+    }
+    return response({ start: params.get('start'), end: params.get('end'), days, sources: { 2026: { status: 'fresh', papers: [] } } })
+  }
+  if (path.includes('/calendar/refresh') && options.method === 'POST') return response(data.calendar_today)
   if (path.includes('/day-state/') && options.method === 'POST') {
     data.day_state = { ...data.day_state, ...JSON.parse(options.body), revision: data.day_state.revision + 1 }
     return response(data.day_state)
