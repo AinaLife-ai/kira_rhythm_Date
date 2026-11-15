@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from .models import KRDError, compact_error
 from .store import dumps
+from .llm_format import humanize_timestamps
 
 
 def runtime_from_event(event):
@@ -28,8 +29,12 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
             if metadata["kind"] in {"planning", "review"}:
                 await runtime.store.execute("UPDATE planning_runs SET status='completed',finished_at=? WHERE id=?", (__import__('time').time(), metadata["run_id"]))
         await runtime.broadcast("plan_changed", {"persona_id": persona_id, "days": [r["plan"]["date"] for r in results]})
-        return dumps({"ok": True, "days": [{"plan_id": r["plan"]["id"], "date": r["plan"]["date"], "revision": r["revision"],
-                                           "diff": r["diff"], "change_units": r["change_units"]} for r in results]})
+        payload = {"ok": True, "days": [{"plan_id": r["plan"]["id"], "date": r["plan"]["date"], "revision": r["revision"],
+                                          "diff": r["diff"], "change_units": r["change_units"]} for r in results]}
+        cfg = await runtime.store.get_config(persona_id)
+        tz_name = runtime.plans.policy.timezone_name(cfg)
+        payload["timezone"] = tz_name
+        return dumps(humanize_timestamps(payload, tz_name))
     except Exception as exc:
         return error_result(exc)
 
@@ -72,7 +77,9 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
             await runtime.scheduler.check_all_triggered(plan_id)
         runtime.scheduler.wake()
         await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "rhythm_update"})
-        return dumps({"ok": True, "results": results})
+        cfg = await runtime.store.get_config(persona_id)
+        tz_name = runtime.plans.policy.timezone_name(cfg)
+        return dumps(humanize_timestamps({"ok": True, "timezone": tz_name, "results": results}, tz_name))
     except Exception as exc:
         return error_result(exc)
 
@@ -124,6 +131,8 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
             result = await plans_service.experiences(persona_id, date or None, item_id, limit)
         else:
             raise KRDError("invalid_scope", f"Unknown view scope: {scope}")
-        return dumps({"ok": True, "scope": scope, "result": result})
+        cfg = await runtime.store.get_config(persona_id)
+        tz_name = runtime.plans.policy.timezone_name(cfg)
+        return dumps(humanize_timestamps({"ok": True, "scope": scope, "timezone": tz_name, "result": result}, tz_name))
     except Exception as exc:
         return error_result(exc)
