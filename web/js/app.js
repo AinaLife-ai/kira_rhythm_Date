@@ -56,6 +56,19 @@ const app = Vue.createApp({
     }
   },
   computed: {
+    timezoneOptions() {
+      const options = [
+        ['system', '跟随宿主系统'], ['Asia/Shanghai', '中国标准时间 · 上海'], ['Asia/Hong_Kong', '香港时间'],
+        ['Asia/Taipei', '台北时间'], ['Asia/Tokyo', '日本标准时间 · 东京'], ['Asia/Seoul', '韩国标准时间 · 首尔'],
+        ['Asia/Singapore', '新加坡时间'], ['Asia/Bangkok', '曼谷时间'], ['Asia/Kolkata', '印度标准时间'],
+        ['Europe/London', '伦敦时间'], ['Europe/Paris', '巴黎时间'], ['Europe/Berlin', '柏林时间'],
+        ['America/New_York', '纽约时间'], ['America/Chicago', '芝加哥时间'], ['America/Los_Angeles', '洛杉矶时间'],
+        ['Australia/Sydney', '悉尼时间'], ['Pacific/Auckland', '奥克兰时间'], ['UTC', '协调世界时 UTC'],
+      ]
+      const current = this.draft?.timezone
+      if (current && !options.some(([id]) => id === current)) options.push([current, `当前自定义 · ${current}`])
+      return options
+    },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]

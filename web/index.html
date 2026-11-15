@@ -43,7 +43,7 @@
         <header class="topbar">
           <div class="breadcrumb"><span>{{ state.view === 'today' ? '此刻' : ({calendar:'日历',changes:'变化',templates:'模板',settings:'设置'})[state.view] }}</span><small>{{ data.date }} · {{ dayTypeName }}</small></div>
           <div class="top-actions">
-            <div class="live-pill"><span></span> Live</div>
+            <div class="live-pill"><span></span> 在线</div>
             <label class="persona-select"><span class="persona-dot"></span><select v-model="state.selectedPersona" @change="selectPersona" aria-label="选择人格"><option v-for="persona in data.personas" :value="persona.id">{{ persona.name }}{{ persona.active ? ' · 当前' : '' }}</option></select></label>
             <button class="icon-button" title="刷新" @click="refresh()"><ui-icon name="refresh" :size="17" /></button>
           </div>

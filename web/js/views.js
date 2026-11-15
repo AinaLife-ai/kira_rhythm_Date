@@ -148,7 +148,7 @@ export const TodayView = {
       </div>
     </section>
 
-    <section class="section-card glass">
+    <section class="section-card glass timeline-section">
       <div class="section-heading"><div><span class="eyebrow">今日时间轴</span><h2>生活的节奏</h2></div>
         <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 添加小项</button>
       </div>
@@ -162,7 +162,7 @@ export const TodayView = {
       </div>
       <div v-for="change in $root.latestDiff.slice(0, 3)" :key="change.revision" class="change-row">
         <span class="revision-badge">r{{ change.revision }}</span>
-        <div><strong>{{ change.actor === 'bot' ? 'bot' : change.actor }} · {{ change.reason || '调整了计划' }}</strong>
+        <div><strong>{{ change.actor === 'bot' ? 'bot' : '你' }} · {{ change.reason || '调整了计划' }}</strong>
         <p>{{ $root.diffSummary(change.diff) }}</p></div>
       </div>
     </section>
@@ -211,7 +211,7 @@ export const ChangesView = {
       </div>
       <div v-if="!$root.diffs.length" class="empty-inline">还没有变化记录，生活才刚刚开始。</div>
       <article v-for="change in $root.diffs" :key="change.revision" class="diff-card">
-        <div class="diff-revision"><span>r{{ change.revision }}</span><small>{{ change.actor }}</small></div>
+        <div class="diff-revision"><span>r{{ change.revision }}</span><small>{{ change.actor === 'bot' ? 'bot' : '你' }}</small></div>
         <div class="diff-body"><h3>{{ change.reason || '调整生活安排' }}</h3><time>{{ $root.fmt.date(change.created_at) }}</time>
           <div v-for="entry in change.diff" class="diff-entry" :class="'op-' + entry.op">
             <strong>{{ entry.op === 'added' ? '+' : entry.op === 'removed' ? '-' : '~' }} {{ entry.title }}</strong>
@@ -223,7 +223,7 @@ export const ChangesView = {
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">运行记录</span><h2>触发不是盲目发送</h2></div><button class="soft-button" @click="$root.loadRuns">刷新</button></div>
       <div class="run-table"><div class="run-row run-head"><span>小项</span><span>状态</span><span>概率</span><span>时间</span></div>
-        <div v-for="run in $root.runs" class="run-row"><span class="mono">{{ run.item_id.slice(0, 14) }}…</span><span>{{ run.status }}</span><span>{{ run.probability == null ? '—' : Math.round(run.probability * 100) + '%' }}</span><span>{{ $root.fmt.date(run.claimed_at) }}</span></div>
+        <div v-for="run in $root.runs" class="run-row"><span class="mono">{{ run.item_id.slice(0, 14) }}…</span><span>{{ $root.fmt.runStatus(run.status) }}</span><span>{{ run.probability == null ? '—' : Math.round(run.probability * 100) + '%' }}</span><span>{{ $root.fmt.date(run.claimed_at) }}</span></div>
       </div>
     </section>
   </div>`,
@@ -267,30 +267,32 @@ export const SettingsView = {
     <div class="settings-content">
       <section v-if="$root.settingsTab === 'general'" class="settings-section">
         <span class="eyebrow">规划与数量</span><h2>自主，但有清晰边界</h2>
+        <p class="field-hint">这些规则决定 bot 能安排多少生活，以及日程在多大范围内变化。初次使用建议保持默认，先观察一两天再调整。</p>
         <div class="form-grid">
-          <label><span>每日最小项</span><input type="number" min="0" max="500" v-model.number="$root.draft.min_items"></label>
-          <label><span>每日最大项</span><input type="number" min="1" max="500" v-model.number="$root.draft.max_items"></label>
+          <label><span>每日最少安排</span><small>太少会显得空，推荐 2 到 4 项。</small><input type="number" min="0" max="500" v-model.number="$root.draft.min_items"></label>
+          <label><span>每日最多安排</span><small>避免日程过密，推荐 8 到 12 项。</small><input type="number" min="1" max="500" v-model.number="$root.draft.max_items"></label>
           <label><span>定时规划</span><input type="time" v-model="$root.draft.planning_time"></label>
-          <label><span>最远天数</span><input type="number" min="1" max="366" v-model.number="$root.draft.max_horizon_days"></label>
-          <label><span>默认概率</span><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.default_probability"></label>
-          <label><span>bot 最低概率</span><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.min_probability"></label>
+          <label><span>允许提前规划几天</span><small>默认 14 天已经足够，无需频繁修改。</small><input type="number" min="1" max="366" v-model.number="$root.draft.max_horizon_days"></label>
+          <label><span>新日程默认执行概率</span><small>1 表示一定执行；0.8 表示偶尔会自然错过。</small><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.default_probability"></label>
+          <label><span>bot 可设置的最低概率</span><small>防止 bot 把所有安排设得太随意，推荐 0.2。</small><input type="number" min="0" max="1" step="0.05" v-model.number="$root.draft.min_probability"></label>
           <label><span>历史天数</span><input type="number" min="0" max="30" v-model.number="$root.draft.history_days"></label>
-          <label><span>组内 diff 次数</span><input type="number" min="1" max="20" v-model.number="$root.draft.diff_revisions"></label>
+          <label><span>每组保留的最近变更记录</span><small>只影响发送给 bot 的变化上下文，推荐 2。</small><input type="number" min="1" max="20" v-model.number="$root.draft.diff_revisions"></label>
         </div>
         <div class="switch-grid"><label class="switch-row"><span>自动规划</span><input type="checkbox" v-model="$root.draft.auto_plan"></label>
           <label class="switch-row"><span>全项触发后再给规划机会</span><input type="checkbox" v-model="$root.draft.plan_on_all_triggered"></label>
           <label class="switch-row"><span>精确时间</span><input type="checkbox" v-model="$root.draft.allow_exact"></label>
           <label class="switch-row"><span>随机时间窗</span><input type="checkbox" v-model="$root.draft.allow_window"></label>
           <label class="switch-row"><span>概率触发</span><input type="checkbox" v-model="$root.draft.allow_probability"></label>
-          <label class="switch-row"><span>普通会话注入 DayState</span><input type="checkbox" v-model="$root.draft.inject_day_state"></label>
+          <label class="switch-row"><span>普通聊天附带当前生活状态</span><input type="checkbox" v-model="$root.draft.inject_day_state"></label>
         </div>
-        <label class="full-field"><span>历史模式</span><select v-model="$root.draft.history_mode"><option value="notice">notice · 系统短标记</option><option value="full">full · 额外保留模板</option><option value="none">none · 全非持久（空 user 边界）</option></select></label>
-        <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">最后会话没有真实响应、已越权或适配器不可用时自动回退规划池。</small></label>
+        <label class="full-field"><span>历史模式</span><select v-model="$root.draft.history_mode"><option value="notice">系统短标记（推荐）</option><option value="full">额外保留提示词模板</option><option value="none">完全不写入聊天历史</option></select></label>
+        <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">推荐保持规划池。只有希望 bot 在刚完成对话的地方继续规划时，才选择“最后实际完成的会话”。</small></label>
         <label class="full-field"><span class="prompt-title">完整规划提示词<button class="text-button" @click="$root.resetPrompt('planning')">恢复默认</button></span><textarea rows="7" v-model="$root.draft.planning_prompt"></textarea></label>
         <label class="full-field"><span class="prompt-title">小项执行提示词<button class="text-button" @click="$root.resetPrompt('execution')">恢复默认</button></span><textarea rows="6" v-model="$root.draft.execution_prompt"></textarea></label>
       </section>
       <section v-if="$root.settingsTab === 'time'" class="settings-section">
         <span class="eyebrow">时间与夜间</span><h2>执行、打扰与覆盖，分别决定</h2>
+        <p class="field-hint">跨午夜时段可直接填写，例如 23:00 至 07:00。三类时段含义不同，请按说明设置。</p>
         <div v-for="group in [['blocked_execution_windows','禁止执行时段','任何日程都不会在此唤醒'],['quiet_delivery_windows','安静投递时段','允许做梦与思考，但不发可见消息'],['required_coverage_windows','必需覆盖时段','设置时段内的最小/最大项数']]" class="window-group">
           <div class="section-heading"><div><h3>{{ group[1] }}</h3><p>{{ group[2] }}</p></div><button class="soft-button" @click="$root.addWindow(group[0])"><ui-icon name="plus" :size="14" /> 添加</button></div>
           <div v-for="(window, index) in $root.draft[group[0]]" class="window-row">
@@ -299,7 +301,7 @@ export const SettingsView = {
             <button class="icon-button danger" @click="$root.draft[group[0]].splice(index, 1)"><ui-icon name="close" :size="14" /></button>
           </div>
         </div>
-        <div class="form-grid"><label><span>过期宽限（秒）</span><input type="number" min="0" v-model.number="$root.draft.recovery_grace_seconds"></label><label><span>时区（system 或 IANA）</span><input v-model="$root.draft.timezone" placeholder="Asia/Shanghai"></label></div>
+        <div class="form-grid"><label><span>迟到多久仍可触发（秒）</span><small>推荐 600 秒；设备短暂休眠后仍有机会补触发。</small><input type="number" min="0" v-model.number="$root.draft.recovery_grace_seconds"></label><label><span>生活时区</span><small>决定所有日程使用的当地时钟，推荐跟随系统。</small><select v-model="$root.draft.timezone"><option v-for="zone in $root.timezoneOptions" :key="zone[0]" :value="zone[0]">{{ zone[1] }}</option></select></label></div>
         <div class="review-setting">
           <label class="switch-row"><span>计划中途检查提醒</span><input type="checkbox" v-model="$root.draft.planning_review.enabled"></label>
           <p class="field-hint">默认关闭。开启后向距离下一小项最近的会话提供完整计划与调整引导，不强制修改。</p>
@@ -309,6 +311,7 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'sessions'" class="settings-section">
         <span class="eyebrow">会话权限</span><h2>允许生活在哪些地方发生</h2>
+        <p class="field-hint">先决定 bot 可以在哪些聊天里生活，再分别选择“规划开始时”和“执行日程时”优先使用的会话。</p>
         <label class="full-field"><span>名单模式</span><select v-model="$root.draft.session_access.mode"><option value="deny_list">黑名单：默认全部允许</option><option value="allow_list">白名单：仅列表允许</option></select></label>
         <div class="session-picker"><label v-for="session in $root.allSessions" :class="{selected: $root.draft.session_access.sessions.includes(session.sid)}"><input type="checkbox" :checked="$root.draft.session_access.sessions.includes(session.sid)" @change="$root.toggleAccess(session.sid)"><span>{{ session.title }}</span><small>{{ session.sid }}</small></label></div>
         <div v-for="kind in ['planning', 'execution']" class="pool-editor"><h3>{{ kind === 'planning' ? '规划起始会话池' : '小项执行会话池' }}</h3>
@@ -319,8 +322,9 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'weather'" class="settings-section">
         <span class="eyebrow">天气与地点</span><h2>真实或虚拟，都能参与生活</h2>
+        <p class="field-hint">只想快速体验可选择虚拟气候；需要真实天气时再填写地点。没有注册密钥就优先使用无需账号的服务。</p>
         <div class="form-grid"><label><span>模式</span><select v-model="$root.draft.weather.mode"><option value="off">关闭</option><option value="real">真实天气</option><option value="virtual">虚拟气候</option><option value="hybrid">真实 + 虚拟</option></select></label>
-          <label><span>Provider</span><select v-model="$root.draft.weather.provider"><option value="open_meteo">Open-Meteo · 无需账号</option><option value="met_norway">MET Norway · 无需账号</option><option value="nws">US NWS · 美国</option><option value="bright_sky">Bright Sky · DWD</option><option value="weatherapi">WeatherAPI · 注册</option><option value="visualcrossing">Visual Crossing · 注册</option><option value="qweather">和风天气 · 注册</option><option value="weatherbit">Weatherbit · 注册</option><option value="openweather">OpenWeather · 注册</option></select></label></div>
+          <label><span>天气服务</span><select v-model="$root.draft.weather.provider"><option value="open_meteo">Open-Meteo · 无需账号</option><option value="met_norway">MET Norway · 无需账号</option><option value="nws">US NWS · 美国</option><option value="bright_sky">Bright Sky · DWD</option><option value="weatherapi">WeatherAPI · 注册</option><option value="visualcrossing">Visual Crossing · 注册</option><option value="qweather">和风天气 · 注册</option><option value="weatherbit">Weatherbit · 注册</option><option value="openweather">OpenWeather · 注册</option></select></label></div>
         <div class="location-editor"><input v-model="$root.cityQuery" placeholder="搜索城市，例如 上海" @keyup.enter="$root.geocode"><button class="soft-button" @click="$root.geocode">查找地点</button></div>
         <div v-if="$root.cityResults.length" class="city-results"><button v-for="city in $root.cityResults" @click="$root.chooseCity(city)"><strong>{{ city.name }}</strong> {{ city.admin1 }} {{ city.country }}<small>{{ city.latitude }}, {{ city.longitude }}</small></button></div>
         <div v-if="$root.currentLocation" class="current-location">当前地点：<strong>{{ $root.currentLocation.name }}</strong><span>{{ $root.currentLocation.latitude }}, {{ $root.currentLocation.longitude }}</span><button class="text-button" @click="$root.weatherPreview">预览天气</button></div>
@@ -330,10 +334,11 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'data'" class="settings-section">
         <span class="eyebrow">数据与诊断</span><h2>可备份、可恢复、可解释</h2>
+        <p class="field-hint">导出包含当前人格的计划、状态、体验和模板，不包含任何天气密钥。导入前会先预览并确认。</p>
         <div class="data-actions"><button class="soft-button" @click="$root.exportData">导出当前人格数据</button><label class="soft-button upload-button">导入备份<input type="file" accept="application/json" @change="$root.importData"></label><button class="soft-button" @click="$root.loadDiagnostics">刷新诊断</button></div>
         <pre v-if="$root.diagnostics" class="diagnostics">{{ JSON.stringify($root.diagnostics, null, 2) }}</pre>
       </section>
-      <div class="settings-save"><button class="soft-button" @click="$root.resetAllPrompts()">全部提示词恢复默认</button><button class="primary" :disabled="$root.saving" @click="$root.saveSettings">{{ $root.saving ? '正在生效…' : '保存并热生效' }}</button><span>进行中的 Run 保留启动时规则，新规则用于后续认领。</span></div>
+      <div class="settings-save"><button class="soft-button" @click="$root.resetAllPrompts()">全部提示词恢复默认</button><button class="primary" :disabled="$root.saving" @click="$root.saveSettings">{{ $root.saving ? '正在生效…' : '保存并热生效' }}</button><span>保存后立即生效；正在执行的日程仍使用启动时规则，新规则用于之后的日程。</span></div>
     </div>
   </div>`,
 }
@@ -375,7 +380,7 @@ export const DayStateEditor = {
   data() { return { form: JSON.parse(JSON.stringify(this.$root.data.day_state)) } },
   template: `
   <div class="modal-backdrop" @click.self="$root.dayStateEditor = false"><div class="modal-card">
-    <div class="modal-heading"><div><span class="eyebrow">DayState</span><h2>此刻的我</h2></div><button class="icon-button" @click="$root.dayStateEditor = false"><ui-icon name="close" :size="16" /></button></div>
+    <div class="modal-heading"><div><span class="eyebrow">当日状态</span><h2>此刻的我</h2></div><button class="icon-button" @click="$root.dayStateEditor = false"><ui-icon name="close" :size="16" /></button></div>
     <label class="full-field"><span>现在的服装</span><input v-model="form.current_appearance"></label>
     <label class="full-field"><span>现在的心情</span><input v-model="form.current_mood"></label>
     <label class="full-field"><span>现在的地点</span><input v-model="form.current_location"></label>
@@ -400,12 +405,12 @@ export const DayTypeEditor = {
   <div class="modal-backdrop" @click.self="$root.dayTypeEditor = null"><div class="modal-card">
     <div class="modal-heading"><div><span class="eyebrow">日型</span><h2>{{ entry ? '编辑日型' : '创建日型' }}</h2></div><button class="icon-button" @click="$root.dayTypeEditor = null"><ui-icon name="close" :size="16" /></button></div>
     <label class="full-field"><span>名称</span><input v-model="form.name" placeholder="考试周 / 旅行日 / 雨天宅家"></label>
-    <label class="full-field"><span>内部 ID（创建后不可改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
+    <label class="full-field"><span>日型标识（创建后不可修改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>
     <label class="full-field"><span>此日型规划提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
     <div class="form-grid" style="margin-top: 17px">
-      <label><span>每日最小项</span><input type="number" min="0" max="500" v-model.number="form.config.overrides.min_items"></label>
-      <label><span>每日最大项</span><input type="number" min="1" max="500" v-model.number="form.config.overrides.max_items"></label>
+      <label><span>每日最少安排</span><small>太少会显得空，推荐 2 到 4 项。</small><input type="number" min="0" max="500" v-model.number="form.config.overrides.min_items"></label>
+      <label><span>每日最多安排</span><small>避免日程过密，推荐 8 到 12 项。</small><input type="number" min="1" max="500" v-model.number="form.config.overrides.max_items"></label>
     </div>
     <label class="full-field"><span>此日型执行会话策略</span><select v-model="form.config.overrides.execution_pool.strategy"><option value="pure_random">完全随机</option><option value="no_immediate_repeat">避免连续重复</option><option value="shuffle_bag">一轮内不重复</option><option value="round_robin">顺序轮换</option></select></label>
     <div class="weekday-picker"><span>周重复</span><label v-for="(name, index) in ['一','二','三','四','五','六','日']"><input type="checkbox" :checked="form.rules.weekdays.includes(index)" @change="$root.toggleDayTypeWeekday(form, index)">周{{ name }}</label></div>

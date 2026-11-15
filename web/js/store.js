@@ -112,6 +112,9 @@ export const fmt = {
   interaction(value) {
     return ({ auto: '自由', must_message: '需发言', silent: '安静' })[value] || value
   },
+  runStatus(value) {
+    return ({ prepared: '已准备', queued: '已排队', running: '执行中', responded: '已回应', finalized: '已归档', skipped_probability: '概率跳过', failed: '失败', interrupted: '已中断' })[value] || value
+  },
   countdown(value, serverTime) {
     if (!value) return ''
     const seconds = Math.max(0, Math.round(value - serverTime))

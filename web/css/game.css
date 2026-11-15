@@ -146,9 +146,33 @@ body {
   .hero-hud { display:none; }
   .hero-hud b { font-size:15px; }
   .hero-hud small { display:none; }
-  .hero-side { position:absolute; left:20px; right:20px; bottom:17px; align-items:flex-end; }
+  .hero-side { position:absolute; left:20px; right:20px; bottom:84px; align-items:flex-end; }
   .hero-copy { padding-bottom:45px; }
   .pixel-runner { width:40px; height:60px; right:20px; bottom:16px; background-size:160px 60px; }
   .sidebar { border-radius:18px 18px 0 0; }
   .main-nav button.active { background:linear-gradient(180deg,var(--accent-soft),transparent); }
+}
+
+.form-grid label small, .full-field > small { color:var(--muted); font-size:10px; line-height:1.5; }
+.field-hint { max-width:68ch; }
+.review-setting { border-radius:4px 16px 4px 16px; }
+
+.today-view { display:grid !important; grid-template-columns:minmax(0,1.55fr) minmax(290px,.65fr); gap:24px; align-items:start; }
+.today-view > .hero-card { grid-column:1/-1; margin:0; min-height:min(62vh,620px); border-left:0; border-right:0; border-radius:0 !important; clip-path:polygon(0 0,100% 0,100% calc(100% - 46px),calc(100% - 46px) 100%,0 100%); padding:46px 52px; }
+.today-view > .quick-grid { grid-column:1/-1; margin:-82px 36px 0; position:relative; z-index:3; }
+.today-view > .timeline-section { grid-column:1; }
+.today-view > .changes-preview { grid-column:2; }
+.hero-person { padding:22px 26px; background:linear-gradient(90deg,rgba(8,10,20,.76),rgba(8,10,20,.2),transparent); border-left:2px solid var(--accent); }
+.hero-side { padding:0; }
+.section-heading .eyebrow { margin-bottom:4px; }
+@media (max-width:980px) {
+ .today-view { grid-template-columns:1fr; }
+ .today-view > .timeline-section, .today-view > .changes-preview { grid-column:1; }
+}
+@media (max-width:700px) {
+ .today-view { gap:16px; }
+ .today-view > .hero-card { min-height:63vh; padding:25px 20px 72px; clip-path:polygon(0 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 100%); }
+ .today-view > .quick-grid { margin:-48px 12px 0; padding:0; }
+ .hero-person { padding:16px; background:linear-gradient(90deg,rgba(8,10,20,.8),rgba(8,10,20,.24)); }
+ .hero-side { padding:0 4px; }
 }

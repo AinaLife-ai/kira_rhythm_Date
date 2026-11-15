@@ -56,5 +56,11 @@ export const themeTemplates = [
   { id: 'mint_soda', name: '薄荷 · 苏打', description: '清透海盐青与轻盈气泡', color: '#49a9b9', mode: 'light', art: 'mint', tone: 'soda' },
   { id: 'crimson_sunset', name: '真红 · 赤锋', description: '雨后晚霞与赤色都市锋芒', color: '#c7444c', mode: 'dark', art: 'crimson', tone: 'crimson' },
   { id: 'crimson_rain', name: '真红 · 雨幕', description: '深蓝雨夜中的绯红倒影', color: '#9d3f66', mode: 'dark', art: 'crimson', tone: 'rain' },
+  { id: 'lacrimosa_noir', name: '安魂曲 · 黑曜', description: '冷银黑曜与猩红信号灯', color: '#c8cbe0', mode: 'dark', art: 'lacrimosa', tone: 'noir' },
+  { id: 'lacrimosa_rose', name: '安魂曲 · 蔷薇', description: '暗夜蔷薇与甜酷红调', color: '#ff7898', mode: 'dark', art: 'lacrimosa', tone: 'rose' },
+  { id: 'mint_rain', name: '薄荷 · 雨巷', description: '蓝绿雨幕与玻璃反光', color: '#72c5d0', mode: 'dark', art: 'mint', tone: 'rainmint' },
+  { id: 'mint_peach', name: '薄荷 · 蜜桃', description: '奶油蜜桃色的轻甜都市', color: '#eaa38e', mode: 'light', art: 'mint', tone: 'peach' },
+  { id: 'crimson_night', name: '真红 · 深蓝', description: '深蓝午夜与赤色轨迹', color: '#ca5b88', mode: 'dark', art: 'crimson', tone: 'night' },
+  { id: 'crimson_ember', name: '真红 · 余烬', description: '城市余烬与琥珀晚照', color: '#e89b59', mode: 'dark', art: 'crimson', tone: 'ember' },
   { id: 'kira_mist', name: '雾紫手账', description: '柔雾纸张与安静微光', color: '#9b8cff', mode: 'dark', art: '', tone: 'mist' },
 ]
