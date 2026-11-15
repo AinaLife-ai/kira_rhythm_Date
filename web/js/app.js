@@ -122,6 +122,7 @@ const app = Vue.createApp({
     },
     petVariant() { return this.activeTheme?.character || 'tomato' },
     petSprite() { return this.assetUrl(`pets/${this.activeTheme?.character || 'tomato'}_walk.webp`) },
+    petActions() { return this.assetUrl(`pets/${this.activeTheme?.character || 'tomato'}_actions.webp`) },
     currentView() {
       const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]
@@ -237,6 +238,10 @@ const app = Vue.createApp({
       const type = conn?.effectiveType || (this.online ? '4g' : 'offline')
       this.networkLabel = this.online ? ({ 'slow-2g': '2G', '2g': '2G', '3g': '3G', '4g': '4G' })[type] || '网络' : '离线'
       this.signalBars = !this.online ? 0 : type === 'slow-2g' ? 1 : type === '2g' ? 2 : type === '3g' ? 3 : 4
+    },
+    finishBoot(delay = 1200) {
+      if (this.bootTimer) return
+      this.bootTimer = setTimeout(() => { this.booted = true }, delay)
     },
     async initDeviceStatus() {
       this.updateNetwork()
@@ -535,6 +540,7 @@ const app = Vue.createApp({
       const theme = themeTemplates.find((entry) => entry.id === themeId) || themeTemplates[0]
       document.documentElement.dataset.themeName = theme.id
       document.documentElement.dataset.theme = theme.mode || 'dark'
+      try { localStorage.setItem('krd_theme', theme.id) } catch (_) {}
       const root = document.documentElement.style
       const customBackground = this.data.background?.url
       if (customBackground || theme.art || theme.customArt) {
@@ -690,10 +696,10 @@ const app = Vue.createApp({
     async loadDiagnostics() { this.diagnostics = await get('/diagnostics') },
   },
   async mounted() {
-    this.bootTimer = setTimeout(() => { this.booted = true }, 1800)
     try {
       await ready()
       await this.refresh({ reset: true, entry: true })
+      this.finishBoot(1200)
       this.disconnect = socket(() => {
         clearTimeout(this.liveTimer)
         this.liveTimer = setTimeout(() => {
@@ -710,6 +716,7 @@ const app = Vue.createApp({
     } catch (error) {
       state.loading = false
       notify(error.message, 'error')
+      this.finishBoot(700)
     }
   },
   beforeUnmount() {

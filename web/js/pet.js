@@ -52,6 +52,7 @@ export const PetCompanion = {
     event: { type: String, default: 'quiet' },
     activity: { type: String, default: '' },
     sprite: { type: String, default: '' },
+    actions: { type: String, default: '' },
     large: { type: Boolean, default: false },
   },
   data() {
@@ -88,6 +89,16 @@ export const PetCompanion = {
   },
   computed: {
     petStyle() { return { left: this.x + '%', '--pet-lift': this.lift + 'px' } },
+    actionFrame() {
+      if (this.action === 'sleep') return 2
+      if (['read'].includes(this.action)) return 1
+      if (['phone'].includes(this.action)) return 3
+      return 0
+    },
+    currentSprite() {
+      if (['walk', 'run'].includes(this.action) || !this.actions) return this.sprite
+      return this.actions
+    },
     label() { return ACTIONS[this.action] || '发呆' },
     isUmbrella() { return this.action === 'umbrella' },
     isScarf() { return this.action === 'scarf' },
@@ -316,9 +327,7 @@ export const PetCompanion = {
     <button class="pet-hit" @click="pat" @pointerdown="startDrag" aria-label="摸摸像素伙伴">
       <span class="pet-shadow"></span>
       <span class="pet-figure">
-        <span class="pet-sprite" :style="{ backgroundImage: 'url(' + sprite + ')' }"></span>
-        <span class="pet-prop-book" v-if="isBook"><i></i><i></i></span>
-        <span class="pet-prop-phone" v-if="isPhone"><i></i></span>
+        <span class="pet-sprite" :class="'pet-frame-' + actionFrame" :style="{ backgroundImage: 'url(' + currentSprite + ')' }"></span>
         <span class="pet-prop-cup" v-if="isCup"></span>
         <span class="pet-prop-laptop" v-if="isWork"><i></i></span>
         <span class="pet-notes" v-if="isMusic"><b></b><b></b></span>

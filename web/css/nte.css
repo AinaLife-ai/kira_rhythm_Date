@@ -958,3 +958,11 @@ body { background:#08090c; }
 .timeline-console,.signal-card,.section-card,.calendar-card,.day-detail,.settings-layout { background:color-mix(in srgb,var(--panel-solid) 86%,transparent) !important; }
 .item-card,.day-cell,.run-row,.diff-card { border-color:color-mix(in srgb,var(--accent) 18%,var(--line)) !important; }
 @media (min-width:1100px) { .view-host > .nte-today { background:var(--bg) !important; } }
+.pet-sprite { background-position:0 0; }
+.pet-sprite.pet-frame-1 { background-position:-84px 0; }
+.pet-sprite.pet-frame-2 { background-position:-168px 0; }
+.pet-sprite.pet-frame-3 { background-position:-252px 0; }
+.pet-action-sleep .pet-figure { transform:none !important; animation:pet-idle-breathe 3.4s ease-in-out infinite !important; }
+.pet-action-sleep .pet-sprite { background-position:-168px 0; }
+.pet-action-read .pet-sprite { background-position:-84px 0; }
+.pet-action-phone .pet-sprite { background-position:-252px 0; }
