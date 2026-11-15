@@ -1,4 +1,4 @@
-import { fmt } from './store.js?v=1.2.2'
+import { fmt } from './store.js?v=1.2.3'
 
 const VOICE = {
   tomato: {
@@ -499,15 +499,15 @@ export const PetCompanion = {
     <button v-if="careVisible || panel" class="pet-care-toggle" @click="openPanel" :aria-expanded="panel" aria-label="打开陪伴面板"><span></span><span></span></button>
     <transition name="pet-panel">
       <div v-if="panel" class="pet-panel">
-        <div class="pet-panel-head"><span>陪伴模式 / PET</span><button @click="panel = false" aria-label="关闭">×</button></div>
+        <div class="pet-panel-head"><span>陪伴模式</span><button @click="panel = false" aria-label="关闭">×</button></div>
         <strong>{{ statusLine }}</strong>
         <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己跳一跳和打盹。</p>
         <div class="pet-schedule">
           <div class="pet-schedule-head"><span>今日节奏</span><b>{{ planDone }}/{{ planTotal }}</b></div>
           <i class="pet-progress"><b :style="{width: planProgress + '%'}"></b></i>
           <div class="pet-schedule-stats"><span>已完成 {{ planDone }}</span><span>待发生 {{ planTotal - planDone }}</span></div>
-          <div class="pet-next-card" v-if="nextItem"><span>NEXT / 下一项</span><strong>{{ nextItem.title }}</strong><div><b>{{ nextClock }}</b><small>{{ nextIn }}</small></div></div>
-          <div class="pet-next-card empty" v-else><span>NEXT / 下一项</span><strong>今天留白</strong><small>没有需要赶的时间</small></div>
+          <div class="pet-next-card" v-if="nextItem"><span>下一项</span><strong>{{ nextItem.title }}</strong><div><b>{{ nextClock }}</b><small>{{ nextIn }}</small></div></div>
+          <div class="pet-next-card empty" v-else><span>下一项</span><strong>今天留白</strong><small>没有需要赶的时间</small></div>
         </div>
         <div class="pet-buttons"><button @click="pat">摸摸</button><button @click="feed">投喂</button><button @click="giveDrink">饮品</button><button @click="talk">聊天</button><button @click="rest">休息</button></div>
       </div>

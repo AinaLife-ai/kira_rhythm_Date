@@ -48,11 +48,21 @@ class PlanService:
         overrides = (entry.get("config", {}).get("overrides", {}) if entry else {})
         return normalized(deep_merge(base, overrides))
 
-    async def resolve_day_type(self, persona_id: str, day: str) -> str:
+    async def resolve_day_types(self, persona_id: str, day: str) -> list[dict[str, Any]]:
+        """Return every active day type, ordered by effective priority.
+
+        Built-in reference day types are opt-in. Custom day types are active by
+        their rules and may coexist with the built-in reference type.
+        """
         entries = await self.store.list_day_types(persona_id)
+        config = await self.store.get_config(persona_id)
+        enabled = config.get("base_day_types", {})
         weekday = datetime.fromisoformat(day).weekday()
-        candidates = []
+        candidates: dict[str, tuple[int, dict[str, Any]]] = {}
         for entry in entries:
+            identifier = entry["id"]
+            if entry.get("builtin") and not enabled.get(identifier):
+                continue
             rules = entry.get("rules") or {}
             priority = int(rules.get("priority", 100))
             matched = False
@@ -64,14 +74,23 @@ class PlanService:
             if weekday in rules.get("weekdays", []):
                 matched = True
             if matched:
-                candidates.append((priority, entry["id"]))
-        if candidates:
-            return sorted(candidates)[0][1]
+                candidates[identifier] = (priority, entry)
         if self.calendar is not None:
-            calendar_day = await self.calendar.day(day, allow_network=False)
-            if calendar_day.get("holiday"):
-                return calendar_day["suggested_day_type"]
-        return "weekend" if weekday >= 5 else "weekday"
+            try:
+                calendar_day = await self.calendar.day(day, allow_network=False)
+                base_id = calendar_day.get("suggested_day_type") or ("weekend" if weekday >= 5 else "weekday")
+                if enabled.get(base_id) and base_id not in candidates:
+                    base_entry = next((entry for entry in entries if entry["id"] == base_id), None)
+                    if base_entry:
+                        candidates[base_id] = (int((base_entry.get("rules") or {}).get("priority", 100)), base_entry)
+            except Exception:
+                pass
+        return [{"id": identifier, "name": entry.get("name", identifier), "priority": priority, "entry": entry}
+                for identifier, (priority, entry) in sorted(candidates.items(), key=lambda item: (item[1][0], item[0]))]
+
+    async def resolve_day_type(self, persona_id: str, day: str) -> str:
+        matches = await self.resolve_day_types(persona_id, day)
+        return matches[0]["id"] if matches else ""
 
     @staticmethod
     def _assemble_plans(plan_rows: list[dict[str, Any]], block_rows: list[dict[str, Any]],

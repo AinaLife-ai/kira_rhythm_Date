@@ -57,18 +57,22 @@ def prepare_llm_payload(value: Any, tz_name: str, host_tz_name: str | None = Non
     cleaned = humanize_timestamps(value, tz_name)
     drop_keys = {"persona_id", *drop}
 
+    def empty(value: Any) -> bool:
+        # Keep false/0 because they can carry meaning (e.g. is_off_day=false).
+        return value is None or value == "" or value == [] or value == {}
+
     def walk(item: Any) -> Any:
         if isinstance(item, dict):
             result = {}
             for key, val in item.items():
-                if key in drop_keys or val is None:
+                if key in drop_keys or empty(val):
                     continue
                 if key == "timezone" and host_tz_name and val == host_tz_name:
                     continue
                 result[key] = walk(val)
             return result
         if isinstance(item, list):
-            return [walk(entry) for entry in item]
+            return [walk(entry) for entry in item if not empty(entry)]
         return item
 
     return walk(cleaned)

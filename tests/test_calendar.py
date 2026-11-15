@@ -67,4 +67,6 @@ async def test_custom_day_type_rule_beats_statutory_suggestion(runtime):
         "dates": ["2027-01-01"], "priority": 1}, "config": {}})
     resolved = await runtime.plans.resolve_day_type("persona-a", "2027-01-01")
     assert resolved == "family_day"
+    assert await runtime.plans.resolve_day_type("persona-a", "2027-01-02") == ""
+    await runtime.store.update_config("persona-a", {"base_day_types": {"holiday": True}}, 0)
     assert await runtime.plans.resolve_day_type("persona-a", "2027-01-02") == "holiday"

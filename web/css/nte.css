@@ -1005,3 +1005,32 @@ body { background:#08090c; }
 .brand-mark i { background:rgba(255,255,255,.72); }
 
 .city-results { max-height: 320px; overflow-y: auto; overscroll-behavior: contain; padding-right: 3px; }
+
+/* Template presets, base day types and structured template editor */
+.preset-toggle { display:flex; align-items:center; gap:10px; margin-top:12px; color:var(--nte-dim); font-size:9px; }
+.preset-toggle span { opacity:.7; }
+.base-day-grid { display:grid; gap:6px; margin-top:10px; }
+.base-day-row { display:grid; grid-template-columns:5px 1fr auto auto; align-items:center; gap:8px; padding:9px 10px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); }
+.base-day-row .day-type-color { width:4px; height:26px; background:var(--day-color); }
+.base-day-row span:nth-child(2) { display:flex; flex-direction:column; gap:2px; }
+.base-day-row strong { color:#fff; font-size:10px; }
+.base-day-row small { color:var(--nte-dim); font-size:7px; }
+.base-day-row input { width:auto; }
+.template-planner { margin-top:16px; border-top:1px solid rgba(255,255,255,.1); padding-top:12px; }
+.template-planner .section-heading { margin-bottom:8px; }
+.template-block { margin-top:10px; padding:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.025); }
+.template-block-head { display:flex; align-items:center; gap:8px; }
+.template-block-head input { flex:1; font-weight:700; }
+.template-item { margin-top:9px; padding:9px; border-left:2px solid var(--accent); background:rgba(0,0,0,.15); }
+.template-item-actions { display:flex; justify-content:flex-end; }
+.add-item-button { margin-top:8px; }
+.icon-picker { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.icon-choice { display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid rgba(255,255,255,.16); border-radius:7px; background:rgba(255,255,255,.04); color:#fff; }
+.icon-choice.active { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb,var(--accent) 16%,transparent); }
+.icon-choice.upload-choice { cursor:pointer; }
+.icon-choice input { display:none; }
+.template-icon-preview { width:34px; height:34px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,.2); }
+.field-label { display:block; margin-bottom:6px; color:var(--nte-dim); font-size:9px; }
+.settings-subsection { margin-top:14px; padding-top:10px; border-top:1px solid rgba(255,255,255,.1); }
+.settings-subsection h3 { color:#fff; font-size:12px; margin-bottom:7px; }
+.day-types-line { margin-top:8px; color:var(--accent); font-size:9px; letter-spacing:.02em; }

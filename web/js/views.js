@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.2'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.2'
+import { fmt } from './store.js?v=1.2.3'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.3'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -108,7 +108,7 @@ export const TodayView = {
     <section class="scene-hero">
       <div class="scene-noise"></div><div class="scene-scan"></div>
       <div class="scene-topline">
-        <span class="live-tag"><i></i> LIVE PERSONA / 当前人格 <b>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '在线' }}</b></span>
+        <span class="live-tag"><i></i> 当前人格 <b>{{ $root.data.personas?.find(p => p.id === $root.data.persona_id)?.name || '在线' }}</b></span>
         <span class="scene-coord">35.68N / 139.76E</span>
       </div>
       <span class="scene-index">01</span>
@@ -139,12 +139,12 @@ export const TodayView = {
     <aside class="mission-dock">
       <div class="dock-top"><span>MISSION CONTROL <b>/ 今日任务</b></span><strong>{{ $root.planStats.done }}<small>/{{ $root.planStats.total }}</small></strong></div>
       <div class="mission-main" v-if="$root.nextItem">
-        <div class="mission-kicker"><i></i> NEXT SIGNAL <span>下一事件</span></div>
+        <div class="mission-kicker"><i></i> 下一事件</div>
         <div class="mission-clock"><strong>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</strong><span>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.clockNow) }}</span></div>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
         <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
-        <div class="mission-queue" v-if="$root.upcomingItems.length"><span class="queue-label">LATER / 随后</span><div v-for="item in $root.upcomingItems" :key="item.id"><b>{{ $root.fmt.time(item.scheduled_at) }}</b><span>{{ item.title }}</span></div></div>
+        <div class="mission-queue" v-if="$root.upcomingItems.length"><span class="queue-label">随后</span><div v-for="item in $root.upcomingItems" :key="item.id"><b>{{ $root.fmt.time(item.scheduled_at) }}</b><span>{{ item.title }}</span></div></div>
         <div class="mission-telemetry">
           <span class="telemetry-label">SYSTEM TELEMETRY / 系统读数</span>
           <div class="telemetry-row"><span>日程密度</span><i><b :style="{width: Math.min(100, $root.planStats.total / Math.max(1, $root.data.config?.max_items || 12) * 100) + '%'}"></b></i><em>{{ Math.round(Math.min(1, $root.planStats.total / Math.max(1, $root.data.config?.max_items || 12)) * 100) }}%</em></div>
@@ -215,10 +215,10 @@ export const CalendarView = {
       </div>
       <div class="weekday-row"><span v-for="day in ['一','二','三','四','五','六','日']">周{{ day }}</span></div>
       <div class="month-grid">
-        <button v-for="cell in $root.monthCells" :key="cell.key" class="day-cell" :class="{'other-month': !cell.current, 'is-today': cell.date === $root.data.date, 'is-selected': cell.date === $root.selectedDate, 'has-plan': cell.plan, 'is-holiday': cell.holiday?.is_off_day, 'is-workday': cell.holiday && !cell.holiday.is_off_day}"
+        <button v-for="cell in $root.monthCells" :key="cell.key" class="day-cell" :class="{'other-month': !cell.current, 'is-today': cell.date === $root.data.date, 'is-selected': cell.date === $root.selectedDate, 'has-plan': cell.plan, 'is-holiday': $root.calendarFlags.holiday && cell.holiday?.is_off_day, 'is-workday': $root.calendarFlags.adjusted_workday && cell.holiday && !cell.holiday.is_off_day}"
           @click="$root.selectDate(cell.date)">
-          <span class="day-top"><span class="day-number">{{ cell.day }}</span><span v-if="cell.holiday" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span></span>
-          <span class="lunar-label" :class="{festival: cell.lunar && cell.lunar !== '初一'}">{{ cell.lunar }}</span>
+          <span class="day-top"><span class="day-number">{{ cell.day }}</span><span v-if="cell.holiday && ($root.calendarFlags.holiday || $root.calendarFlags.adjusted_workday)" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span></span>
+          <span v-if="$root.calendarCellText(cell)" class="lunar-label" :class="{festival: $root.calendarFlags.festivals && (cell.calendar?.solar_festivals?.length || cell.calendar?.lunar_festivals?.length)}">{{ $root.calendarCellText(cell) }}</span>
           <small v-if="cell.plan" class="plan-count">{{ cell.count }} 项</small>
         </button>
       </div>
@@ -227,7 +227,8 @@ export const CalendarView = {
     <section class="day-detail glass">
       <div class="section-heading"><div><span class="eyebrow">{{ $root.selectedDate }}</span><h2>{{ $root.selectedPlan?.title || '未安排的一天' }}</h2></div>
         <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div>
-      <div v-if="$root.selectedCalendar" class="calendar-facts"><strong>{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="$root.selectedCalendar.holiday">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-for="name in $root.selectedCalendar.solar_festivals" :key="name">{{ name }}</span><span v-for="name in $root.selectedCalendar.lunar_festivals" :key="name">{{ name }}</span><small>{{ $root.selectedCalendar.data_status === 'fresh' ? '法定假期已在线更新' : '法定假期本地回退' }}</small></div>
+      <div v-if="$root.selectedCalendar" class="calendar-facts"><strong v-if="$root.calendarFlags.lunar_date">{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.calendarFlags.solar_terms && $root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="($root.calendarFlags.holiday && $root.selectedCalendar.holiday?.is_off_day) || ($root.calendarFlags.adjusted_workday && $root.selectedCalendar.holiday && !$root.selectedCalendar.holiday.is_off_day)">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.solar_festivals" :key="'s-'+name">{{ name }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.lunar_festivals" :key="'l-'+name">{{ name }}</span><small>{{ $root.selectedCalendar.data_status === 'fresh' ? '法定假期已在线更新' : '法定假期本地回退' }}</small></div>
+      <p v-if="$root.selectedDayTypes.length" class="day-types-line">日型：{{ $root.selectedDayTypes.join(' / ') }}</p>
       <p v-if="$root.selectedPlan" class="plan-overview">{{ $root.selectedPlan.overview }}</p>
       <timeline :plan="$root.selectedPlan" :server-time="$root.data.server_time"
         @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
@@ -266,20 +267,39 @@ export const TemplatesView = {
   template: `
   <div class="view-stack">
     <section class="section-card glass">
-      <div class="section-heading"><div><span class="eyebrow">生活模板</span><h2>从一种节奏开始，再变成自己的</h2></div><div class="template-actions"><button class="soft-button" @click="$root.newTemplate"><ui-icon name="plus" :size="14" /> 新建模板</button><button class="soft-button" @click="$root.saveCurrentTemplate">从当前计划新建</button></div></div>
-      <div class="template-grid">
-        <article v-for="template in $root.allPlanTemplates" :key="template.id" class="template-card" :class="'tone-' + (template.tone || 'violet')">
-          <span class="template-icon"><ui-icon :name="template.icon" :size="21" /></span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
-          <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用到 {{ $root.selectedDate }}</button><button class="text-button" @click="$root.editTemplate(template)">编辑</button><button class="text-button" @click="$root.previewTemplate(template)">预览结构</button><button v-if="template.override || template.custom" class="text-button muted" @click="$root.deleteTemplate(template)">{{ template.override ? '恢复默认' : '删除我的模板' }}</button></div>
+      <div class="section-heading"><div><span class="eyebrow">我的模板</span><h2>把一种生活保存成可复用的骨架</h2></div><div class="template-actions"><button class="soft-button" @click="$root.newTemplate"><ui-icon name="plus" :size="14" /> 新建模板</button><button class="soft-button" @click="$root.saveCurrentTemplate">从当前计划新建</button></div></div>
+      <p class="field-hint">应用模板会把固定分组和小项直接写入选中的日期；如果想让 bot 按模板重新规划，请用“按模板规划”。</p>
+      <div v-if="$root.customPlanTemplates.length" class="template-grid">
+        <article v-for="template in $root.customPlanTemplates" :key="template.id" class="template-card" :class="'tone-' + (template.tone || 'violet')">
+          <span class="template-icon"><img v-if="template.icon_url" :src="template.icon_url" alt=""><ui-icon v-else :name="template.icon || 'sparkle'" :size="21" /></span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
+          <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用骨架到 {{ $root.selectedDate }}</button><button class="text-button" @click="$root.planWithTemplate(template)">按模板规划</button><button class="text-button" @click="$root.editTemplate(template)">编辑</button><button class="text-button" @click="$root.previewTemplate(template)">预览</button><button v-if="template.override || template.custom" class="text-button muted" @click="$root.deleteTemplate(template)">删除我的模板</button></div>
+        </article>
+      </div>
+      <div v-else class="empty-inline">还没有自己的模板。可以先新建，或从当前计划保存一份。</div>
+      <div class="preset-toggle"><button class="text-button" @click="$root.showPresetTemplates = !$root.showPresetTemplates">{{ $root.showPresetTemplates ? '收起预设模板' : '展开预设模板（参考）' }} · {{ $root.presetPlanTemplates.length }}</button><span>预设默认折叠，不会自动应用。</span></div>
+      <div v-if="$root.showPresetTemplates" class="template-grid preset-grid">
+        <article v-for="template in $root.presetPlanTemplates" :key="template.id" class="template-card" :class="'tone-' + (template.tone || 'violet')">
+          <span class="template-icon"><img v-if="template.icon_url" :src="template.icon_url" alt=""><ui-icon v-else :name="template.icon || 'sparkle'" :size="21" /></span><h3>{{ template.name }}</h3><p>{{ template.description }}</p>
+          <div class="template-actions"><button class="soft-button" @click="$root.applyTemplate(template)">应用骨架</button><button class="text-button" @click="$root.planWithTemplate(template)">按模板规划</button><button class="text-button" @click="$root.editTemplate(template)">编辑</button><button class="text-button" @click="$root.previewTemplate(template)">预览</button><button v-if="template.override" class="text-button muted" @click="$root.deleteTemplate(template)">恢复默认</button></div>
         </article>
       </div>
     </section>
     <section class="section-card glass">
-      <div class="section-heading"><div><span class="eyebrow">日型</span><h2>每一天都可以有自己的名字</h2></div><button class="soft-button" @click="$root.newDayType"><ui-icon name="plus" :size="14" /> 自定义日型</button></div>
-      <div class="day-type-grid"><article v-for="entry in $root.data.day_types" class="day-type-card" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
+      <div class="section-heading"><div><span class="eyebrow">我的日型</span><h2>给日子加上属于你的名字</h2></div><button class="soft-button" @click="$root.newDayType"><ui-icon name="plus" :size="14" /> 自定义日型</button></div>
+      <p class="field-hint">日型可以多个同时生效；名称和提示词按优先级拼接，日历事实不会被日型覆盖。</p>
+      <div class="day-type-grid"><article v-for="entry in $root.customDayTypes" class="day-type-card" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
         <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ entry.builtin ? '内置日型' : '自定义日型' }}</small>
         <button class="text-button" @click="$root.editDayType(entry)">编辑</button><button v-if="!entry.builtin" class="text-button muted" @click="$root.deleteDayType(entry)">删除</button>
       </article></div>
+      <div v-if="!$root.customDayTypes.length" class="empty-inline">还没有自定义日型。比如可以创建“发薪日”“祈祷日”“考试周”。</div>
+    </section>
+    <section class="section-card glass">
+      <div class="section-heading"><div><span class="eyebrow">基础日型参考</span><h2>内置模板，默认不启用</h2></div></div>
+      <p class="field-hint">这些是内置参考模板，默认不开启以不额外发送提示词引导，它们的日子本身会被作为日历显示给 bot。只有这些模板正好符合你认为的 bot 的生活节律，并希望定义其提示词等时才打开。关闭不会影响日历事实，也不影响自定义日型。</p>
+      <div class="base-day-grid"><label v-for="entry in $root.baseDayTypes" :key="entry.id" class="base-day-row" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
+        <span class="day-type-color"></span><span><strong>{{ entry.name }}</strong><small>默认关闭 · {{ entry.id === 'weekday' ? '普通工作日' : entry.id === 'weekend' ? '普通周末' : entry.id === 'holiday' ? '法定放假' : '调休补班' }}</small></span>
+        <input type="checkbox" :checked="$root.data.config.base_day_types?.[entry.id] === true" @change="$root.toggleBaseDayType(entry.id, $event.target.checked)"><button class="text-button" @click="$root.editDayType(entry)">编辑</button>
+      </label></div>
     </section>
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">外观与头像</span><h2>让界面也拥有生活感</h2></div></div>
@@ -297,21 +317,85 @@ export const TemplateEditor = {
   props: ['template'],
   data() {
     const source = this.template ? JSON.parse(JSON.stringify(this.template)) : {
-      name: '', description: '', prompt: '', plan: { title: '', overview: '', planned_appearance: '', planned_mood: '', blocks: [] },
+      name: '', description: '', icon: 'sparkle', plan: { title: '', overview: '', planned_appearance: '', planned_mood: '', blocks: [] },
     }
-    source.prompt ||= ''
     source.plan ||= { title: '', overview: '', planned_appearance: '', planned_mood: '', blocks: [] }
-    source._plan = JSON.stringify(source.plan, null, 2)
-    return { form: source }
+    source.plan.blocks ||= []
+    source.planning_prompt ||= source.prompt || ''
+    source.execution_prompt ||= ''
+    source.icon ||= 'sparkle'
+    for (const block of source.plan.blocks) {
+      block.items ||= []
+      for (const item of block.items) {
+        item.schedule ||= { type: 'exact', at: '09:00' }
+        item.schedule.type ||= 'exact'
+        item.interaction ||= 'auto'
+        item.target ||= ''
+        item.execution_probability ??= 1
+        item.category ||= ''
+      }
+    }
+    return {
+      form: source,
+      icons: ['home', 'calendar', 'cloud', 'moon', 'flower', 'sparkle', 'clock', 'pin', 'heart'],
+    }
+  },
+  methods: {
+    addBlock() {
+      this.form.plan.blocks.push({ title: '生活片段', items: [] })
+    },
+    removeBlock(index) {
+      this.form.plan.blocks.splice(index, 1)
+    },
+    addItem(block) {
+      block.items ||= []
+      block.items.push({ title: '新的小项', intent: '', instruction: '', schedule: { type: 'exact', at: '09:00' }, interaction: 'auto', target: '', execution_probability: 1, category: '' })
+    },
+    removeItem(block, index) {
+      block.items.splice(index, 1)
+    },
+    async uploadIcon(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      try {
+        const asset = await this.$root.uploadTemplateIcon(file)
+        this.form.icon_url = asset.url
+        this.form.icon_asset_id = asset.id
+        this.form.icon = ''
+        this.$root.notify('模板图标已上传')
+      } catch (error) { this.$root.notify(error.message, 'error') } finally { event.target.value = '' }
+    },
   },
   template: `
   <div class="modal-backdrop" @click.self="$root.closeTemplateEditor"><div class="modal-card large">
     <div class="modal-heading"><div><span class="eyebrow">生活模板</span><h2>{{ form.override || form.builtin ? '编辑内置模板' : form.custom ? '编辑我的模板' : '新建模板' }}</h2></div><button class="icon-button" @click="$root.closeTemplateEditor"><ui-icon name="close" :size="16" /></button></div>
     <div class="form-grid">
-      <label class="wide"><span>模板名称</span><input v-model="form.name" placeholder="例如：考试周 / 雨天宅家"></label>
-      <label class="wide"><span>模板说明</span><textarea rows="2" v-model="form.description"></textarea></label>
-      <label class="wide"><span>模板引导词（应用时写入每个小项的执行 instruction）</span><textarea rows="4" v-model="form.prompt" placeholder="例如：保持松散，不把每一件事变成任务汇报；先观察天气和身体状态再行动。"></textarea><small class="field-hint">这会成为该模板所有小项的执行引导；小项自身 instruction 仍会保留。</small></label>
-      <label class="wide"><span>计划结构 JSON</span><textarea class="template-plan-editor" rows="18" v-model="form._plan" spellcheck="false"></textarea><small class="field-hint">可编辑 title、overview、blocks，以及每个 item 的 title、intent、instruction、schedule、interaction；保存时会校验。</small></label>
+      <label class="wide"><span>模板名称</span><input v-model="form.name" placeholder="例如：从容工作日 / 发薪日 / 雨天宅家"></label>
+      <label class="wide"><span>模板说明</span><textarea rows="2" v-model="form.description" placeholder="一句话说明这个模板适合什么样的日子。"></textarea></label>
+      <div class="wide"><span class="field-label">模板图标</span><div class="icon-picker"><button v-for="icon in icons" :key="icon" class="icon-choice" :class="{active: form.icon === icon && !form.icon_url}" @click="form.icon = icon; form.icon_url = ''; form.icon_asset_id = ''"><ui-icon :name="icon" :size="20" /></button><label class="icon-choice upload-choice" title="上传自定义图标"><ui-icon name="upload" :size="18" /><input type="file" accept="image/png,image/jpeg,image/webp" @change="uploadIcon"></label><img v-if="form.icon_url" :src="form.icon_url" class="template-icon-preview" alt=""></div></div>
+      <label class="wide"><span>规划引导词</span><textarea rows="3" v-model="form.planning_prompt" placeholder="希望 bot 在按此模板规划时记住什么？例如：先看天气和身体状态，不要排满。"></textarea><small class="field-hint">用于“按模板规划”；直接应用骨架时不会重新生成计划。</small></label>
+      <label class="wide"><span>执行引导词</span><textarea rows="3" v-model="form.execution_prompt" placeholder="希望每个小项执行时遵循什么？例如：保持松弛，不要机械汇报。"></textarea><small class="field-hint">应用骨架时会附加到小项执行提示词；小项自己的说明仍保留。</small></label>
+    </div>
+    <div class="template-planner">
+      <div class="section-heading"><div><span class="eyebrow">计划骨架</span><h3>按天分组，小项放在组里</h3></div><button class="soft-button" @click="addBlock"><ui-icon name="plus" :size="14" /> 添加分组</button></div>
+      <div v-for="(block, blockIndex) in form.plan.blocks" :key="blockIndex" class="template-block">
+        <div class="template-block-head"><input v-model="block.title" placeholder="分组名称，例如：上午 / 傍晚"><button class="text-button muted" @click="removeBlock(blockIndex)">删除分组</button></div>
+        <div v-for="(item, itemIndex) in block.items" :key="itemIndex" class="template-item">
+          <div class="form-grid">
+            <label class="wide"><span>小项标题</span><input v-model="item.title" placeholder="例如：开始工作"></label>
+            <label><span>为什么安排</span><input v-model="item.intent" placeholder="例如：进入节奏"></label>
+            <label><span>时间模式</span><select v-model="item.schedule.type"><option value="exact">精确时间</option><option value="window">随机时间窗</option></select></label>
+            <label v-if="item.schedule.type === 'exact'"><span>执行时间</span><input type="time" step="1" v-model="item.schedule.at"></label>
+            <template v-else><label><span>窗口开始</span><input type="time" step="1" v-model="item.schedule.start"></label><label><span>窗口结束</span><input type="time" step="1" v-model="item.schedule.end"></label></template>
+            <label><span>互动方式</span><select v-model="item.interaction"><option value="auto">自由决定</option><option value="must_message">需要发言</option><option value="silent">安静经历</option></select></label>
+            <label><span>目标会话</span><select v-model="item.target"><option value="">执行池自动选择</option><option v-for="session in $root.data.sessions" :value="session.sid">{{ session.title }} · {{ session.sid }}</option></select></label>
+            <label class="wide"><span>执行提示</span><textarea rows="2" v-model="item.instruction" placeholder="小项执行时真正要做什么。"></textarea></label>
+          </div>
+          <div class="template-item-actions"><button class="text-button muted" @click="removeItem(block, itemIndex)">删除小项</button></div>
+        </div>
+        <button class="soft-button add-item-button" @click="addItem(block)"><ui-icon name="plus" :size="13" /> 添加小项</button>
+      </div>
+      <div v-if="!form.plan.blocks.length" class="empty-inline">还没有分组。先添加一个分组，再在组里添加小项。</div>
     </div>
     <div class="modal-actions"><button v-if="form.override || form.custom" class="text-button muted" @click="$root.deleteTemplate(form)">恢复默认</button><button class="soft-button" @click="$root.closeTemplateEditor">取消</button><button class="primary" @click="$root.saveTemplate(form)">保存模板</button></div>
   </div></div>`,
@@ -320,7 +404,7 @@ export const TemplateEditor = {
 export const SettingsView = {
   template: `
   <div class="settings-layout glass" v-if="$root.draft">
-    <aside class="settings-tabs"><button v-for="tab in [['general','规划与数量'],['time','时间与夜间'],['sessions','会话权限'],['weather','天气与地点'],['data','数据与诊断']]" :class="{active: $root.settingsTab === tab[0]}" @click="$root.selectSettingsTab(tab[0])">{{ tab[1] }}</button></aside>
+    <aside class="settings-tabs"><button v-for="tab in [['general','规划与数量'],['time','时间与夜间'],['calendar','日历信息'],['sessions','会话权限'],['weather','天气与地点'],['data','数据与诊断']]" :class="{active: $root.settingsTab === tab[0]}" @click="$root.selectSettingsTab(tab[0])">{{ tab[1] }}</button></aside>
     <div class="settings-content">
       <section v-if="$root.settingsTab === 'general'" class="settings-section">
         <span class="eyebrow">规划与数量</span><h2>自主，但有清晰边界</h2>
@@ -354,7 +438,7 @@ export const SettingsView = {
           <div class="section-heading"><div><h3>{{ group[1] }}</h3><p>{{ group[2] }}</p></div><button class="soft-button" @click="$root.addWindow(group[0])"><ui-icon name="plus" :size="14" /> 添加</button></div>
           <div v-for="(window, index) in $root.draft[group[0]]" class="window-row">
             <input type="time" step="1" v-model="window.start"><span>至</span><input type="time" step="1" v-model="window.end">
-            <template v-if="group[0] === 'required_coverage_windows'"><input type="number" min="0" max="100" v-model.number="window.min_items" title="最小项数"><input type="number" min="0" max="100" v-model.number="window.max_items" title="最大项数"><input placeholder="分类（可选）" v-model="window.category"></template>
+            <template v-if="group[0] === 'required_coverage_windows'"><input type="number" min="0" max="100" v-model.number="window.min_items" title="最小项数"><input type="number" min="0" max="100" v-model.number="window.max_items" title="最大项数"><input placeholder="分类（可选，例如阅读）" v-model="window.category"></template>
             <button class="icon-button danger" @click="$root.draft[group[0]].splice(index, 1)"><ui-icon name="close" :size="14" /></button>
           </div>
         </div>
@@ -365,6 +449,23 @@ export const SettingsView = {
           <div class="form-grid"><label><span>检查间隔（秒）</span><input type="number" min="3600" max="604800" step="1" v-model.number="$root.draft.planning_review.interval_seconds"></label><label><span>触发前最小余量（秒）</span><input type="number" min="300" max="14400" step="1" v-model.number="$root.draft.planning_review.min_lead_seconds"></label></div>
           <label class="full-field"><span class="prompt-title">检查提示词<button class="text-button" @click="$root.resetPrompt('review')">恢复默认</button></span><textarea rows="5" v-model="$root.draft.planning_review.prompt"></textarea></label>
         </div>
+      </section>
+      <section v-if="$root.settingsTab === 'calendar'" class="settings-section">
+        <span class="eyebrow">日历信息</span><h2>哪些日期信息值得让 bot 知道</h2>
+        <p class="field-hint">这里分成两组：发送给 bot 只影响模型上下文；前端显示只影响你自己的日历。普通农历初几不会发送给 bot，但可以在前端保留。</p>
+        <div class="settings-subsection"><h3>发送给 bot</h3><div class="switch-grid">
+          <label class="switch-row"><span>法定假期名称</span><input type="checkbox" v-model="$root.draft.calendar_context.holiday"></label>
+          <label class="switch-row"><span>调休/补班（含名称）</span><input type="checkbox" v-model="$root.draft.calendar_context.adjusted_workday"></label>
+          <label class="switch-row"><span>节日（含不放假）</span><input type="checkbox" v-model="$root.draft.calendar_context.festivals"></label>
+          <label class="switch-row"><span>节气</span><input type="checkbox" v-model="$root.draft.calendar_context.solar_terms"></label>
+        </div></div>
+        <div class="settings-subsection"><h3>前端日历显示</h3><div class="switch-grid">
+          <label class="switch-row"><span>法定假期</span><input type="checkbox" v-model="$root.draft.calendar_display.holiday"></label>
+          <label class="switch-row"><span>调休/补班</span><input type="checkbox" v-model="$root.draft.calendar_display.adjusted_workday"></label>
+          <label class="switch-row"><span>节日</span><input type="checkbox" v-model="$root.draft.calendar_display.festivals"></label>
+          <label class="switch-row"><span>节气</span><input type="checkbox" v-model="$root.draft.calendar_display.solar_terms"></label>
+          <label class="switch-row"><span>普通农历日期</span><input type="checkbox" v-model="$root.draft.calendar_display.lunar_date"></label>
+        </div></div>
       </section>
       <section v-if="$root.settingsTab === 'sessions'" class="settings-section">
         <span class="eyebrow">会话权限</span><h2>允许生活在哪些地方发生</h2>
@@ -460,7 +561,7 @@ export const ItemEditor = {
         <label><span>窗口子模式</span><select v-model="schedule.window_mode"><option value="single_random">随机一次</option><option value="interval_random">随机间隔</option></select></label></template>
         <template v-if="schedule.window_mode === 'interval_random'"><label><span>最小间隔（秒）</span><input type="number" min="1" step="1" v-model.number="intervalMin"></label><label><span>最大间隔（秒）</span><input type="number" min="1" step="1" v-model.number="intervalMax"></label></template>
       <label><span>执行概率</span><input type="number" min="0" max="1" step="0.05" v-model.number="form.execution_probability"></label>
-      <label><span>分类</span><input v-model="form.category" placeholder="dream / reading…"></label>
+      <label><span>分类</span><input v-model="form.category" placeholder="例如：阅读、运动"></label>
       <label class="wide"><span>目标会话（留空使用执行池）</span><select v-model="form.target"><option value="">执行会话池自动选择</option><option v-for="session in $root.data.sessions" :value="session.sid">{{ session.title }} · {{ session.sid }}</option></select></label>
     </div>
     <div class="modal-actions"><button class="soft-button" @click="$root.closeEditor">取消</button><button class="primary" @click="$root.saveItem(form)">保存并校验</button></div>
@@ -502,7 +603,7 @@ export const DayTypeEditor = {
   <div class="modal-backdrop" @click.self="$root.dayTypeEditor = null"><div class="modal-card">
     <div class="modal-heading"><div><span class="eyebrow">日型</span><h2>{{ entry ? '编辑日型' : '创建日型' }}</h2></div><button class="icon-button" @click="$root.dayTypeEditor = null"><ui-icon name="close" :size="16" /></button></div>
     <label class="full-field"><span>名称</span><input v-model="form.name" placeholder="考试周 / 旅行日 / 雨天宅家"></label>
-    <label class="full-field"><span>日型标识（创建后不可修改）</span><input v-model="form.id" :disabled="!!entry" placeholder="exam_week"></label>
+    <label class="full-field"><span>日型标识（可选，创建后不可修改）</span><input v-model="form.id" :disabled="!!entry" placeholder="留空自动生成，例如 exam_week"><small class="field-hint">仅用于数据库和链接，bot 不会读取；留空会自动生成。只能用英文、数字、下划线、短横线。</small></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>
     <label class="full-field"><span>此日型规划提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
     <label class="full-field"><span>此日型执行提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.execution_prompt"></textarea></label>
@@ -514,7 +615,7 @@ export const DayTypeEditor = {
     <div class="weekday-picker"><span>周重复</span><label v-for="(name, index) in ['一','二','三','四','五','六','日']"><input type="checkbox" :checked="form.rules.weekdays.includes(index)" @change="$root.toggleDayTypeWeekday(form, index)">周{{ name }}</label></div>
     <label class="full-field"><span>指定日期（逗号分隔）</span><textarea rows="2" v-model="form._dates" placeholder="2026-11-20, 2026-12-01"></textarea></label>
     <label class="full-field"><span>日期范围（每项 start~end，逗号或换行分隔）</span><textarea rows="2" v-model="form._ranges" placeholder="2026-02-01~2026-02-07, 2026-10-01~2026-10-07"></textarea></label>
-    <label class="full-field"><span>规则优先级（数字越小越优先）</span><input type="number" v-model.number="form.rules.priority"></label>
+    <label class="full-field"><span>规则优先级（数字越小越优先）</span><input type="number" v-model.number="form.rules.priority"><small class="field-hint">精确日期比日期范围优先，日期范围比周重复优先；同一天多个日型会按这里的顺序拼接提示词。</small></label>
     <div class="modal-actions"><button class="soft-button" @click="$root.dayTypeEditor = null">取消</button><button class="primary" @click="$root.saveDayType(form)">保存日型</button></div>
   </div></div>`,
 }

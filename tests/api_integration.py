@@ -89,10 +89,13 @@ def run(framework: Path, plugin_root: Path):
             run = await client.post(f"{base}/items/{item_id}/run")
             assert run.status_code == 400 and run.json()["detail"]["code"] == "dispatch_failed"
             template = await client.post(f"{base}/templates", json={
-                "name": "API 模板", "prompt": "保持从容", "plan": {"title": "模板", "blocks": []},
+                "name": "API 模板", "prompt": "保持从容", "planning_prompt": "按模板规划",
+                "icon": "moon", "plan": {"title": "模板", "blocks": []},
             })
             assert template.status_code == 200, template.text
             assert template.json()["prompt"] == "保持从容"
+            assert template.json()["planning_prompt"] == "按模板规划"
+            assert template.json()["icon"] == "moon"
             templates = await client.get(f"{base}/templates")
             assert templates.status_code == 200 and any(entry["id"] == template.json()["id"] for entry in templates.json())
             day_types = await client.get(f"{base}/day-types")

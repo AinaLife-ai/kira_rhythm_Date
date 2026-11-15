@@ -7,14 +7,14 @@
   <title>生活节律 · 随身生活界面</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http%3A//www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2718%27 fill=%27%23ff3f6e%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2718%27 fill=%27%230a0d12%27/%3E%3Cpath d=%27M24 29a8 8 0 0 1 16 0c0 4-3 5-5 7-1 1-1 2-1 3m0 6v1%27 stroke=%27%23fff%27 stroke-width=%275%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E">
   <script>try{const savedTheme=localStorage.getItem('krd_theme');if(savedTheme)document.documentElement.dataset.themeName=savedTheme;}catch(_){}</script>
-  <link rel="stylesheet" href="css/base.css?v=1.2.2">
-  <link rel="stylesheet" href="css/layout.css?v=1.2.2">
-  <link rel="stylesheet" href="css/components.css?v=1.2.2">
-  <link rel="stylesheet" href="css/themes.css?v=1.2.2">
-  <link rel="stylesheet" href="css/effects.css?v=1.2.2">
-  <link rel="stylesheet" href="css/responsive.css?v=1.2.2">
-  <link rel="stylesheet" href="css/game.css?v=1.2.2">
-  <link rel="stylesheet" href="css/nte.css?v=1.2.2">
+  <link rel="stylesheet" href="css/base.css?v=1.2.3">
+  <link rel="stylesheet" href="css/layout.css?v=1.2.3">
+  <link rel="stylesheet" href="css/components.css?v=1.2.3">
+  <link rel="stylesheet" href="css/themes.css?v=1.2.3">
+  <link rel="stylesheet" href="css/effects.css?v=1.2.3">
+  <link rel="stylesheet" href="css/responsive.css?v=1.2.3">
+  <link rel="stylesheet" href="css/game.css?v=1.2.3">
+  <link rel="stylesheet" href="css/nte.css?v=1.2.3">
 </head>
 <body>
   <div id="app" v-cloak>
@@ -27,18 +27,18 @@
     <transition name="boot-fade">
       <div v-if="!booted" class="boot-screen" aria-hidden="true">
         <div class="boot-grid"></div>
-        <div class="boot-glitch">KRD</div>
+        <div class="boot-glitch">生活</div>
         <div class="boot-mark"><span class="rd-mark">RD</span><i></i></div>
         <div class="boot-word"><strong>生活节律</strong><small>MOBILE LIFE ARCHIVE</small></div>
         <div class="boot-line"><i></i></div>
-        <div class="boot-status"><span>STARTING PERSONAL LIFE OS</span><b>1.2.2</b></div>
+        <div class="boot-status"><span>正在开启生活界面</span><b>1.2.3</b></div>
       </div>
     </transition>
 
     <div class="app-shell" v-if="data.ready">
       <header class="topbar">
         <div class="statusbar">
-          <span class="status-carrier">KRD</span>
+          <span class="status-carrier">生活</span>
           <span class="status-time">{{ localClock }}</span>
           <span class="dynamic-island"></span>
           <span class="status-icons"><span class="status-net">{{ networkLabel }}</span><span class="cell-bars" :class="'bars-' + networkSignal"><i></i><i></i><i></i><i></i></span><span class="wifi"></span><span class="battery" :class="{ charging: batteryCharging }" :title="batteryCharging ? '正在充电' : '电池'"><i :style="{ width: (batteryLevel == null ? 0 : batteryLevel) + '%' }"></i><b></b></span><span class="battery-text">{{ batteryText }}</span></span>
@@ -77,9 +77,9 @@
           </button>
         </nav>
         <div class="sidebar-foot">
-          <div class="live-status"><span :class="{online: data.scheduler?.running}"></span><div><strong>{{ data.scheduler?.running ? '运行中' : '已暂停' }}</strong><small>{{ data.scheduler?.running ? 'LIVE' : 'STANDBY' }}</small></div></div>
+          <div class="live-status"><span :class="{online: data.scheduler?.running}"></span><div><strong>{{ data.scheduler?.running ? '运行中' : '已暂停' }}</strong><small>{{ data.scheduler?.running ? '在线' : '待机' }}</small></div></div>
           <button class="quick-plan" @click="runPlanning"><ui-icon name="plus" :size="15"></ui-icon> <span>规划</span></button>
-          <div class="build-tag">1.2.2</div>
+          <div class="build-tag">1.2.3</div>
         </div>
         <span class="phone-home-indicator" aria-hidden="true"></span>
       </aside>
@@ -98,7 +98,7 @@
     <div class="toast-stack" aria-live="polite"><div v-for="notice in state.notices" :key="notice.id" class="toast" :class="'toast-' + notice.type"><ui-icon :name="notice.type === 'error' ? 'alert' : 'check'" :size="16"></ui-icon>{{ notice.text }}</div></div>
   </div>
   <script src="/plugin-bridge.js"></script>
-  <script src="vendor/vue.global.prod.js?v=1.2.2"></script>
-  <script type="module" src="js/app.js?v=1.2.2"></script>
+  <script src="vendor/vue.global.prod.js?v=1.2.3"></script>
+  <script type="module" src="js/app.js?v=1.2.3"></script>
 </body>
 </html>

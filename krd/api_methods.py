@@ -285,7 +285,11 @@ class ApiMixin:
             entry = {"id": payload.get("id") or new_id("tpl"), "name": name,
                      "description": str(payload.get("description", ""))[:500],
                      "prompt": str(payload.get("prompt", ""))[:50000],
+                     "planning_prompt": str(payload.get("planning_prompt", ""))[:50000],
                      "execution_prompt": str(payload.get("execution_prompt", ""))[:50000],
+                     "icon": str(payload.get("icon", "sparkle"))[:64],
+                     "icon_url": str(payload.get("icon_url", ""))[:2000],
+                     "icon_asset_id": str(payload.get("icon_asset_id", ""))[:128],
                      "plan": plan, "custom": True, "created_at": now()}
             templates = [item for item in templates if item["id"] != entry["id"]]
             templates.append(entry)

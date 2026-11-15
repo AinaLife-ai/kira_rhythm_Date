@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.2'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.2'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.2'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.2'
-import { PetCompanion } from './pet.js?v=1.2.2'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.3'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.3'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.3'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.3'
+import { PetCompanion } from './pet.js?v=1.2.3'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.2'
+const ASSET_VERSION = '1.2.3'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -56,6 +56,7 @@ const app = Vue.createApp({
       weatherCredentialDirty: {},
       weatherContactDraft: '',
       weatherContactDirty: false,
+      showPresetTemplates: false,
       clockNow: Date.now() / 1000,
       randomThemeId: themeTemplates.filter((entry) => !entry.random)[Math.floor(Math.random() * themeTemplates.filter((entry) => !entry.random).length)].id,
       clockTimer: null,
@@ -176,6 +177,15 @@ const app = Vue.createApp({
       const extras = this.customTemplates.filter((template) => !this.planTemplates.some((base) => base.id === template.id)).map((template) => ({ ...template, custom: true }))
       return [...builtins, ...extras]
     },
+    presetPlanTemplates() { return this.allPlanTemplates.filter((template) => template.builtin) },
+    customPlanTemplates() { return this.allPlanTemplates.filter((template) => !template.builtin) },
+    baseDayTypes() { return (this.data.day_types || []).filter((entry) => entry.builtin) },
+    calendarFlags() {
+      return { holiday: true, adjusted_workday: true, festivals: true, solar_terms: true, lunar_date: true,
+               ...(this.data.config?.calendar_display || {}) }
+    },
+    selectedDayTypes() { return this.activeDayTypeNames(this.selectedDate) },
+    customDayTypes() { return (this.data.day_types || []).filter((entry) => !entry.builtin) },
     heroStyle() {
       const banner = this.data.banner?.url
       return banner ? { backgroundImage: `linear-gradient(90deg, var(--panel-solid) 0%, transparent 100%), url("${banner}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
@@ -273,6 +283,7 @@ const app = Vue.createApp({
     eventState: { immediate: true, handler(value) { document.documentElement.dataset.event = value } },
   },
   methods: {
+    notify(text, type = 'success') { notify(text, type) },
     updateNetwork() {
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
       this.online = navigator.onLine
@@ -529,6 +540,50 @@ const app = Vue.createApp({
     },
     newTemplate() { state.templateEditor = { template: null } },
     editTemplate(template) { state.templateEditor = { template } },
+    activeDayTypeNames(date) {
+      if (!date || !this.data.day_types) return []
+      const config = this.data.config || {}
+      const selectedCalendar = this.selectedCalendar || {}
+      const baseId = selectedCalendar.suggested_day_type || (() => {
+        const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+        return weekday >= 5 ? 'weekend' : 'weekday'
+      })()
+      const entries = this.data.day_types
+      const candidates = []
+      for (const entry of entries) {
+        const rules = entry.rules || {}
+        const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+        let priority = Number.isInteger(rules.priority) ? rules.priority : 100
+        let matched = false
+        if ((rules.dates || []).includes(date)) { matched = true; priority -= 1000 }
+        if ((rules.date_ranges || []).some((range) => range.start && range.end && range.start <= date && date <= range.end)) { matched = true; priority -= 500 }
+        if ((rules.weekdays || []).includes(weekday)) matched = true
+        if (entry.builtin && config.base_day_types?.[entry.id] !== true) matched = false
+        if (matched) candidates.push({ name: entry.name, priority, id: entry.id })
+      }
+      if (config.base_day_types?.[baseId] === true && !candidates.some((entry) => entry.id === baseId)) {
+        const base = entries.find((entry) => entry.id === baseId)
+        if (base) candidates.push({ name: base.name, priority: Number((base.rules || {}).priority || 100), id: base.id })
+      }
+      return candidates.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id)).map((entry) => entry.name)
+    },
+    calendarCellText(cell) {
+      const flags = this.calendarFlags
+      const calendar = cell.calendar || {}
+      const festivals = [...(calendar.solar_festivals || []), ...(calendar.lunar_festivals || [])]
+      if (flags.festivals && festivals.length) return festivals[0]
+      if (flags.solar_terms && calendar.solar_term) return calendar.solar_term
+      if (flags.lunar_date && calendar.lunar?.day) return calendar.lunar.day
+      return ''
+    },
+    async toggleBaseDayType(identifier, enabled) {
+      try {
+        const map = { ...(this.data.config.base_day_types || {}), [identifier]: Boolean(enabled) }
+        await saveConfig({ base_day_types: map })
+        this.data.config.base_day_types = map
+        notify(enabled ? '基础日型已加入参考' : '基础日型已关闭')
+      } catch (_) { /* saveConfig already notifies */ }
+    },
     closeTemplateEditor() { state.templateEditor = null },
     newDayType() { state.dayTypeEditor = { entry: null } },
     editDayType(entry) { state.dayTypeEditor = { entry } },
@@ -537,11 +592,36 @@ const app = Vue.createApp({
       const values = (form.rules.weekdays ||= [])
       values.includes(index) ? values.splice(values.indexOf(index), 1) : values.push(index)
     },
+    dayTypeMatches(entry, date) {
+      const rules = entry.rules || {}
+      if ((rules.dates || []).includes(date)) return true
+      if ((rules.date_ranges || []).some((range) => range.start && range.end && range.start <= date && date <= range.end)) return true
+      const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+      return (rules.weekdays || []).includes(weekday)
+    },
+    dayTypeConflicts(entry) {
+      const today = new Date(`${this.data.date}T12:00:00Z`)
+      const conflicts = []
+      for (let offset = 0; offset < Math.max(31, Number(this.data.config.max_horizon_days || 14)); offset++) {
+        const date = new Date(today)
+        date.setUTCDate(today.getUTCDate() + offset)
+        const iso = date.toISOString().slice(0, 10)
+        if (!this.dayTypeMatches(entry, iso)) continue
+        const matches = (this.data.day_types || []).filter((other) => {
+          if (other.id === entry.id) return false
+          if (other.builtin) return this.data.config.base_day_types?.[other.id] === true && this.dayTypeMatches(other, iso)
+          return this.dayTypeMatches(other, iso)
+        })
+        if (matches.length) conflicts.push({ date: iso, names: matches.map((other) => other.name).join('、') })
+      }
+      return conflicts
+    },
     async saveDayType(form) {
       try {
         const payload = clone(form)
         delete payload._dates
         delete payload._ranges
+        if (!payload.id) payload.id = `day_${Date.now().toString(36)}`
         payload.rules ||= {}
         payload.rules.weekdays = (payload.rules.weekdays || []).map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
         payload.rules.dates = (form._dates || '').split(',').map((value) => value.trim()).filter(Boolean)
@@ -552,6 +632,12 @@ const app = Vue.createApp({
         const overrides = payload.config?.overrides || {}
         for (const key of Object.keys(overrides)) {
           if (overrides[key] === '' || overrides[key] == null) delete overrides[key]
+        }
+        const conflicts = this.dayTypeConflicts(payload)
+        if (conflicts.length) {
+          const preview = conflicts.slice(0, 8).map((item) => `${item.date}：${item.names}`).join('\n')
+          const more = conflicts.length > 8 ? `\n……另有 ${conflicts.length - 8} 天` : ''
+          if (!confirm(`这个日型会和其他日型在同一天生效：\n${preview}${more}\n\n名称和提示词会按优先级拼接。仍要保存吗？`)) return
         }
         await post(`/day-types?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
         state.dayTypeEditor = null
@@ -569,8 +655,9 @@ const app = Vue.createApp({
     async applyTemplate(template) {
       try {
         const payload = clone(template.plan)
-        if (template.prompt) {
-          for (const block of payload.blocks || []) for (const item of block.items || []) item.instruction = [template.prompt, item.instruction].filter(Boolean).join('\n\n')
+        if (template.execution_prompt || template.prompt) {
+          const guidance = template.execution_prompt || template.prompt
+          for (const block of payload.blocks || []) for (const item of block.items || []) item.instruction = [guidance, item.instruction].filter(Boolean).join('\n\n')
         }
         payload.date = state.selectedDate
         payload.expected_revision = state.selectedPlan?.revision || 0
@@ -602,18 +689,29 @@ const app = Vue.createApp({
           for (const key of ['id', 'series_id', 'scheduled_at', 'state', 'revision', 'reason', 'created_at', 'updated_at', 'plan_id', 'block_id']) delete item[key]
         }
       }
-      state.templateEditor = { template: { name: state.selectedPlan.title || '我的生活模板', description: '', plan, prompt: '' } }
+      state.templateEditor = { template: { name: state.selectedPlan.title || '我的生活模板', description: '', plan, planning_prompt: '', execution_prompt: '', icon: 'sparkle' } }
+    },
+    async planWithTemplate(template) {
+      try {
+        const date = state.selectedDate || this.data.date
+        const guidance = String(template.planning_prompt || template.prompt || template.description || '').trim()
+        const reason = `按模板「${template.name}」优先规划 ${date}。${guidance ? `\n模板引导：${guidance}` : ''}`
+        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, { date, reason, focus_date: date })
+        notify(`已把 ${date} 的模板规划机会交给 bot`)
+      } catch (error) { notify(error.message, 'error') }
     },
     async saveTemplate(form) {
       try {
-        let plan
-        try { plan = JSON.parse(form._plan) } catch (_) { return notify('计划结构不是有效 JSON', 'error') }
-        if (!plan || typeof plan !== 'object' || Array.isArray(plan) || !Array.isArray(plan.blocks)) return notify('计划结构必须包含 blocks 数组', 'error')
+        const plan = JSON.parse(JSON.stringify(form.plan || {}))
+        if (!plan || typeof plan !== 'object' || Array.isArray(plan) || !Array.isArray(plan.blocks)) return notify('计划骨架必须包含分组', 'error')
         const payload = {
           name: String(form.name || '').trim(),
           description: String(form.description || '').trim(),
-          prompt: String(form.prompt || '').trim(),
+          planning_prompt: String(form.planning_prompt || '').trim(),
           execution_prompt: String(form.execution_prompt || '').trim(),
+          icon: String(form.icon || 'sparkle'),
+          icon_url: String(form.icon_url || ''),
+          icon_asset_id: String(form.icon_asset_id || ''),
           plan,
         }
         if (!payload.name) return notify('请填写模板名称', 'error')
@@ -623,6 +721,9 @@ const app = Vue.createApp({
         await this.loadCustomTemplates()
         notify('模板已保存')
       } catch (error) { notify(error.message, 'error') }
+    },
+    async uploadTemplateIcon(file) {
+      return upload(`/assets?persona=${encodeURIComponent(state.selectedPersona)}`, file)
     },
     async deleteTemplate(template) {
       if (!confirm(`删除模板「${template.name}」？`)) return
@@ -880,7 +981,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.2'
+import { del as requestDelete } from './api.js?v=1.2.3'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
