@@ -997,3 +997,10 @@ body { background:#08090c; }
 @keyframes pet-jump-hop { 0%,100%{transform:translateY(0)} 45%{transform:translateY(-10px) scaleY(1.04)} 70%{transform:translateY(0) scaleY(.95)} }
 
 .pet-action-walk .pet-figure { animation:none !important; }
+
+/* RD monogram: fixed tomato-red badge, not theme-tinted. */
+.brand-mark, .boot-mark { background:linear-gradient(145deg,#ff647d 0,#e8435f 58%,#b92442 100%) !important; color:#080a10 !important; }
+.rd-mark { display:block; color:#080a10; font-family:"Arial Narrow",Impact,sans-serif; font-size:20px; font-weight:900; line-height:1; letter-spacing:-.2em; transform:skewX(-8deg) translateX(-1px); text-shadow:0 1px 0 rgba(255,255,255,.3); }
+.boot-mark .rd-mark { font-size:23px; }
+.brand-mark .rd-mark { font-size:19px; }
+.brand-mark i { background:rgba(255,255,255,.72); }

@@ -27,7 +27,7 @@
       <div v-if="!booted" class="boot-screen" aria-hidden="true">
         <div class="boot-grid"></div>
         <div class="boot-glitch">KRD</div>
-        <div class="boot-mark"><span>K</span><i></i></div>
+        <div class="boot-mark"><span class="rd-mark">RD</span><i></i></div>
         <div class="boot-word"><strong>生活节律</strong><small>MOBILE LIFE ARCHIVE</small></div>
         <div class="boot-line"><i></i></div>
         <div class="boot-status"><span>STARTING PERSONAL LIFE OS</span><b>1.2.0</b></div>
@@ -66,7 +66,7 @@
       </div>
 
       <aside class="sidebar">
-        <div class="brand"><div class="brand-mark"><span>K</span><i></i></div><div><strong>生活节律</strong><small>随身生活</small></div></div>
+        <div class="brand"><div class="brand-mark"><span class="rd-mark">RD</span><i></i></div><div><strong>生活节律</strong><small>随身生活</small></div></div>
         <nav class="main-nav" aria-label="生活节律导航">
           <button v-for="(item, index) in navItems" :key="item.id" :class="{active: state.view === item.id}" @click="setView(item.id)">
             <span class="nav-no">0{{ index + 1 }}</span>
