@@ -196,6 +196,7 @@ export const PetCompanion = {
       }
       const keyword = this.keywordAction()
       if (keyword) {
+        if (keyword === 'walk') { this.startWalking(this.nextWalkTarget()); return }
         this.setAction(keyword, this.speechFor(keyword))
         return
       }
@@ -203,8 +204,10 @@ export const PetCompanion = {
         this.setAction('sleep', this.speechFor('sleep'))
         return
       }
-      if (force) this.setAction(this.pickIdle(), this.speechFor(this.action))
-      else this.action = this.pickIdle()
+      const idle = this.pickIdle()
+      if (idle === 'walk') { this.startWalking(this.nextWalkTarget()); return }
+      if (force) this.setAction(idle, this.speechFor(idle))
+      else this.action = idle
     },
     pickIdle() {
       const list = ['idle', 'look', 'stretch', 'dance', 'phone', 'walk']
@@ -230,12 +233,15 @@ export const PetCompanion = {
       this.walkTimer = null
       this.walking = false
     },
+    nextWalkTarget() {
+      let next = window.innerWidth >= 1100 ? 64 + Math.random() * 24 : 20 + Math.random() * 58
+      if (Math.abs(next - this.x) < 12) next = next > this.x ? Math.min(94, this.x + 16) : Math.max(16, this.x - 16)
+      return next
+    },
     wander() {
       if (this.dragging || this.walking || this.lift > 0 || this.panel || this.event === 'imminent') return
       if (!['idle', 'look', 'phone', 'walk'].includes(this.action)) return
-      let next = window.innerWidth >= 1100 ? 64 + Math.random() * 24 : 20 + Math.random() * 58
-      if (Math.abs(next - this.x) < 12) next = next > this.x ? Math.min(94, this.x + 16) : Math.max(16, this.x - 16)
-      this.startWalking(next)
+      this.startWalking(this.nextWalkTarget())
     },
     startWalking(target) {
       const shell = this.$el.closest('.app-shell') || this.$el.parentElement

@@ -908,8 +908,8 @@ body { background:#08090c; }
 /* Sprite-sheet companion */
 .pet-figure { position:relative; width:84px; height:150px; }
 .pet-sprite { position:absolute; inset:0; background-repeat:no-repeat; background-size:400% 100%; background-position:-168px 0; image-rendering:auto; }
-.pet-action-walk .pet-sprite { animation:pet-sprite-walk .68s linear infinite; }
-.pet-action-run .pet-sprite { animation:pet-sprite-walk .34s linear infinite; }
+.pet-action-walk .pet-sprite { animation:pet-sprite-walk .58s steps(1,end) infinite; }
+.pet-action-run .pet-sprite { animation:pet-sprite-walk .30s steps(1,end) infinite; }
 .pet-action-walk { transition:left 2.7s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
 .pet-action-run { transition:left .9s linear,transform .36s cubic-bezier(.2,.8,.2,1) !important; }
 @keyframes pet-sprite-walk { 0%,24%{background-position:0 0}25%,49%{background-position:-84px 0}50%,74%{background-position:-168px 0}75%,100%{background-position:-252px 0} }
