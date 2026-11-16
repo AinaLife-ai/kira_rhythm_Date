@@ -43,6 +43,7 @@ class Runtime:
         self.plans.on_change = self.scheduler.wake
         self.ws_clients: set[Any] = set()
         self._persona_cache: tuple[float, str] = (0, "")
+        self._calendar_task: asyncio.Task | None = None
 
     async def initialize(self) -> None:
         await self.store.initialize()
@@ -56,12 +57,13 @@ class Runtime:
         self.context_builder.weather = self.weather
         self.context_builder.calendar = self.calendar
         await self.scheduler.start()
-        active = await self.active_persona_id()
-        if active:
-            today = await self.plans.current_date(active)
-            self.calendar.refresh_soon(int(today[:4]))
+        self._calendar_task = asyncio.create_task(self._calendar_auto_refresh(), name="krd_calendar_auto")
 
     async def close(self) -> None:
+        if self._calendar_task is not None:
+            self._calendar_task.cancel()
+            await asyncio.gather(self._calendar_task, return_exceptions=True)
+            self._calendar_task = None
         await self.scheduler.stop()
         clients = list(self.ws_clients)
         self.ws_clients.clear()
@@ -80,6 +82,37 @@ class Runtime:
         if level == "error" or self.debug or level == "warning":
             line = f"[KRD] {event} " + " ".join(f"{key}={value}" for key, value in fields.items())
             getattr(logger, level if level in {"debug", "info", "warning", "error"} else "info")(line)
+
+    async def _calendar_auto_refresh(self) -> None:
+        """Warm calendar years without ever blocking prompts or requests."""
+        while True:
+            try:
+                active = await self.active_persona_id()
+                if active:
+                    config = await self.store.get_config(active)
+                    hours = int(config.get("calendar_refresh_hours", 6))
+                    if self.calendar is not None:
+                        self.calendar.set_ttl(hours * 3600)
+                    today = await self.plans.current_date(active)
+                    year = int(today[:4])
+                    years = {year, year + 1}
+                    rows = await self.store.all(
+                        "SELECT DISTINCT substr(date,1,4) AS year FROM plans WHERE persona_id=? AND date>=?",
+                        (active, today),
+                    )
+                    for row in rows:
+                        try:
+                            if row.get("year"):
+                                years.add(int(row["year"]))
+                        except (TypeError, ValueError):
+                            pass
+                    for candidate in sorted(years):
+                        self.calendar.refresh_soon(candidate)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.log("warning", "calendar_auto_refresh_failed", error=repr(exc))
+            await asyncio.sleep(300)
 
     async def active_persona_id(self) -> str:
         now = asyncio.get_running_loop().time()
@@ -156,6 +189,12 @@ class Runtime:
                     req.user_prompt.append(Prompt(
                         await self.context_builder.compact_state(active, config=base_config), name="krd_day_state",
                         source="kira_rhythm_Date", persist=False, render_template=False,
+                    ))
+                weather_prompt = await self.context_builder.chat_weather(active, base_config)
+                if weather_prompt:
+                    req.user_prompt.append(Prompt(
+                        weather_prompt, name="krd_weather", source="kira_rhythm_Date",
+                        persist=False, render_template=False,
                     ))
             elif req.tool_set:
                 req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")

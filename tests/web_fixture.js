@@ -33,7 +33,7 @@ const config = {
   recovery_grace_seconds: 600, history_mode: 'notice', inject_day_state: true, approval_required: false, timezone: 'system',
   blocked_execution_windows: [], quiet_delivery_windows: [{ start: '23:30', end: '07:00' }], required_coverage_windows: [],
   planning_prompt: '根据日型、天气与最近生活规划接下来的一天。', execution_prompt: '自然行动，也可保持安静。',
-  weather: { mode: 'real', provider: 'open_meteo', locations: {}, current_ttl_seconds: 1800, forecast_ttl_seconds: 21600, timeout_seconds: 3, virtual: { seed: 'krd', climate: 'temperate', location: '' } },
+  calendar_refresh_hours: 6, weather: { mode: 'real', provider: 'open_meteo', locations: {}, chat_current: true, chat_forecast: false, chat_forecast_days: 2, target_detail: true, future_detail: false, item_next: true, forecast_days: 7, current_ttl_seconds: 1800, forecast_ttl_seconds: 21600, timeout_seconds: 3, virtual: { seed: 'krd', climate: 'temperate', location: '' } },
   appearance: { theme: 'lacrimosa_dusk', effects: 'auto', avatar_source: 'auto', avatar_adapter_order: [], avatar_asset_id: '' }, retention_days: 180, per_persona: {},
 }
 const data = {
@@ -45,6 +45,15 @@ const data = {
   sessions: [{ sid: 'qq:dm:10001', title: '与爱奈的夜晚', adapter: 'qq' }, { sid: 'qq:gm:70001', title: '小小读书会', adapter: 'qq' }],
   planning_sessions: [{ sid: 'qq:dm:10001', title: '与爱奈的夜晚', adapter: 'qq' }],
   weather: { mode: 'real', real: { source: 'real', location: '上海', condition: '局部多云', temperature: 23.4, status: 'fresh' } },
+  weather_forecast: (() => {
+    const days = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i)
+      const date = d.toISOString().slice(0, 10)
+      days.push({ date, condition: ['多云','小雨','晴','阴','阵雨','晴','多云'][i], temperature_min: 12 + i, temperature_max: 20 + i, precipitation_probability: [20,60,0,15,70,5,10][i], periods: [] })
+    }
+    return { mode: 'real', status: 'fresh', days }
+  })(),
   avatar: { source: 'builtin', url: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNjAgMTYwIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjE2MCIgcng9IjQ4IiBmaWxsPSIjYTk5YWY4Ii8+PGNpcmNsZSBjeD0iODAiIGN5PSI3NSIgcj0iNDQiIGZpbGw9IiNmN2Y0ZmYiLz48L3N2Zz4=' },
   scheduler: { running: true, next_due: at(18, 36) }, server_time: Date.now() / 1000,
 }
@@ -73,6 +82,7 @@ window.fetch = async (url, options = {}) => {
     return response({ config: data.config, revision: data.config_revision })
   }
   if (path.includes('/avatar?')) return response(data.avatar)
+  if (path.includes('/weather/forecast')) return response(data.weather_forecast)
   if (path.includes('/weather/current')) return response(data.weather)
   if (path.includes('/calendar?')) {
     const params = new URL(path, location.origin).searchParams

@@ -192,6 +192,18 @@ class ApiMixin:
         persona_id = await self._persona(persona)
         return await self.runtime.weather.summary(persona_id)
 
+    @register.api(method="GET", path="/v1/weather/forecast")
+    async def api_weather_forecast(self, start: str, end: str, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def load():
+            from .timeutils import parse_date
+            first, last = parse_date(start), parse_date(end)
+            if last < first:
+                raise KRDError("invalid_weather_range", "Forecast end must not be before start")
+            days = min(16, (last - first).days + 1)
+            return await self.runtime.weather.forecast(persona_id, first.isoformat(), days, allow_network=True)
+        return await self._call(load)
+
     @register.api(method="POST", path="/v1/weather/geocode")
     async def api_geocode(self, payload: dict, persona: str = ""):
         persona_id = await self._persona(persona)

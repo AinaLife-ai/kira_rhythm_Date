@@ -43,24 +43,25 @@ class ContextBuilder:
             return text
         return text[: max(0, limit - 80)] + f"\n…[KRD truncated {len(text) - limit + 80} chars; use rhythm_view]"
 
-    async def _weather(self, persona_id: str) -> Any:
+    async def _weather(self, persona_id: str, target_date: str | None = None, kind: str = "plan") -> Any:
         if self.weather is None:
             return None
         try:
-            result = await self.weather.summary(persona_id, allow_network=False)
-            if result.get("mode") == "off":
-                return None
-            status = (result.get("real") or {}).get("status")
-            if status in {"pending", "stale"}:
-                self.weather.refresh_soon(persona_id)
-            return result
+            if target_date is None:
+                target_date = await self.plans.current_date(persona_id)
+            return await self.weather.context_weather(persona_id, target_date, kind=kind, allow_network=False)
         except Exception:
-            return {"warning": "天气暂时不可用"}
+            return None
+
+    @staticmethod
+    def _weather_rule() -> str:
+        return "天气：target 是目标日预报，forecast 是目标日之后的逐日预报；有 periods 时按日期/时间就近参考；预报可能变化，仅作参考，now 只代表当前，不要替代 target。"
 
     async def _calendar_day(self, day: str) -> dict[str, Any]:
         if self.calendar is None:
             return {"date": day, "status": "disabled"}
         try:
+            self.calendar.ensure_year(int(day[:4]))
             return await self.calendar.day(day, allow_network=False)
         except Exception as exc:
             return {"date": day, "status": "unavailable", "reason": type(exc).__name__}
@@ -81,8 +82,6 @@ class ContextBuilder:
                 result["festivals"] = list(dict.fromkeys(festivals))
         if flags.get("solar_terms", True) and full.get("solar_term"):
             result["solar_terms"] = [full["solar_term"]]
-        if full.get("data_status") in {"stale", "unavailable"}:
-            result["warning"] = "法定假期数据可能不是最新"
         return result
 
     async def _active_day_types(self, persona_id: str, day: str) -> list[dict[str, Any]]:
@@ -169,6 +168,18 @@ class ContextBuilder:
         payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
         return "[KRD DayState · request only]\n" + self._bounded(payload, 1400)
 
+    async def chat_weather(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
+        base_config = config or await self.store.get_config(persona_id)
+        if self.weather is None:
+            return ""
+        day = await self.plans.current_date(persona_id)
+        weather = await self._weather(persona_id, day, "chat")
+        if not weather:
+            return ""
+        tz_name = self.plans.policy.timezone_name(base_config)
+        payload = prepare_llm_payload(weather, tz_name, self.host_timezone_name())
+        return "[KRD Weather · request only]\n" + self._bounded(payload, 700)
+
     async def planning_prompt(self, metadata: dict[str, Any]) -> str:
         persona_id = metadata["persona_id"]
         base_config = await self.store.get_config(persona_id)
@@ -183,8 +194,9 @@ class ContextBuilder:
         matches = await self._active_day_types(persona_id, target_date)
         effective = await self.plans.effective_config(persona_id, matches[0]["id"] if matches else "")
         calendar = self._calendar_context(await self._calendar_day(target_date), base_config)
+        weather = await self._weather(persona_id, target_date, "plan")
         payload = {
-            "instruction": base_config["planning_prompt"],
+            "instruction": base_config["planning_prompt"] + (("\n" + self._weather_rule()) if weather else ""),
             "focus": {"date": target_date,
                       "instruction": f"这次规划的首要目标是 {target_date}。先为这一天创建或修订；仍可在配置允许的范围内处理其他日期，但不要无理由跳过这一天。",
                       **({"reason": metadata["reason"]} if metadata.get("reason") else {})},
@@ -197,7 +209,7 @@ class ContextBuilder:
                 "blocked_execution_windows", "quiet_delivery_windows", "required_coverage_windows")},
             "current_plan": self._plan_data(current, tz_name=tz_name) if current else None,
             "previous_plans": history,
-            "weather": await self._weather(persona_id)
+            "weather": weather
         }
         host_tz = self.host_timezone_name()
         if host_tz is None or host_tz != tz_name:
@@ -223,8 +235,9 @@ class ContextBuilder:
             next_item = {"title": next_item.get("title", ""), **self._clock_fields(next_item.get("scheduled_at"), plan["date"], tz_name)}
         quiet_now = in_active_windows(
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
+        weather = await self._weather(persona_id, target_date, "plan")
         payload = {
-            "instruction": effective["planning_review"]["prompt"],
+            "instruction": effective["planning_review"]["prompt"] + (("\n" + self._weather_rule()) if weather else ""),
             "day_types": self._day_types_text(matches),
             "day_type_prompt": await self._day_type_prompt(persona_id, matches, "planning"),
             "calendar": self._calendar_context(await self._calendar_day(target_date), base_config),
@@ -232,7 +245,7 @@ class ContextBuilder:
             "current_plan": self._plan_data(plan, tz_name=tz_name),
             "next_item": next_item,
             "day_state": await self.plans.day_state(persona_id, target_date),
-            "weather": await self._weather(persona_id),
+            "weather": weather,
             "recent_diff": await self.plans.revisions(plan["id"], effective["diff_revisions"], persona_id),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
                                 "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
@@ -284,7 +297,7 @@ class ContextBuilder:
             "day_type_prompt": await self._day_type_prompt(persona_id, matches, "execution"),
             "calendar": self._calendar_context(await self._calendar_day(plan["date"]), base_config),
             "daily_limits": self._limits(effective, plan),
-            "day_state": state, "weather": await self._weather(persona_id),
+            "day_state": state, "weather": await self._weather(persona_id, plan["date"], "item"),
             "plan": {key: plan[key] for key in ("date", "title", "overview", "planned_appearance", "planned_mood", "revision")},
             "current_item": {
                 **{key: item[key] for key in ("title", "intent", "instruction", "target", "interaction",

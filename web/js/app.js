@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.7'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.7'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.7'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.7'
-import { PetCompanion } from './pet.js?v=1.2.7'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.8'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.8'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.8'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.8'
+import { PetCompanion } from './pet.js?v=1.2.8'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.7'
+const ASSET_VERSION = '1.2.8'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -39,7 +39,9 @@ const app = Vue.createApp({
       recentPlans: [],
       monthPlans: [],
       monthCalendar: {},
-      calendarRefreshedYears: {},
+      monthForecast: {},
+      calendarSyncing: false,
+      calendarSyncMessage: "",
       draft: null,
       allSessions: [],
       cityQuery: '',
@@ -74,6 +76,7 @@ const app = Vue.createApp({
       refreshEpoch: 0,
       viewEpoch: 0,
       monthEpoch: 0,
+      forecastEpoch: 0,
       diffEpoch: 0,
     }
   },
@@ -258,6 +261,12 @@ const app = Vue.createApp({
       const day = this.data.calendar_today
       return day?.holiday ? `${day.holiday.name}${day.holiday.is_off_day ? '' : ' · 调班'}` : ''
     },
+    selectedForecast() {
+      return this.monthForecast[this.selectedDate] || null
+    },
+    calendarRefreshHours() {
+      return Number(this.data.config?.calendar_refresh_hours || 6)
+    },
     monthCells() {
       if (!this.monthAnchor) return []
       const [year, month] = this.monthAnchor.split('-').map(Number)
@@ -272,7 +281,7 @@ const app = Vue.createApp({
         const count = plan ? plan.blocks.reduce((sum, block) => sum + block.items.length, 0) : 0
         const calendar = this.monthCalendar[iso]
         cells.push({ key: iso, date: iso, day: date.getUTCDate(), current: date.getUTCMonth() === month - 1, plan, count,
-          calendar, lunar: calendar?.display || '', holiday: calendar?.holiday,
+          calendar, lunar: calendar?.display || '', holiday: calendar?.holiday, forecast: this.monthForecast[iso] || null,
           color: this.data.day_types?.find((entry) => entry.id === plan?.day_type_id)?.config?.color })
       }
       return cells
@@ -436,15 +445,51 @@ const app = Vue.createApp({
         this.monthPlans = plans
         this.monthCalendar = Object.fromEntries(calendar.days.map((day) => [day.date, day]))
       }
-      if (!this.calendarRefreshedYears[year]) {
-        this.calendarRefreshedYears[year] = true
-        post('/calendar/refresh', { year }).then(async () => {
-          const fresh = await get(`/calendar?start=${start}&end=${end}`)
-          if (anchor === this.monthAnchor && persona === state.selectedPersona) {
-            this.monthCalendar = Object.fromEntries(fresh.days.map((day) => [day.date, day]))
-          }
-        }).catch(() => { this.calendarRefreshedYears[year] = false })
+      this.loadMonthForecast(start, end, epoch, persona, anchor).catch(() => {})
+    },
+    async loadMonthForecast(start, end, epoch, persona, anchor) {
+      const forecastEpoch = ++this.forecastEpoch
+      if (epoch === this.monthEpoch && persona === state.selectedPersona && anchor === this.monthAnchor) {
+        this.monthForecast = {}
       }
+      const data = await get(`/weather/forecast?start=${start}&end=${end}&persona=${encodeURIComponent(persona)}`)
+      if (forecastEpoch !== this.forecastEpoch || epoch !== this.monthEpoch ||
+          persona !== state.selectedPersona || anchor !== this.monthAnchor) return
+      const next = {}
+      for (const day of data.days || []) {
+        if (day?.date) next[day.date] = day
+      }
+      this.monthForecast = next
+    },
+    async refreshCalendarData() {
+      if (this.calendarSyncing) return
+      this.calendarSyncing = true
+      this.calendarSyncMessage = '正在更新…'
+      const year = Number((this.monthAnchor || this.selectedDate).slice(0, 4))
+      try {
+        await post('/calendar/refresh', { year })
+        await this.loadMonth()
+        this.calendarSyncMessage = '已更新'
+        notify('法定假期数据已更新')
+      } catch (error) {
+        this.calendarSyncMessage = '更新失败'
+        notify(error.message || '法定假期数据更新失败', 'error')
+      } finally {
+        this.calendarSyncing = false
+      }
+    },
+    forecastCellText(day) {
+      if (!day) return ''
+      const condition = day.condition || ''
+      const min = day.temperature_min
+      const max = day.temperature_max
+      const range = min != null && max != null ? `${min}~${max}°` : max != null ? `${max}°` : min != null ? `${min}°` : ''
+      return [condition, range].filter(Boolean).join(' ')
+    },
+    forecastDetailText(day) {
+      if (!day) return ''
+      const text = this.forecastCellText(day)
+      return day.precipitation_probability ? `${text} · 降水 ${day.precipitation_probability}%` : text
     },
     async loadRecentPlans() {
       const persona = state.selectedPersona
@@ -1002,7 +1047,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.7'
+import { del as requestDelete } from './api.js?v=1.2.8'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

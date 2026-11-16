@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.7'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.7'
+import { fmt } from './store.js?v=1.2.8'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.8'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -212,6 +212,8 @@ export const CalendarView = {
         <h2>{{ $root.monthTitle }}</h2>
         <button class="icon-button" @click="$root.shiftMonth(1)"><ui-icon name="right" :size="16" /></button>
         <button class="soft-button today-button" @click="$root.selectDate($root.data.date)">回到今天</button>
+        <button class="soft-button calendar-refresh-button" :disabled="$root.calendarSyncing" @click="$root.refreshCalendarData">{{ $root.calendarSyncing ? '正在更新…' : '更新法定假期数据' }}</button>
+        <small class="calendar-sync-note">每 {{ $root.calendarRefreshHours }} 小时自动更新</small>
       </div>
       <div class="weekday-row"><span v-for="day in ['一','二','三','四','五','六','日']">周{{ day }}</span></div>
       <div class="month-grid">
@@ -219,6 +221,7 @@ export const CalendarView = {
           @click="$root.selectDate(cell.date)">
           <span class="day-top"><span class="day-number">{{ cell.day }}</span><span v-if="cell.holiday && ($root.calendarFlags.holiday || $root.calendarFlags.adjusted_workday)" class="holiday-mark" :class="{work: !cell.holiday.is_off_day}">{{ cell.holiday.is_off_day ? '休' : '班' }}</span></span>
           <span v-if="$root.calendarCellText(cell)" class="lunar-label" :class="{festival: $root.calendarFlags.festivals && (cell.calendar?.solar_festivals?.length || cell.calendar?.lunar_festivals?.length)}">{{ $root.calendarCellText(cell) }}</span>
+          <small v-if="$root.forecastCellText(cell.forecast)" class="day-weather">{{ $root.forecastCellText(cell.forecast) }}</small>
           <small v-if="cell.plan" class="plan-count">{{ cell.count }} 项</small>
         </button>
       </div>
@@ -227,7 +230,11 @@ export const CalendarView = {
     <section class="day-detail glass">
       <div class="section-heading"><div><span class="eyebrow">{{ $root.selectedDate }}</span><h2>{{ $root.selectedPlan?.title || '未安排的一天' }}</h2></div>
         <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div>
-      <div v-if="$root.selectedCalendar" class="calendar-facts"><strong v-if="$root.calendarFlags.lunar_date">{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.calendarFlags.solar_terms && $root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="($root.calendarFlags.holiday && $root.selectedCalendar.holiday?.is_off_day) || ($root.calendarFlags.adjusted_workday && $root.selectedCalendar.holiday && !$root.selectedCalendar.holiday.is_off_day)">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.solar_festivals" :key="'s-'+name">{{ name }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.lunar_festivals" :key="'l-'+name">{{ name }}</span><small>{{ $root.selectedCalendar.data_status === 'fresh' ? '法定假期已在线更新' : '法定假期本地回退' }}</small></div>
+      <div v-if="$root.selectedCalendar" class="calendar-facts"><strong v-if="$root.calendarFlags.lunar_date">{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.calendarFlags.solar_terms && $root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="($root.calendarFlags.holiday && $root.selectedCalendar.holiday?.is_off_day) || ($root.calendarFlags.adjusted_workday && $root.selectedCalendar.holiday && !$root.selectedCalendar.holiday.is_off_day)">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.solar_festivals" :key="'s-'+name">{{ name }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.lunar_festivals" :key="'l-'+name">{{ name }}</span></div>
+      <div v-if="$root.selectedForecast" class="calendar-weather-detail">
+        <strong>预报</strong>
+        <span>{{ $root.forecastDetailText($root.selectedForecast) }}</span>
+      </div>
       <p v-if="$root.selectedDayTypes.length" class="day-types-line">日型：{{ $root.selectedDayTypes.join(' / ') }}</p>
       <p v-if="$root.selectedPlan" class="plan-overview">{{ $root.selectedPlan.overview }}</p>
       <timeline :plan="$root.selectedPlan" :server-time="$root.data.server_time"
@@ -485,6 +492,21 @@ export const SettingsView = {
         <p class="field-hint">只想快速体验可选择虚拟气候；需要真实天气时再填写地点。没有注册密钥就优先使用无需账号的服务。</p>
         <div class="form-grid"><label><span>模式</span><select v-model="$root.draft.weather.mode"><option value="off">关闭</option><option value="real">真实天气</option><option value="virtual">虚拟气候</option><option value="hybrid">真实 + 虚拟</option></select></label>
           <label><span>天气服务</span><select v-model="$root.draft.weather.provider"><option value="open_meteo">Open-Meteo · 无需账号</option><option value="met_norway">MET Norway · 无需账号</option><option value="nws">US NWS · 美国</option><option value="bright_sky">Bright Sky · DWD</option><option value="weatherapi">WeatherAPI · 注册</option><option value="visualcrossing">Visual Crossing · 注册</option><option value="qweather">和风天气 · 注册</option><option value="weatherbit">Weatherbit · 注册</option><option value="openweather">OpenWeather · 注册</option></select></label></div>
+        <div class="weather-context-panel">
+          <div class="section-heading"><div><h3>天气如何使用</h3><p>当前天气与预报分开；预报只作为参考，不会写成确定事实。</p></div></div>
+          <div class="switch-grid">
+            <label class="switch-row"><span>普通聊天显示当前天气</span><input type="checkbox" v-model="$root.draft.weather.chat_current"></label>
+            <label class="switch-row"><span>普通聊天显示未来预报</span><input type="checkbox" v-model="$root.draft.weather.chat_forecast"></label>
+            <label class="switch-row"><span>目标日显示详细分时段</span><input type="checkbox" v-model="$root.draft.weather.target_detail"></label>
+            <label class="switch-row"><span>比目标更未来的日显示详细分时段</span><input type="checkbox" v-model="$root.draft.weather.future_detail"></label>
+            <label class="switch-row"><span>小项显示下一时段天气</span><input type="checkbox" v-model="$root.draft.weather.item_next"></label>
+          </div>
+          <div class="form-grid">
+            <label><span>普通聊天预报天数</span><input type="number" min="1" max="7" v-model.number="$root.draft.weather.chat_forecast_days"><small>默认 2 天；关闭未来预报时不会发送。</small></label>
+            <label><span>法定假期自动更新间隔（小时）</span><input type="number" min="1" max="168" v-model.number="$root.draft.calendar_refresh_hours"><small>默认 6 小时；后台更新，不阻塞对话。</small></label>
+          </div>
+          <p class="field-hint">两个“详细”开关只影响规划/复盘的天气：目标日控制 focus.date，比目标更未来的日控制其后的 forecast。普通聊天只给日摘要；小项由自己的开关控制下一时段。</p>
+        </div>
         <div v-if="$root.weatherCredentialFields.length" class="credential-panel">
           <div class="section-heading"><div><h3>接入凭据</h3><p>只保存在本机；切换服务不会清空其他服务的已保存信息。</p></div><span class="tag">已加密字段</span></div>
           <div class="form-grid"><label v-for="[field, label] in $root.weatherCredentialFields" :key="field"><span>{{ label }}</span><input type="password" autocomplete="new-password" :value="$root.weatherCredentialDraft[$root.draft.weather.provider]?.[field] || ''" :placeholder="$root.weatherCredentialStatus[$root.draft.weather.provider]?.[field] ? '已保存，留空保留' : '粘贴 API Key'" @input="$root.setWeatherCredential($root.draft.weather.provider, field, $event.target.value)"><small v-if="$root.weatherCredentialStatus[$root.draft.weather.provider]?.[field]">已配置；不清空就继续使用</small></label></div>

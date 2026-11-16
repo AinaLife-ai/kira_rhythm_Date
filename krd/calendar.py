@@ -25,11 +25,16 @@ DATA_ROOT = Path(__file__).resolve().parent / "data" / "holidays"
 class CalendarService:
     """Offline lunar calendar with versioned statutory-holiday enrichment."""
 
-    def __init__(self, store):
+    def __init__(self, store, ttl_seconds: int = HOLIDAY_TTL):
         self.store = store
+        self.ttl_seconds = int(ttl_seconds)
         self._locks: dict[int, asyncio.Lock] = {}
         self._refreshes: dict[int, asyncio.Task] = {}
         self._retry_after: dict[int, float] = {}
+        self._ensured: set[int] = set()
+
+    def set_ttl(self, seconds: int) -> None:
+        self.ttl_seconds = max(60, int(seconds))
 
     @staticmethod
     def _validate_payload(payload: dict[str, Any], year: int) -> dict[str, Any]:
@@ -67,9 +72,9 @@ class CalendarService:
     async def year(self, year: int, *, allow_network: bool = True, force_refresh: bool = False) -> dict[str, Any]:
         cached = await self._cached(year)
         now = time.time()
-        if cached and not force_refresh and (not allow_network or now - cached.get("fetched_at", 0) < HOLIDAY_TTL):
+        if cached and not force_refresh and (not allow_network or now - cached.get("fetched_at", 0) < self.ttl_seconds):
             result = dict(cached)
-            if now - result.get("fetched_at", 0) >= HOLIDAY_TTL:
+            if now - result.get("fetched_at", 0) >= self.ttl_seconds:
                 result["status"] = "stale"
             return result
         if not allow_network:
@@ -79,7 +84,7 @@ class CalendarService:
         lock = self._locks.setdefault(year, asyncio.Lock())
         async with lock:
             cached = await self._cached(year)
-            if cached and not force_refresh and time.time() - cached.get("fetched_at", 0) < HOLIDAY_TTL:
+            if cached and not force_refresh and time.time() - cached.get("fetched_at", 0) < self.ttl_seconds:
                 return cached
             try:
                 result = await self._download(year)
@@ -106,6 +111,21 @@ class CalendarService:
                 except Exception as exc:
                     last_error = exc
         raise KRDError("holiday_unavailable", f"Unable to update {year} holiday data: {type(last_error).__name__}")
+
+    def ensure_year(self, year: int) -> None:
+        """Read-through warmup: never waits for the network."""
+        if year in self._ensured:
+            return
+        self._ensured.add(year)
+        async def inspect() -> None:
+            cached = await self._cached(year)
+            if cached:
+                return
+            bundled = await self._bundled(year)
+            if bundled.get("status") != "unavailable":
+                return
+            self.refresh_soon(year)
+        asyncio.create_task(inspect(), name=f"krd_calendar_ensure:{year}")
 
     def refresh_soon(self, year: int) -> None:
         task = self._refreshes.get(year)
@@ -178,6 +198,8 @@ class CalendarService:
         if start > end or (parse_date(end) - parse_date(start)).days > 366:
             raise KRDError("invalid_calendar_range", "Expected an ascending range of at most 367 days")
         years = list(range(int(start[:4]), int(end[:4]) + 1))
+        for year in years:
+            self.ensure_year(year)
         infos = {year: await self.year(year, allow_network=allow_network) for year in years}
         days = []
         current = parse_date(start)
