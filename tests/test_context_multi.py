@@ -83,3 +83,26 @@ async def test_short_item_reference_resolves_within_persona():
     updated = await runtime.plans.update_item("persona-a", short, {"title": "短 ID 更新"}, actor="bot")
     assert any(item["title"] == "短 ID 更新" for block in updated["plan"]["blocks"] for item in block["items"])
     await runtime.close()
+
+@pytest.mark.asyncio
+async def test_disabled_custom_day_type_is_kept_but_not_resolved():
+    from pathlib import Path
+    import tempfile
+    from tests.fakes import FakeRuntime
+
+    runtime = FakeRuntime(Path(tempfile.mkdtemp(prefix="krd-disabled-day-type-")))
+    await runtime.store.initialize()
+    day = datetime.now().date().isoformat()
+    await runtime.store.save_day_type("persona-a", {
+        "id": "temporary_day", "name": "临时日型",
+        "rules": {"dates": [day], "priority": 5},
+        "config": {"color": "#123456"},
+    })
+    assert (await runtime.plans.resolve_day_type("persona-a", day)) == "temporary_day"
+    await runtime.store.update_config("persona-a", {
+        "day_type_enabled": {"temporary_day": False},
+    }, await runtime.store.config_revision("persona-a"))
+    assert (await runtime.plans.resolve_day_type("persona-a", day)) == ""
+    entries = await runtime.store.list_day_types("persona-a")
+    assert any(entry["id"] == "temporary_day" for entry in entries)
+    await runtime.close()

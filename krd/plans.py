@@ -57,11 +57,14 @@ class PlanService:
         entries = await self.store.list_day_types(persona_id)
         config = await self.store.get_config(persona_id)
         enabled = config.get("base_day_types", {})
+        custom_enabled = config.get("day_type_enabled", {})
         weekday = datetime.fromisoformat(day).weekday()
         candidates: dict[str, tuple[int, dict[str, Any]]] = {}
         for entry in entries:
             identifier = entry["id"]
             if entry.get("builtin") and not enabled.get(identifier):
+                continue
+            if not entry.get("builtin") and custom_enabled.get(identifier) is False:
                 continue
             rules = entry.get("rules") or {}
             priority = int(rules.get("priority", 100))

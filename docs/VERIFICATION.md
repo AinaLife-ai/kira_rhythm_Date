@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **99 passed** |
-| KiraAI 3.1.2 同一套测试 | **99 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **100 passed** |
+| KiraAI 3.1.2 同一套测试 | **100 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、38 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -42,7 +42,7 @@
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **99 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **100 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -65,6 +65,7 @@
 | 规划目标 | 立即规划传当前选中日期；planning focus.date/reason 明确首要日期；LLM 顶层 items/entries 与扁平 at/start/end 自动归一化 |
 | 日历/日型分离 | 日历事实与日型独立；普通农历不发给 bot；发送/显示开关分开；基础日型默认关闭 |
 | 多日型 | 同日多个日型按优先级显示与拼接提示词；内置基础日型分区、默认关闭；空值不进入模型上下文 |
+| 自定义日型开关 | 自定义日型可停用但保留记录；停用后不解析、不发送名称/提示词，可随时重新开启 |
 | 紧凑上下文 | `scheduled_at` 改为短 `at`/必要时 `on`；day_types 合并字符串；移除动态 rules；短 item 引用 12 位；daily_limits 三处一致 |
 | 工具 schema | `rhythm_plan` 仅暴露 plans[] + 扁平 items；无具体示例；框架工具注册通过 |
 | 模板 | 结构化分组/小项编辑、图标预设/上传、预设模板分区折叠、按模板规划 |

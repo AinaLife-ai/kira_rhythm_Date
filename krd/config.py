@@ -37,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "holiday": False,
         "adjusted_workday": False,
     },
+    "day_type_enabled": {},
     "calendar_context": {
         "holiday": True,
         "adjusted_workday": True,

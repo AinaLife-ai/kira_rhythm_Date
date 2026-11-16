@@ -57,6 +57,7 @@ const app = Vue.createApp({
       weatherContactDraft: '',
       weatherContactDirty: false,
       showPresetTemplates: false,
+      showBaseDayTypes: false,
       clockNow: Date.now() / 1000,
       randomThemeId: themeTemplates.filter((entry) => !entry.random)[Math.floor(Math.random() * themeTemplates.filter((entry) => !entry.random).length)].id,
       clockTimer: null,
@@ -575,6 +576,14 @@ const app = Vue.createApp({
       if (flags.solar_terms && calendar.solar_term) return calendar.solar_term
       if (flags.lunar_date && calendar.lunar?.day) return calendar.lunar.day
       return ''
+    },
+    async toggleCustomDayType(identifier, enabled) {
+      try {
+        const map = { ...(this.data.config.day_type_enabled || {}), [identifier]: Boolean(enabled) }
+        await saveConfig({ day_type_enabled: map })
+        this.data.config.day_type_enabled = map
+        notify(enabled ? '自定义日型已开启' : '自定义日型已停用，记录仍保留')
+      } catch (_) { /* saveConfig already notifies */ }
     },
     async toggleBaseDayType(identifier, enabled) {
       try {

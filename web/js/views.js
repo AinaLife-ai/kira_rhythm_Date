@@ -286,14 +286,16 @@ export const TemplatesView = {
     </section>
     <section class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">我的日型</span><h2>给日子加上属于你的名字</h2></div><button class="soft-button" @click="$root.newDayType"><ui-icon name="plus" :size="14" /> 自定义日型</button></div>
-      <p class="field-hint">日型可以多个同时生效；名称和提示词按优先级拼接，日历事实不会被日型覆盖。</p>
+      <p class="field-hint">日型可以多个同时生效；名称和提示词按优先级拼接，日历事实不会被日型覆盖。关闭开关只会停用该日型，记录仍保留，之后可随时重新开启。</p>
       <div class="day-type-grid"><article v-for="entry in $root.customDayTypes" class="day-type-card" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
-        <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ entry.builtin ? '内置日型' : '自定义日型' }}</small>
+        <span class="day-type-color"></span><h3>{{ entry.name }}</h3><small>{{ $root.data.config.day_type_enabled?.[entry.id] === false ? '已停用 · 保留记录' : '自定义日型 · 已开启' }}</small>
+        <label class="day-type-switch"><input type="checkbox" :checked="$root.data.config.day_type_enabled?.[entry.id] !== false" @change="$root.toggleCustomDayType(entry.id, $event.target.checked)"><span>启用</span></label>
         <button class="text-button" @click="$root.editDayType(entry)">编辑</button><button v-if="!entry.builtin" class="text-button muted" @click="$root.deleteDayType(entry)">删除</button>
       </article></div>
       <div v-if="!$root.customDayTypes.length" class="empty-inline">还没有自定义日型。比如可以创建“发薪日”“祈祷日”“考试周”。</div>
     </section>
-    <section class="section-card glass">
+    <div class="preset-toggle base-type-toggle"><button class="text-button" @click="$root.showBaseDayTypes = !$root.showBaseDayTypes">{{ $root.showBaseDayTypes ? '收起基础日型参考' : '展开基础日型参考' }} · {{ $root.baseDayTypes.length }}</button><span>默认折叠，不会自动应用。</span></div>
+    <section v-if="$root.showBaseDayTypes" class="section-card glass">
       <div class="section-heading"><div><span class="eyebrow">基础日型参考</span><h2>内置模板，默认不启用</h2></div></div>
       <p class="field-hint">这些是内置参考模板，默认不开启以不额外发送提示词引导，它们的日子本身会被作为日历显示给 bot。只有这些模板正好符合你认为的 bot 的生活节律，并希望定义其提示词等时才打开。关闭不会影响日历事实，也不影响自定义日型。</p>
       <div class="base-day-grid"><label v-for="entry in $root.baseDayTypes" :key="entry.id" class="base-day-row" :style="{'--day-color': entry.config.color || 'var(--accent)'}">
