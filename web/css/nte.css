@@ -111,6 +111,16 @@ body {
 .persona-select select { color:var(--nte-ink); font-size:10px; padding:7px 5px; border:0; background:transparent; }
 .persona-dot { width:5px; height:5px; border-radius:0; background:var(--nte-pink); box-shadow:none; }
 .topbar .icon-button { border-radius:0; border-color:rgba(255,255,255,.16); color:var(--nte-ink); }
+.topbar .motion-button { width:auto; min-width:36px; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0 8px; }
+.motion-button .motion-state { font:700 8px/1 "Arial Narrow",sans-serif; letter-spacing:.08em; color:var(--muted); }
+.motion-button.reduced { color:var(--muted); opacity:.72; }
+.motion-button.reduced .ui-icon { opacity:.48; }
+.weather-chip { cursor:pointer; font:inherit; }
+.weather-chip:hover { border-color:color-mix(in srgb,var(--accent) 52%,transparent); color:var(--text); }
+@media (max-width:700px) {
+  .topbar .motion-button { min-width:29px; padding:0 6px; }
+  .motion-button .motion-state { display:none; }
+}
 .content-scroll { padding:17px 22px 42px; max-width:none; }
 .main-area:before { content:'KRD / URBAN LIFE ARCHIVE'; position:fixed; right:18px; bottom:16px; z-index:4; color:rgba(255,255,255,.24); font:500 7px/1 "Arial Narrow",sans-serif; letter-spacing:.18em; pointer-events:none; }
 .hud-corner { position:fixed; width:18px; height:18px; z-index:5; pointer-events:none; border-color:rgba(255,255,255,.42); }
@@ -529,9 +539,7 @@ input[type="checkbox"] { accent-color:var(--nte-pink); }
   .main-area:before { display:none; }
   .hud-corner { display:none; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .weather-fx,.event-flash,.scene-scan,.scene-noise { animation:none !important; }
-}
+html[data-motion="reduced"] .weather-fx, html[data-motion="reduced"] .event-flash, html[data-motion="reduced"] .scene-scan, html[data-motion="reduced"] .scene-noise { animation:none !important; }
 
 /* ============================================================
    2026-11 phone form factor: personal life OS inside a handset
@@ -721,8 +729,17 @@ body { background:#08090c; }
 .pet-hit { position:absolute; left:-42px; bottom:0; display:block; width:84px; height:150px; padding:0; border:0; background:transparent; pointer-events:auto; cursor:grab; touch-action:none; }
 .pet-figure { display:block; width:84px; height:150px; overflow:visible; transform-origin:50% 96%; filter:drop-shadow(0 5px 5px rgba(0,0,0,.36)); }
 .pet-shadow { position:absolute; left:15px; right:15px; bottom:1px; height:5px; border-radius:50%; background:rgba(0,0,0,.45); filter:blur(1px); }
-.pet-bubble { position:absolute; right:5px; bottom:156px; max-width:156px; min-width:70px; padding:8px 10px; border:1px solid rgba(255,255,255,.36); border-radius:12px 12px 2px 12px; background:rgba(247,242,233,.96); color:#15151c; font-size:9px; line-height:1.5; pointer-events:auto; box-shadow:0 9px 24px rgba(0,0,0,.28); }
+.pet-bubble { position:absolute; right:5px; bottom:156px; max-width:184px; min-width:70px; padding:8px 10px; font-size:9.5px; border:1px solid rgba(255,255,255,.36); border-radius:12px 12px 2px 12px; background:rgba(247,242,233,.96); color:#15151c; line-height:1.5; pointer-events:auto; box-shadow:0 9px 24px rgba(0,0,0,.28); }
 .pet-bubble i { position:absolute; right:7px; bottom:-6px; width:8px; height:8px; background:inherit; border-right:1px solid rgba(255,255,255,.36); border-bottom:1px solid rgba(255,255,255,.36); transform:rotate(45deg); }
+.pet-bubble .talk-seg { white-space:pre-wrap; }
+.pet-bubble .talk-count { color:color-mix(in srgb,var(--accent) 72%,#2a1930); font-weight:800; }
+.pet-bubble .talk-index { color:color-mix(in srgb,var(--accent-strong) 76%,#2a1930); font-weight:700; }
+.pet-bubble .talk-title { color:color-mix(in srgb,var(--accent) 74%,#20141f); font-weight:800; padding:0 2px; border-radius:2px; background:color-mix(in srgb,var(--accent) 14%,transparent); }
+.pet-bubble .talk-detail { color:#5b526a; }
+.pet-bubble .talk-session { color:color-mix(in srgb,var(--success) 68%,#18332b); font-weight:700; }
+.pet-bubble .talk-time { color:color-mix(in srgb,var(--warning) 72%,#3d2a16); font-weight:700; }
+.pet-bubble .talk-weather { color:#347fc4; font-weight:700; }
+.pet-bubble .talk-name { color:color-mix(in srgb,var(--accent) 80%,#2a1930); font-weight:700; }
 .pet-bubble-enter-active,.pet-bubble-leave-active { transition:opacity .2s, transform .2s; }
 .pet-bubble-enter-from,.pet-bubble-leave-to { opacity:0; transform:translateY(5px) scale(.96); }
 .pet-shadow-label { position:absolute; left:50%; bottom:-13px; transform:translateX(-50%); padding:2px 5px; border:1px solid rgba(255,255,255,.16); background:rgba(5,7,11,.8); color:rgba(255,255,255,.7); font-size:6px; line-height:1; white-space:nowrap; pointer-events:none; }
@@ -735,21 +752,10 @@ body { background:#08090c; }
 .pet-hearts span:before { left:-3px; }.pet-hearts span:after { top:-3px; }
 @keyframes pet-heart { 0%{opacity:0;transform:translateY(0) rotate(45deg) scale(.4)} 20%{opacity:1} 100%{opacity:0;transform:translateY(-34px) rotate(45deg) scale(1)} }
 
-/* Weather accessories */
-.pet-umbrella { position:absolute; left:-18px; bottom:98px; width:88px; height:55px; pointer-events:none; display:none; }
-.pet-umbrella i { position:absolute; left:7px; top:0; width:74px; height:30px; border-radius:50% 50% 4px 4px; background:linear-gradient(90deg,#ec5f86,#b83260 48%,#ed7b9a); clip-path:polygon(0 55%,8% 18%,26% 0,50% 9%,74% 0,92% 18%,100% 55%,75% 44%,50% 55%,25% 44%); filter:drop-shadow(0 4px 5px rgba(0,0,0,.3)); }
-.pet-umbrella b { position:absolute; left:44px; top:26px; width:2px; height:28px; background:#d6c6b2; }
-.pet-umbrella b:after { content:''; position:absolute; left:-5px; bottom:0; width:7px; height:4px; border:2px solid #d6c6b2; border-top:0; border-radius:0 0 7px 7px; }
-.pet-action-umbrella .pet-umbrella { display:block; }
 .pet-left .pet-bubble { right:auto; left:16px; }
 .pet-left .pet-bubble i { left:7px; right:auto; }
 .pet-left .pet-panel { right:auto; left:0; }
 .pet-left .pet-panel:after { left:22px; right:auto; }
-.pet-scarf { display:none; position:absolute; left:21px; top:52px; width:30px; height:10px; background:#d85172; border-radius:2px; z-index:2; box-shadow:0 2px 0 #8d2743; }
-.pet-scarf:after { content:''; position:absolute; right:-3px; top:6px; width:7px; height:20px; background:#d85172; transform:skewX(-8deg); }
-.pet-action-scarf .pet-scarf { display:block; }
-.pet-action-umbrella .pet-arm-right { transform:rotate(-50deg) translate(1px,2px); transform-origin:51px 45px; }
-.pet-action-scarf .pet-arm-left { transform:rotate(7deg); transform-origin:21px 45px; }
 
 /* Action motion language */
 .pet-action-read .pet-arm-left { transform:rotate(28deg) translate(0,5px); transform-origin:21px 45px; }
@@ -1038,7 +1044,9 @@ body { background:#08090c; }
 .day-type-switch input { width:auto; }
 
 /* Per-action sprite scale: these poses have more opaque content in their source frames. */
-.pet-action-crouch .pet-sprite { transform:scale(.525); transform-origin:center bottom; }
-.pet-facing-left.pet-action-crouch .pet-sprite { transform:scaleX(-1) scale(.525); }
+.pet-action-crouch .pet-sprite { transform:scale(.5565); transform-origin:center bottom; }
+.pet-facing-left.pet-action-crouch .pet-sprite { transform:scaleX(-1) scale(.5565); }
 .pet-action-sleep .pet-sprite { transform:scale(.7225); transform-origin:center bottom; }
 .pet-facing-left.pet-action-sleep .pet-sprite { transform:scaleX(-1) scale(.7225); }
+@media (min-width:701px) { .topbar .motion-button { width:auto; min-width:44px; padding:0 8px; } }
+@media (max-width:700px) { .topbar .motion-button { width:auto; min-width:29px; padding:0 6px; } }
