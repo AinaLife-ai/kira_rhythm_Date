@@ -29,7 +29,7 @@ async def test_silent_output_is_prompt_only_and_visible_text_is_diagnosed(runtim
     prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
     assert '"effective_interaction":"silent"' in prompt
     assert '"enforcement":"prompt_only"' in prompt
-    assert "不得为了本日程删除或改写给用户的回答" in prompt
+    assert "不得为了本日程删除或改写给用户的回答" not in prompt
     response = SimpleNamespace(text_response="<msg><text>模型自己泄漏的文字</text></msg>", tool_calls=[], status="success")
     await runtime.on_llm_response(event, response)
     assert "模型自己泄漏的文字" in response.text_response

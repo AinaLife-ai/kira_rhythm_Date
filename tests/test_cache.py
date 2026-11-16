@@ -46,6 +46,7 @@ async def test_dynamic_context_is_nonpersistent_and_notice_marker_is_kept(tmp_pa
     persisted = "".join(prompt.to_string() for prompt in req.user_prompt if prompt.persist)
     assert persisted.strip() == "[生活节律｜系统触发]"
     assert "previous_plans" not in persisted
+    assert "\"focus\":{\"date\":\"2099-01-01\"" in dynamic[0].content
     await runtime.store.close()
 
 

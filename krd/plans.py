@@ -48,11 +48,24 @@ class PlanService:
         overrides = (entry.get("config", {}).get("overrides", {}) if entry else {})
         return normalized(deep_merge(base, overrides))
 
-    async def resolve_day_type(self, persona_id: str, day: str) -> str:
+    async def resolve_day_types(self, persona_id: str, day: str) -> list[dict[str, Any]]:
+        """Return every active day type, ordered by effective priority.
+
+        Built-in reference day types are opt-in. Custom day types are active by
+        their rules and may coexist with the built-in reference type.
+        """
         entries = await self.store.list_day_types(persona_id)
+        config = await self.store.get_config(persona_id)
+        enabled = config.get("base_day_types", {})
+        custom_enabled = config.get("day_type_enabled", {})
         weekday = datetime.fromisoformat(day).weekday()
-        candidates = []
+        candidates: dict[str, tuple[int, dict[str, Any]]] = {}
         for entry in entries:
+            identifier = entry["id"]
+            if entry.get("builtin") and not enabled.get(identifier):
+                continue
+            if not entry.get("builtin") and custom_enabled.get(identifier) is False:
+                continue
             rules = entry.get("rules") or {}
             priority = int(rules.get("priority", 100))
             matched = False
@@ -64,14 +77,23 @@ class PlanService:
             if weekday in rules.get("weekdays", []):
                 matched = True
             if matched:
-                candidates.append((priority, entry["id"]))
-        if candidates:
-            return sorted(candidates)[0][1]
+                candidates[identifier] = (priority, entry)
         if self.calendar is not None:
-            calendar_day = await self.calendar.day(day, allow_network=False)
-            if calendar_day.get("holiday"):
-                return calendar_day["suggested_day_type"]
-        return "weekend" if weekday >= 5 else "weekday"
+            try:
+                calendar_day = await self.calendar.day(day, allow_network=False)
+                base_id = calendar_day.get("suggested_day_type") or ("weekend" if weekday >= 5 else "weekday")
+                if enabled.get(base_id) and base_id not in candidates:
+                    base_entry = next((entry for entry in entries if entry["id"] == base_id), None)
+                    if base_entry:
+                        candidates[base_id] = (int((base_entry.get("rules") or {}).get("priority", 100)), base_entry)
+            except Exception:
+                pass
+        return [{"id": identifier, "name": entry.get("name", identifier), "priority": priority, "entry": entry}
+                for identifier, (priority, entry) in sorted(candidates.items(), key=lambda item: (item[1][0], item[0]))]
+
+    async def resolve_day_type(self, persona_id: str, day: str) -> str:
+        matches = await self.resolve_day_types(persona_id, day)
+        return matches[0]["id"] if matches else ""
 
     @staticmethod
     def _assemble_plans(plan_rows: list[dict[str, Any]], block_rows: list[dict[str, Any]],
@@ -130,11 +152,22 @@ class PlanService:
         quiet = compiled_windows(day, config["quiet_delivery_windows"], tz_name)
         previous_by_id = existing_items or {}
         raw_blocks = payload.get("blocks", [])
+        if not raw_blocks:
+            for alias in ("items", "entries", "schedule"):
+                if isinstance(payload.get(alias), list) and payload[alias]:
+                    grouped: dict[str, list[dict[str, Any]]] = {}
+                    for item in payload[alias]:
+                        key = str(item.get("block", "生活片段")).strip()[:80] if isinstance(item, dict) else "生活片段"
+                        grouped.setdefault(key or "生活片段", []).append(item)
+                    raw_blocks = [{"title": title, "items": items} for title, items in grouped.items()]
+                    break
         if not isinstance(raw_blocks, list):
             raise KRDError("invalid_plan", "blocks must be a list")
         execution_options = None
         prepared = []
         for block_index, raw_block in enumerate(raw_blocks):
+            if isinstance(raw_block, dict) and not raw_block.get("items") and isinstance(raw_block.get("entries"), list):
+                raw_block["items"] = raw_block["entries"]
             if not isinstance(raw_block, dict) or not isinstance(raw_block.get("items", []), list):
                 raise KRDError("invalid_plan", "Each block must be an object with an items list")
             block = {"id": str(raw_block.get("id") or new_id("blk")), "title": str(raw_block.get("title", "生活片段"))[:120],
@@ -146,7 +179,20 @@ class PlanService:
             for raw_item in raw_block.get("items", []):
                 if not isinstance(raw_item, dict):
                     raise KRDError("invalid_item", "Each item must be an object")
+                if not raw_item.get("target") and raw_item.get("session"):
+                    raw_item["target"] = raw_item["session"]
+                if "execution_probability" not in raw_item and "probability" in raw_item:
+                    raw_item["execution_probability"] = raw_item["probability"]
                 schedule = raw_item.get("schedule") or {}
+                if not schedule:
+                    if raw_item.get("at"):
+                        schedule = {"type": "exact", "at": raw_item["at"]}
+                    elif raw_item.get("start") and raw_item.get("end"):
+                        schedule = {"type": "window", "start": raw_item["start"], "end": raw_item["end"]}
+                        for key in ("occurrences", "window_mode", "interval_minutes", "interval_seconds"):
+                            if key in raw_item:
+                                schedule[key] = raw_item[key]
+                    raw_item["schedule"] = schedule
                 if not isinstance(schedule, dict):
                     raise KRDError("invalid_schedule", "schedule must be an object")
                 supplied_id = str(raw_item.get("id") or "")
@@ -509,7 +555,29 @@ class PlanService:
             result.append({**row, "diff": diff})
         return result
 
+    async def resolve_item_id(self, persona_id: str, reference: str) -> str:
+        """Resolve a full item id or a short item-id prefix within a persona."""
+        reference = str(reference or "").strip()
+        if not reference:
+            raise KRDError("item_required", "item_id is required")
+        row = await self.store.one(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id=?",
+            (persona_id, reference))
+        if row:
+            return row["id"]
+        if not reference.startswith("itm_"):
+            reference = f"itm_{reference}"
+        rows = await self.store.all(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id LIKE ?",
+            (persona_id, f"{reference}%"))
+        if len(rows) == 1:
+            return rows[0]["id"]
+        if len(rows) > 1:
+            raise KRDError("ambiguous_item", "Short item id matches more than one item")
+        raise KRDError("not_found", "Item not found")
+
     async def update_item(self, persona_id: str, item_id: str, patch: dict[str, Any], *, actor: str, reason: str = "") -> dict[str, Any]:
+        item_id = await self.resolve_item_id(persona_id, item_id)
         row = await self.store.one("SELECT plan_id FROM items WHERE id=?", (item_id,))
         if not row:
             raise KRDError("not_found", "Item not found")

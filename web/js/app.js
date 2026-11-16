@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.1'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.1'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor } from './views.js?v=1.2.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.1'
-import { PetCompanion } from './pet.js?v=1.2.1'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.4'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.4'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.4'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.4'
+import { PetCompanion } from './pet.js?v=1.2.4'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.1'
+const ASSET_VERSION = '1.2.4'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -16,7 +16,7 @@ const dateShift = (date, days) => {
 }
 
 const app = Vue.createApp({
-  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, PetCompanion },
+  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, PetCompanion },
   data() {
     return {
       state,
@@ -51,6 +51,13 @@ const app = Vue.createApp({
       monthAnchor: '',
       customTemplates: [],
       customAccent: '',
+      weatherCredentialDraft: {},
+      weatherCredentialStatus: {},
+      weatherCredentialDirty: {},
+      weatherContactDraft: '',
+      weatherContactDirty: false,
+      showPresetTemplates: false,
+      showBaseDayTypes: false,
       clockNow: Date.now() / 1000,
       randomThemeId: themeTemplates.filter((entry) => !entry.random)[Math.floor(Math.random() * themeTemplates.filter((entry) => !entry.random).length)].id,
       clockTimer: null,
@@ -162,7 +169,24 @@ const app = Vue.createApp({
       return { total: items.length, done: items.filter((item) => ['triggered', 'triggered_silent'].includes(item.state)).length }
     },
     latestDiff() { return this.diffs },
-    allPlanTemplates() { return [...this.planTemplates, ...this.customTemplates] },
+    allPlanTemplates() {
+      const custom = new Map(this.customTemplates.map((template) => [template.id, template]))
+      const builtins = this.planTemplates.map((base) => {
+        const override = custom.get(base.id)
+        return override ? { ...base, ...override, builtin: true, override: true, custom: false } : { ...base, builtin: true }
+      })
+      const extras = this.customTemplates.filter((template) => !this.planTemplates.some((base) => base.id === template.id)).map((template) => ({ ...template, custom: true }))
+      return [...builtins, ...extras]
+    },
+    presetPlanTemplates() { return this.allPlanTemplates.filter((template) => template.builtin) },
+    customPlanTemplates() { return this.allPlanTemplates.filter((template) => !template.builtin) },
+    baseDayTypes() { return (this.data.day_types || []).filter((entry) => entry.builtin) },
+    calendarFlags() {
+      return { holiday: true, adjusted_workday: true, festivals: true, solar_terms: true, lunar_date: true,
+               ...(this.data.config?.calendar_display || {}) }
+    },
+    selectedDayTypes() { return this.activeDayTypeNames(this.selectedDate) },
+    customDayTypes() { return (this.data.day_types || []).filter((entry) => !entry.builtin) },
     heroStyle() {
       const banner = this.data.banner?.url
       return banner ? { backgroundImage: `linear-gradient(90deg, var(--panel-solid) 0%, transparent 100%), url("${banner}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}
@@ -190,6 +214,20 @@ const app = Vue.createApp({
       const info = this.weatherInfo
       const temperature = info.temperature != null ? `${info.temperature}°C` : ''
       return `${info.location || ''} ${temperature} ${info.status === 'stale' ? '· 缓存' : ''}`.trim()
+    },
+    weatherCredentialFields() {
+      const provider = this.draft?.weather?.provider || this.data.weather?.provider || 'open_meteo'
+      return ({
+        weatherapi: [['weatherapi_key', 'WeatherAPI API Key']],
+        visualcrossing: [['visualcrossing_key', 'Visual Crossing API Key']],
+        qweather: [['qweather_key', '和风天气 API Key']],
+        weatherbit: [['weatherbit_key', 'Weatherbit API Key']],
+        openweather: [['openweather_key', 'OpenWeather API Key']],
+      })[provider] || []
+    },
+    weatherNeedsContact() {
+      const provider = this.draft?.weather?.provider || this.data.weather?.provider
+      return ['met_norway', 'nws'].includes(provider)
     },
     weatherKind() {
       if (!this.weatherInfo) return 'off'
@@ -246,6 +284,7 @@ const app = Vue.createApp({
     eventState: { immediate: true, handler(value) { document.documentElement.dataset.event = value } },
   },
   methods: {
+    notify(text, type = 'success') { notify(text, type) },
     updateNetwork() {
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
       this.online = navigator.onLine
@@ -438,9 +477,13 @@ const app = Vue.createApp({
     },
     async runPlanning() {
       try {
-        const date = state.selectedDate === this.data.date ? dateShift(this.data.date, 1) : state.selectedDate
-        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, { date, reason: 'WebUI 手动给予一次规划机会' })
-        notify('已把规划机会交给 bot')
+        const date = state.selectedDate || this.data.date
+        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, {
+          date,
+          reason: `WebUI 手动请求优先规划 ${date}；先处理这一天，同时仍可在配置允许的日期范围内调整其他日期。`,
+          focus_date: date,
+        })
+        notify(`已把 ${date} 的规划机会交给 bot`)
       } catch (error) { notify(error.message, 'error') }
     },
     newItem() {
@@ -496,20 +539,114 @@ const app = Vue.createApp({
         notify('此刻状态已更新')
       } catch (error) { notify(error.message, 'error') }
     },
+    newTemplate() { state.templateEditor = { template: null } },
+    editTemplate(template) { state.templateEditor = { template } },
+    activeDayTypeNames(date) {
+      if (!date || !this.data.day_types) return []
+      const config = this.data.config || {}
+      const selectedCalendar = this.selectedCalendar || {}
+      const baseId = selectedCalendar.suggested_day_type || (() => {
+        const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+        return weekday >= 5 ? 'weekend' : 'weekday'
+      })()
+      const entries = this.data.day_types
+      const candidates = []
+      for (const entry of entries) {
+        const rules = entry.rules || {}
+        const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+        let priority = Number.isInteger(rules.priority) ? rules.priority : 100
+        let matched = false
+        if ((rules.dates || []).includes(date)) { matched = true; priority -= 1000 }
+        if ((rules.date_ranges || []).some((range) => range.start && range.end && range.start <= date && date <= range.end)) { matched = true; priority -= 500 }
+        if ((rules.weekdays || []).includes(weekday)) matched = true
+        if (entry.builtin && config.base_day_types?.[entry.id] !== true) matched = false
+        if (matched) candidates.push({ name: entry.name, priority, id: entry.id })
+      }
+      if (config.base_day_types?.[baseId] === true && !candidates.some((entry) => entry.id === baseId)) {
+        const base = entries.find((entry) => entry.id === baseId)
+        if (base) candidates.push({ name: base.name, priority: Number((base.rules || {}).priority || 100), id: base.id })
+      }
+      return candidates.sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id)).map((entry) => entry.name)
+    },
+    calendarCellText(cell) {
+      const flags = this.calendarFlags
+      const calendar = cell.calendar || {}
+      const festivals = [...(calendar.solar_festivals || []), ...(calendar.lunar_festivals || [])]
+      if (flags.festivals && festivals.length) return festivals[0]
+      if (flags.solar_terms && calendar.solar_term) return calendar.solar_term
+      if (flags.lunar_date && calendar.lunar?.day) return calendar.lunar.day
+      return ''
+    },
+    async toggleCustomDayType(identifier, enabled) {
+      try {
+        const map = { ...(this.data.config.day_type_enabled || {}), [identifier]: Boolean(enabled) }
+        await saveConfig({ day_type_enabled: map })
+        this.data.config.day_type_enabled = map
+        notify(enabled ? '自定义日型已开启' : '自定义日型已停用，记录仍保留')
+      } catch (_) { /* saveConfig already notifies */ }
+    },
+    async toggleBaseDayType(identifier, enabled) {
+      try {
+        const map = { ...(this.data.config.base_day_types || {}), [identifier]: Boolean(enabled) }
+        await saveConfig({ base_day_types: map })
+        this.data.config.base_day_types = map
+        notify(enabled ? '基础日型已加入参考' : '基础日型已关闭')
+      } catch (_) { /* saveConfig already notifies */ }
+    },
+    closeTemplateEditor() { state.templateEditor = null },
     newDayType() { state.dayTypeEditor = { entry: null } },
     editDayType(entry) { state.dayTypeEditor = { entry } },
     toggleDayTypeWeekday(form, index) {
-      const values = form.rules.weekdays
+      form.rules ||= {}
+      const values = (form.rules.weekdays ||= [])
       values.includes(index) ? values.splice(values.indexOf(index), 1) : values.push(index)
+    },
+    dayTypeMatches(entry, date) {
+      const rules = entry.rules || {}
+      if ((rules.dates || []).includes(date)) return true
+      if ((rules.date_ranges || []).some((range) => range.start && range.end && range.start <= date && date <= range.end)) return true
+      const weekday = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7
+      return (rules.weekdays || []).includes(weekday)
+    },
+    dayTypeConflicts(entry) {
+      const today = new Date(`${this.data.date}T12:00:00Z`)
+      const conflicts = []
+      for (let offset = 0; offset < Math.max(31, Number(this.data.config.max_horizon_days || 14)); offset++) {
+        const date = new Date(today)
+        date.setUTCDate(today.getUTCDate() + offset)
+        const iso = date.toISOString().slice(0, 10)
+        if (!this.dayTypeMatches(entry, iso)) continue
+        const matches = (this.data.day_types || []).filter((other) => {
+          if (other.id === entry.id) return false
+          if (other.builtin) return this.data.config.base_day_types?.[other.id] === true && this.dayTypeMatches(other, iso)
+          return this.dayTypeMatches(other, iso)
+        })
+        if (matches.length) conflicts.push({ date: iso, names: matches.map((other) => other.name).join('、') })
+      }
+      return conflicts
     },
     async saveDayType(form) {
       try {
         const payload = clone(form)
         delete payload._dates
-        payload.rules.dates = form._dates.split(',').map((value) => value.trim()).filter(Boolean)
+        delete payload._ranges
+        if (!payload.id) payload.id = `day_${Date.now().toString(36)}`
+        payload.rules ||= {}
+        payload.rules.weekdays = (payload.rules.weekdays || []).map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+        payload.rules.dates = (form._dates || '').split(',').map((value) => value.trim()).filter(Boolean)
+        payload.rules.date_ranges = (form._ranges || '').split(/[,，\n]/).map((value) => value.trim()).filter(Boolean).map((value) => {
+          const [start, end] = value.split('~').map((part) => part.trim())
+          return { start, end }
+        }).filter((range) => range.start && range.end)
         const overrides = payload.config?.overrides || {}
         for (const key of Object.keys(overrides)) {
           if (overrides[key] === '' || overrides[key] == null) delete overrides[key]
+        }
+        const conflicts = this.dayTypeConflicts(payload)
+        if (conflicts.length) {
+          const preview = conflicts.slice(0, 8).map((item) => `${item.date}：${item.names}`).join('\n')
+          const more = conflicts.length > 8 ? `\n……另有 ${conflicts.length - 8} 天` : ''
+          if (!confirm(`这个日型会和其他日型在同一天生效：\n${preview}${more}\n\n名称和提示词会按优先级拼接。仍要保存吗？`)) return
         }
         await post(`/day-types?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
         state.dayTypeEditor = null
@@ -527,6 +664,10 @@ const app = Vue.createApp({
     async applyTemplate(template) {
       try {
         const payload = clone(template.plan)
+        if (template.execution_prompt || template.prompt) {
+          const guidance = template.execution_prompt || template.prompt
+          for (const block of payload.blocks || []) for (const item of block.items || []) item.instruction = [guidance, item.instruction].filter(Boolean).join('\n\n')
+        }
         payload.date = state.selectedDate
         payload.expected_revision = state.selectedPlan?.revision || 0
         const result = await post(`/plans?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
@@ -539,16 +680,15 @@ const app = Vue.createApp({
       } catch (error) { notify(error.message, 'error') }
     },
     previewTemplate(template) {
-      const count = template.plan.blocks.reduce((sum, block) => sum + block.items.length, 0)
-      notify(`${template.name}：${template.plan.blocks.length} 组、${count} 项；${template.plan.overview}`)
+      const blocks = template.plan?.blocks || []
+      const count = blocks.reduce((sum, block) => sum + (block.items || []).length, 0)
+      notify(`${template.name}：${blocks.length} 组、${count} 项；${template.plan?.overview || ''}`)
     },
     async loadCustomTemplates() {
       this.customTemplates = await get(`/templates?persona=${encodeURIComponent(state.selectedPersona)}`)
     },
-    async saveCurrentTemplate() {
+    saveCurrentTemplate() {
       if (!state.selectedPlan) return notify('请先选择或创建一个计划', 'error')
-      const name = prompt('模板名称', state.selectedPlan.title || '我的生活模板')
-      if (!name) return
       const plan = clone(state.selectedPlan)
       for (const key of ['id', 'revision', 'expected_revision', 'state', 'created_at', 'updated_at', 'created_by', 'persona_id']) delete plan[key]
       for (const block of plan.blocks || []) {
@@ -558,11 +698,41 @@ const app = Vue.createApp({
           for (const key of ['id', 'series_id', 'scheduled_at', 'state', 'revision', 'reason', 'created_at', 'updated_at', 'plan_id', 'block_id']) delete item[key]
         }
       }
+      state.templateEditor = { template: { name: state.selectedPlan.title || '我的生活模板', description: '', plan, planning_prompt: '', execution_prompt: '', icon: 'sparkle' } }
+    },
+    async planWithTemplate(template) {
       try {
-        await post(`/templates?persona=${encodeURIComponent(state.selectedPersona)}`, { name, plan })
-        await this.loadCustomTemplates()
-        notify('已保存为我的模板')
+        const date = state.selectedDate || this.data.date
+        const guidance = String(template.planning_prompt || template.prompt || template.description || '').trim()
+        const reason = `按模板「${template.name}」优先规划 ${date}。${guidance ? `\n模板引导：${guidance}` : ''}`
+        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, { date, reason, focus_date: date })
+        notify(`已把 ${date} 的模板规划机会交给 bot`)
       } catch (error) { notify(error.message, 'error') }
+    },
+    async saveTemplate(form) {
+      try {
+        const plan = JSON.parse(JSON.stringify(form.plan || {}))
+        if (!plan || typeof plan !== 'object' || Array.isArray(plan) || !Array.isArray(plan.blocks)) return notify('计划骨架必须包含分组', 'error')
+        const payload = {
+          name: String(form.name || '').trim(),
+          description: String(form.description || '').trim(),
+          planning_prompt: String(form.planning_prompt || '').trim(),
+          execution_prompt: String(form.execution_prompt || '').trim(),
+          icon: String(form.icon || 'sparkle'),
+          icon_url: String(form.icon_url || ''),
+          icon_asset_id: String(form.icon_asset_id || ''),
+          plan,
+        }
+        if (!payload.name) return notify('请填写模板名称', 'error')
+        if (form.id) payload.id = form.id
+        await post(`/templates?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
+        state.templateEditor = null
+        await this.loadCustomTemplates()
+        notify('模板已保存')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    async uploadTemplateIcon(file) {
+      return upload(`/assets?persona=${encodeURIComponent(state.selectedPersona)}`, file)
     },
     async deleteTemplate(template) {
       if (!confirm(`删除模板「${template.name}」？`)) return
@@ -662,6 +832,47 @@ const app = Vue.createApp({
         notify('头像已更新')
       } catch (error) { notify(error.message, 'error') } finally { event.target.value = '' }
     },
+    selectSettingsTab(tab) {
+      this.settingsTab = tab
+      if (tab === 'weather') this.loadWeatherCredentials().catch(() => {})
+    },
+    async loadWeatherCredentials() {
+      const data = await get(`/weather/credentials?persona=${encodeURIComponent(state.selectedPersona)}`)
+      this.weatherCredentialStatus = data.providers || {}
+      for (const provider of ['weatherapi', 'visualcrossing', 'qweather', 'weatherbit', 'openweather']) {
+        this.weatherCredentialDraft[provider] ||= {}
+        const fields = { weatherapi: ['weatherapi_key'], visualcrossing: ['visualcrossing_key'], qweather: ['qweather_key'], weatherbit: ['weatherbit_key'], openweather: ['openweather_key'] }[provider]
+        for (const field of fields) if (this.weatherCredentialDraft[provider][field] === undefined) this.weatherCredentialDraft[provider][field] = ''
+      }
+      if (this.weatherContactDraft === '') this.weatherContactDraft = ''
+    },
+    setWeatherCredential(provider, field, value) {
+      this.weatherCredentialDraft[provider] ||= {}
+      this.weatherCredentialDraft[provider][field] = value
+      this.weatherCredentialDirty[provider] ||= {}
+      this.weatherCredentialDirty[provider][field] = true
+    },
+    setWeatherContact(value) {
+      this.weatherContactDraft = value
+      this.weatherContactDirty = true
+    },
+    async saveWeatherCredentials() {
+      const providers = {}
+      for (const [provider, fields] of Object.entries(this.weatherCredentialDirty)) {
+        for (const [field, dirty] of Object.entries(fields)) {
+          if (!dirty) continue
+          providers[provider] ||= {}
+          providers[provider][field] = this.weatherCredentialDraft[provider]?.[field] || ''
+        }
+      }
+      if (!Object.keys(providers).length && !this.weatherContactDirty) return
+      const payload = { providers }
+      if (this.weatherContactDirty) payload.contact = this.weatherContactDraft
+      await put(`/weather/credentials?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
+      this.weatherCredentialDirty = {}
+      this.weatherContactDirty = false
+      await this.loadWeatherCredentials()
+    },
     prepareSettings() {
       this.draft = clone(this.data.config || {})
       if (!themeTemplates.some((entry) => entry.id === this.draft.appearance?.theme)) this.draft.appearance.theme = 'random'
@@ -671,6 +882,7 @@ const app = Vue.createApp({
       this.settingsBaseRevision = this.data.config_revision || 0
       this.allSessions = this.data.sessions || []
       this.diagnostics = null
+      this.loadWeatherCredentials().catch(() => {})
     },
     toggleAccess(sid) {
       const values = this.draft.session_access.sessions
@@ -692,14 +904,15 @@ const app = Vue.createApp({
         delete payload.schema_version
         delete payload.per_persona
         await saveConfig(payload, this.settingsBaseRevision)
+        await this.saveWeatherCredentials()
         this.prepareSettings()
         this.applyAppearance()
         this.loadWeather(state.selectedPersona).catch(() => {})
-      } catch (_) { /* already notified */ }
+      } catch (error) { if (!String(error?.message || '').includes('设置已')) notify(error.message || '设置保存失败', 'error') }
     },
     async geocode() {
       if (!this.cityQuery.trim()) return
-      try { this.cityResults = await post('/weather/geocode', { name: this.cityQuery }) }
+      try { this.cityResults = await post(`/weather/geocode?persona=${encodeURIComponent(state.selectedPersona)}`, { name: this.cityQuery }) }
       catch (error) { notify(error.message, 'error') }
     },
     chooseCity(city) {
@@ -777,7 +990,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.1'
+import { del as requestDelete } from './api.js?v=1.2.4'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

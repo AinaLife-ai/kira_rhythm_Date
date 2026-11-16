@@ -114,6 +114,7 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
         elif scope == "block":
             if not item_id:
                 raise KRDError("item_required", "item_id is required for block view")
+            item_id = await runtime.plans.resolve_item_id(persona_id, item_id)
             row = await runtime.store.one("SELECT plan_id,block_id FROM items WHERE id=?", (item_id,))
             if not row:
                 raise KRDError("not_found", "Item not found")

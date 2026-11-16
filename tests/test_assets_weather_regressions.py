@@ -79,3 +79,17 @@ async def test_weather_http_error_is_not_cached_as_weather(runtime):
     client = type("Client", (), {"get": AsyncMock(return_value=FailureResponse())})()
     with pytest.raises(RuntimeError, match="503"):
         await service._get(client, "https://example.test")
+
+
+@pytest.mark.asyncio
+async def test_weather_credentials_are_persona_scoped_and_merged(runtime):
+    service = WeatherService(runtime.store, runtime.ctx)
+    await service.save_credentials("persona-a", {"providers": {"weatherapi": {"weatherapi_key": "a-key"}}})
+    await service.save_credentials("persona-a", {"providers": {"qweather": {"qweather_key": "q-key"}}})
+    status = await service.credential_status("persona-a")
+    assert status["providers"]["weatherapi"]["weatherapi_key"] is True
+    assert status["providers"]["qweather"]["qweather_key"] is True
+    assert await service._credential("weatherapi_key", "persona-a") == "a-key"
+    assert await service._credential("qweather_key", "persona-a") == "q-key"
+    persona_b = await service.credential_status("persona-b")
+    assert persona_b["providers"]["weatherapi"]["weatherapi_key"] is False
