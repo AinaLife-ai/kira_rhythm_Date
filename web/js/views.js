@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.11'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.11'
+import { fmt } from './store.js?v=1.2.12'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.12'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -72,7 +72,7 @@ export const ItemCard = {
       </div>
       <div class="item-actions">
         <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('edit', item)">调整</button>
-        <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('run', item)">立即触发</button>
+        <button v-if="item.state === 'scheduled'" class="text-button" :class="{ 'is-cooling': $root.runCooldownRemaining }" @click="$emit('run', item)">{{ $root.runCooldownRemaining ? '防抖 ' + $root.runCooldownRemaining + 's' : '立即触发' }}</button>
         <button v-if="item.state === 'scheduled'" class="text-button muted" @click="$emit('skip', item)">跳过本次</button>
         <button v-if="['scheduled', 'cancelled'].includes(item.state)" class="text-button danger" @click="$emit('delete', item)">删除</button>
       </div>
@@ -99,7 +99,7 @@ export const Timeline = {
   <div v-else class="empty-state">
     <span class="empty-orbit"><ui-icon name="sparkle" :size="27" /></span><h3>今天还没有安排</h3>
     <p>给生活留一点空白，或者让 bot 规划接下来的节奏。</p>
-    <button class="primary" @click="$root.runPlanning()">现在规划</button>
+    <button class="primary" :class="{ 'is-cooling': $root.planningCooldownRemaining }" @click="$root.runPlanning()">{{ $root.planningCooldownRemaining ? '防抖 ' + $root.planningCooldownRemaining + 's' : '现在规划' }}</button>
   </div>`,
 }
 
@@ -153,12 +153,12 @@ export const TodayView = {
           <div class="telemetry-row"><span>完成进度</span><i><b :style="{width: ($root.planStats.total ? $root.planStats.done / $root.planStats.total * 100 : 0) + '%'}"></b></i><em>{{ $root.planStats.total ? Math.round($root.planStats.done / $root.planStats.total * 100) : 0 }}%</em></div>
           <div class="telemetry-row"><span>环境干扰</span><i><b :style="{width: ($root.weatherKind === 'rain' || $root.weatherKind === 'snow' ? 76 : $root.weatherKind === 'cloud' ? 38 : 18) + '%'}"></b></i><em>{{ $root.weatherKind === 'rain' || $root.weatherKind === 'snow' ? '偏高' : $root.weatherKind === 'cloud' ? '中' : '低' }}</em></div>
         </div>
-        <button class="mission-run" @click="$root.runItem($root.nextItem)"><span>立即触发</span><ui-icon name="play" :size="14" /></button>
+        <button class="mission-run" :class="{ 'is-cooling': $root.runCooldownRemaining }" @click="$root.runItem($root.nextItem)"><span>{{ $root.runCooldownRemaining ? '防抖 ' + $root.runCooldownRemaining + 's' : '立即触发' }}</span><ui-icon name="play" :size="14" /></button>
       </div>
       <div class="mission-main empty" v-else>
         <div class="mission-kicker"><i></i> SIGNAL EMPTY <span>暂无下一项</span></div>
         <h2>让 bot 写下一段生活</h2><p>今天可以留白，也可以现在给 bot 一次规划机会。</p>
-        <button class="mission-run" @click="$root.runPlanning()"><span>开始规划</span><ui-icon name="sparkle" :size="14" /></button>
+        <button class="mission-run" :class="{ 'is-cooling': $root.planningCooldownRemaining }" @click="$root.runPlanning()"><span>{{ $root.planningCooldownRemaining ? '防抖 ' + $root.planningCooldownRemaining + 's' : '开始规划' }}</span><ui-icon name="sparkle" :size="14" /></button>
       </div>
       <div class="mission-stats">
         <div><strong>{{ String($root.planStats.done).padStart(2, '0') }}</strong><span>已触发</span></div>

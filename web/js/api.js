@@ -62,23 +62,75 @@ export function socket(handlers) {
   let ws
   let closed = false
   let retry
-  const connect = async () => {
-    await ready()
-    const url = window.PluginPageContext?.buildWsUrl?.('/v1/events')
-    if (!url) return
-    ws = new WebSocket(url)
-    ws.onmessage = (event) => {
-      try { handlers(JSON.parse(event.data)) } catch (_) { /* ignore malformed frame */ }
-    }
-    ws.onclose = () => {
-      if (!closed) retry = setTimeout(connect, 5000)
-    }
-    ws.onerror = () => ws.close()
+  let heartbeat
+  let backoff = 1000
+  let openedOnce = false
+  const notifyFrame = (frame) => {
+    try { handlers(frame) } catch (_) { /* ignore malformed frame */ }
   }
+  const schedule = () => {
+    if (closed) return
+    clearTimeout(retry)
+    retry = setTimeout(connect, backoff)
+    backoff = Math.min(10000, backoff * 2)
+  }
+  const connect = async () => {
+    if (closed) return
+    try {
+      await ready()
+      const bridge = window.PluginPageContext
+      const factory = bridge?.createWebSocket
+      if (factory) {
+        // The production bridge appends the JWT token; buildWsUrl alone is not authenticated.
+        ws = factory('/v1/events')
+      } else {
+        const base = bridge?.buildWsUrl?.('/v1/events')
+        if (!base) return
+        let token = ''
+        try { token = bridge?.getToken?.() || '' } catch (_) {}
+        const url = token ? `${base}${base.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : base
+        ws = new WebSocket(url)
+      }
+      ws.onopen = () => {
+        backoff = 1000
+        if (openedOnce) notifyFrame({ type: 'socket_open', payload: {} })
+        openedOnce = true
+        clearInterval(heartbeat)
+        heartbeat = setInterval(() => {
+          if (ws?.readyState === WebSocket.OPEN) ws.send('ping')
+        }, 25000)
+      }
+      ws.onmessage = (event) => {
+        try { notifyFrame(JSON.parse(event.data)) } catch (_) { /* ignore malformed frame */ }
+      }
+      ws.onclose = () => {
+        clearInterval(heartbeat)
+        heartbeat = null
+        if (!closed) schedule()
+      }
+      ws.onerror = () => ws?.close()
+    } catch (_) {
+      schedule()
+    }
+  }
+  const onVisible = () => {
+    if (typeof document === 'undefined' || document.hidden) return
+    if (!ws || ws.readyState > WebSocket.OPEN) {
+      clearTimeout(retry)
+      backoff = 1000
+      connect()
+    } else if (ws.readyState === WebSocket.OPEN) {
+      ws.send('ping')
+      notifyFrame({ type: 'visibility', payload: {} })
+    }
+  }
+  document.addEventListener('visibilitychange', onVisible)
   connect()
   return () => {
     closed = true
     clearTimeout(retry)
+    clearInterval(heartbeat)
+    document.removeEventListener('visibilitychange', onVisible)
     ws?.close()
   }
 }

@@ -1087,3 +1087,4 @@ body { background:#08090c; }
 .confirm-actions .soft-button { min-width:72px; padding:7px 12px; }
 .confirm-actions .soft-button.danger { color:#ff6b7f; border-color:rgba(255,107,127,.45); background:rgba(255,107,127,.08); }
 @media (max-width:700px) { .confirm-backdrop { padding:16px; } .confirm-dialog { padding:15px; } }
+.is-cooling { opacity:.55; cursor:progress; filter:saturate(.55); }
