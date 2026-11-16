@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.9'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.9'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.9'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.9'
-import { PetCompanion } from './pet.js?v=1.2.9'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.10'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.10'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.10'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.10'
+import { PetCompanion } from './pet.js?v=1.2.10'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.9'
+const ASSET_VERSION = '1.2.10'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -590,7 +590,7 @@ const app = Vue.createApp({
       } catch (error) { notify(error.message, 'error') }
     },
     async deleteItem(item) {
-      if (!item || !window.confirm(`删除小项「${item.title}」？\n\n只从当前计划移除，历史 revision 保留。`)) return
+      if (!item || !window.confirm(`删除小项「${item.title}」？\n\n删除后从当前计划移除；以前的版本仍保留在「变化」中。`)) return
       try {
         const result = await post(`/items/${item.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除小项' })
         if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
@@ -603,7 +603,7 @@ const app = Vue.createApp({
     async deleteBlock(block) {
       if (!block) return
       const count = (block.items || []).filter((item) => ['scheduled', 'cancelled'].includes(item.state)).length
-      if (!window.confirm(`删除时段「${block.title}」？\n\n将移除 ${count} 个未执行项，已完成记录保留。`)) return
+      if (!window.confirm(`删除时段「${block.title}」？\n\n删除后此时段和未执行项从当前计划移除；已完成记录和以前的版本仍保留。`)) return
       try {
         const result = await post(`/blocks/${block.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除时段' })
         if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
@@ -615,7 +615,7 @@ const app = Vue.createApp({
     },
     async deleteDay(date) {
       if (!date) return
-      if (!window.confirm(`删除 ${date} 的整天计划？\n\n只移除当前计划，不会关闭今天的定时规划。若定时规划时间未到，之后仍会按设置重新生成。删除动作本身不会立即触发规划。`)) return
+      if (!window.confirm(`删除 ${date} 的整天计划？\n\n删除后当天计划移入历史，当前显示无计划；以前的版本仍保留。定时规划仍照常运行，删除不会立即触发规划。`)) return
       try {
         await post(`/plans/${date}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除整天' })
         await this.refresh()
@@ -1083,7 +1083,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.9'
+import { del as requestDelete } from './api.js?v=1.2.10'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
