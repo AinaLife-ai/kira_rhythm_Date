@@ -83,6 +83,21 @@ window.fetch = async (url, options = {}) => {
   }
   if (path.includes('/avatar?')) return response(data.avatar)
   if (path.includes('/weather/forecast')) return response(data.weather_forecast)
+  if (path.includes('/items/') && path.includes('/skip') && options.method === 'POST') {
+    const itemId = path.split('/items/')[1].split('/skip')[0]
+    if (data.plan) {
+      for (const block of data.plan.blocks || []) {
+        for (const item of block.items || []) {
+          if (item.id === itemId) {
+            item.state = 'cancelled'
+            item.reason = JSON.parse(options.body || '{}').reason || 'WebUI 手动跳过'
+          }
+        }
+      }
+      data.plan.revision = (data.plan.revision || 0) + 1
+    }
+    return response({ plan: data.plan, revision: data.plan?.revision, diff: [{ op: 'changed', item_id: itemId, changes: { state: { to: 'cancelled' } } }] })
+  }
   if (path.includes('/items/') && path.includes('/delete') && options.method === 'POST') {
     const itemId = path.split('/items/')[1].split('/delete')[0]
     if (data.plan) for (const block of data.plan.blocks || []) block.items = (block.items || []).filter((item) => item.id !== itemId)
@@ -115,7 +130,7 @@ window.fetch = async (url, options = {}) => {
     data.day_state = { ...data.day_state, ...JSON.parse(options.body), revision: data.day_state.revision + 1 }
     return response(data.day_state)
   }
-  if (path.includes('/plans?')) return response([plan])
+  if (path.includes('/plans?')) return response(data.plan ? [data.plan] : [])
   if (path.includes('/diff')) return response([{ revision: 4, actor: 'bot', reason: '午后想留白一段时间', created_at: at(14, 30), diff: [{ op: 'changed', title: '随意走走', changes: { scheduled_at: { from: at(18), to: at(18, 36) } } }] }])
   if (path.includes('/runs')) return response([{ item_id: 'i1', status: 'finalized', probability: 1, claimed_at: at(8, 42) }, { item_id: 'i2', status: 'finalized', probability: 1, claimed_at: at(10) }])
   if (path.includes('/diagnostics')) return response({ counts: { plans: 8, items: 34, runs: 21 }, scheduler: { running: true }, database: 'SQLite WAL', websocket_clients: 1 })

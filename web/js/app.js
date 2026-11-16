@@ -567,6 +567,7 @@ const app = Vue.createApp({
         else block.items.push(form)
         plan.expected_revision = plan.revision || 0
         const result = await post(`/plans?persona=${encodeURIComponent(state.selectedPersona)}`, plan)
+        if (!result?.plan) throw new Error('保存失败：服务器没有返回计划')
         state.selectedPlan = result.plan
         this.diffPlanId = result.plan.id
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
@@ -582,6 +583,7 @@ const app = Vue.createApp({
     async skipItem(item) {
       try {
         const result = await post(`/items/${item.id}/skip?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 手动跳过' })
+        if (!result?.plan) throw new Error('跳过失败：服务器没有返回计划')
         state.selectedPlan = result.plan
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
         await Promise.all([this.loadMonth(), this.loadDiff()])
@@ -591,6 +593,7 @@ const app = Vue.createApp({
       if (!item || !window.confirm(`删除小项「${item.title}」？\n\n只从当前计划移除，历史 revision 保留。`)) return
       try {
         const result = await post(`/items/${item.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除小项' })
+        if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
         state.selectedPlan = result.plan
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
         await Promise.all([this.loadMonth(), this.loadDiff()])
@@ -603,6 +606,7 @@ const app = Vue.createApp({
       if (!window.confirm(`删除时段「${block.title}」？\n\n将移除 ${count} 个未执行项，已完成记录保留。`)) return
       try {
         const result = await post(`/blocks/${block.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除时段' })
+        if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
         state.selectedPlan = result.plan
         if (state.selectedDate === this.data.date) this.data.plan = result.plan
         await Promise.all([this.loadMonth(), this.loadDiff()])
@@ -759,6 +763,7 @@ const app = Vue.createApp({
         payload.date = state.selectedDate
         payload.expected_revision = state.selectedPlan?.revision || 0
         const result = await post(`/plans?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
+        if (!result?.plan) throw new Error('应用模板失败：服务器没有返回计划')
         state.selectedPlan = result.plan
         this.diffPlanId = result.plan.id
         if (state.selectedDate === this.data.date) this.data.plan = result.plan

@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **114 passed** |
-| KiraAI 3.1.2 同一套测试 | **114 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **117 passed** |
+| KiraAI 3.1.2 同一套测试 | **117 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、41 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -42,7 +42,7 @@
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **114 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **117 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -59,6 +59,7 @@
 | 整天删除 | 仅 WebUI 用户可用；归档 Plan、保留 DayState；定时规划不受影响；不触发 all-triggered；删除后同日重新规划复用 Plan，无唯一键冲突 |
 | Bot 删除权限 | 仅 delete_item/delete_block；无 delete_day/clear_day；低于 min/required coverage 返回结构化错误，事务回滚，需替换或重新规划 |
 | Bot 变更可见 | recent_changes 提供 actor/reason/removed/cancelled/其他变更数；skip 的 cancelled 原因也进入当前 Plan 和 review diff |
+| 预览删除/跳过契约 | 独立预览页 `/items/{id}/skip` 返回完整 plan；前端跳过/删除/保存均校验 `result.plan`，不会再因空响应把整份计划置空 |
 | 性能 | 天气预报缺失时只排后台任务，不等待；日历读取仅缓存/内置，自动更新在后台；100 项压力读取约 1.9–3.3ms |
 | 天气入口 | 顶栏天气 chip 可点击并打开“设置 → 天气与地点”，不再是无响应图标 |
 | 桌宠随机聊天 | 五种桌宠口吻分别生成事项数量、序号、标题、内容、时间、会话；关键词按主题色高亮；会话标题优先、空标题回退 sid、未指定显示执行池自动选 |
