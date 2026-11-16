@@ -1,4 +1,4 @@
-import { fmt } from './store.js?v=1.2.3'
+import { fmt } from './store.js?v=1.2.4'
 
 const VOICE = {
   tomato: {
@@ -142,6 +142,11 @@ const VOICE_TAILS = {
   hathor: ['路线确认', '收到', '时间刚好', '目标不变', '注意安全', '我在赶路'],
 }
 
+const RANDOM_ACTION_WEIGHTS = [
+  ['idle', 18], ['look', 12], ['stretch', 10], ['dance', 10],
+  ['crouch', 16], ['phone', 10], ['jump', 18],
+]
+
 const ACTIONS = {
   idle: '发呆', jump: '运动中', read: '看书', eat: '吃点东西', drink: '喝点东西', phone: '看手机', crouch: '蹲一会儿',
   work: '专注', music: '听歌', sleep: '打盹', umbrella: '撑伞', scarf: '围巾',
@@ -174,6 +179,7 @@ export const PetCompanion = {
       idleTimer: null,
       speechTimer: null,
       stickyAction: false,
+      stickyUntil: 0,
       interactionLockUntil: 0,
       jumpLeft: 0,
       jumpTimer: null,
@@ -250,7 +256,7 @@ export const PetCompanion = {
     this.showLabel(true)
     this.showCare()
     this.chooseAction(true)
-    this.idleTimer = setInterval(() => this.chooseAction(false), 12000)
+    this.idleTimer = setInterval(() => this.chooseAction(false), 7000)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
@@ -292,7 +298,10 @@ export const PetCompanion = {
     },
     chooseAction(force) {
       if (this.dragging || Date.now() < this.actionLockUntil) return
-      if (this.stickyAction && !force) return
+      if (this.stickyAction && !force) {
+        if (this.action === 'sleep') return
+        if (Date.now() < this.stickyUntil) return
+      }
       if (!force && Date.now() < this.interactionLockUntil) return
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
@@ -313,7 +322,7 @@ export const PetCompanion = {
         return
       }
       const keyword = this.keywordAction()
-      if (keyword) {
+      if (keyword && force) {
         if (keyword === 'jump') { this.startJump('schedule'); return }
         this.setAction(keyword, this.speechFor(keyword), true)
         return
@@ -328,13 +337,19 @@ export const PetCompanion = {
       else { this.action = idle; this.stickyAction = false }
     },
     pickIdle() {
-      const list = ['idle', 'look', 'stretch', 'dance', 'crouch', 'phone', 'sleep', 'jump']
-      return list[Math.floor(Math.random() * list.length)]
+      const total = RANDOM_ACTION_WEIGHTS.reduce((sum, item) => sum + item[1], 0)
+      let roll = Math.random() * total
+      for (const [action, weight] of RANDOM_ACTION_WEIGHTS) {
+        roll -= weight
+        if (roll <= 0) return action
+      }
+      return 'idle'
     },
     setAction(action, text, sticky = false) {
       const changed = this.action !== action
       this.action = action
       this.stickyAction = sticky
+      this.stickyUntil = sticky && action !== 'sleep' ? Date.now() + 15000 : 0
       if (action !== 'jump') { clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0 }
       if (changed) { this.showLabel(true); if (text) this.setSpeech(text) }
     },
@@ -370,7 +385,7 @@ export const PetCompanion = {
         this.lift = 8 + Math.random() * 28
         this.jumpLeft -= 1
         if (this.jumpLeft > 0) this.jumpHop()
-        else { this.action = 'idle'; this.stickyAction = false; this.jumpSchedule = false }
+        else { this.action = 'idle'; this.stickyAction = false; this.stickyUntil = 0; this.jumpSchedule = false }
       }, 460)
     },
     pat() {
