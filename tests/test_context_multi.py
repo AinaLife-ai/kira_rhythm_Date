@@ -70,7 +70,7 @@ async def test_short_item_reference_resolves_within_persona():
 
     runtime = FakeRuntime(Path(tempfile.mkdtemp(prefix="krd-short-id-")))
     await runtime.store.initialize()
-    day = datetime.now().date().isoformat()
+    day = (datetime.now().date() + timedelta(days=1)).isoformat()
     result = await runtime.plans.apply_plan("persona-a", {
         "date": day, "title": "短 ID",
         "blocks": [{"title": "组", "items": [

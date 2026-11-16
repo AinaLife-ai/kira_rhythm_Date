@@ -1036,3 +1036,9 @@ body { background:#08090c; }
 .day-types-line { margin-top:8px; color:var(--accent); font-size:9px; letter-spacing:.02em; }
 .day-type-switch { display:inline-flex; align-items:center; gap:5px; color:var(--nte-dim); font-size:8px; }
 .day-type-switch input { width:auto; }
+
+/* Per-action sprite scale: these poses have more opaque content in their source frames. */
+.pet-action-crouch .pet-sprite { transform:scale(.525); transform-origin:center bottom; }
+.pet-facing-left.pet-action-crouch .pet-sprite { transform:scaleX(-1) scale(.525); }
+.pet-action-sleep .pet-sprite { transform:scale(.7225); transform-origin:center bottom; }
+.pet-facing-left.pet-action-sleep .pet-sprite { transform:scaleX(-1) scale(.7225); }
