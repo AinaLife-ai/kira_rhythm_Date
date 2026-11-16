@@ -242,9 +242,21 @@ class ApiMixin:
     @register.api(method="POST", path="/v1/weather/preview")
     async def api_weather_preview(self, payload: dict):
         async def preview():
-            if payload.get("mode") == "virtual":
-                return self.runtime.weather.virtual(await self._persona(""), payload.get("virtual", {}))
-            return await self.runtime.weather._fetch(payload["provider"], payload["location"], 5, await self._persona(""))
+            mode = payload.get("mode", "off")
+            if mode == "off":
+                return {"mode": "off", "status": "off"}
+            if mode == "virtual":
+                virtual = payload.get("virtual")
+                if not isinstance(virtual, dict):
+                    raise KRDError("invalid_weather_preview", "Virtual weather settings are missing")
+                return self.runtime.weather.virtual(await self._persona(""), virtual)
+            location = payload.get("location")
+            if not isinstance(location, dict) or location.get("latitude") is None or location.get("longitude") is None:
+                raise KRDError("weather_location_required", "请先选择并保存一个天气地点，再预览真实天气")
+            provider = payload.get("provider")
+            if not provider:
+                raise KRDError("invalid_weather_preview", "Weather provider is missing")
+            return await self.runtime.weather._fetch(provider, location, 5, await self._persona(""))
         return await self._call(preview)
 
     @register.api(method="GET", path="/v1/weather/credentials")
