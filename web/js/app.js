@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.10'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.10'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.10'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.10'
-import { PetCompanion } from './pet.js?v=1.2.10'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.11'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.11'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.11'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.11'
+import { PetCompanion } from './pet.js?v=1.2.11'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.10'
+const ASSET_VERSION = '1.2.11'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -78,6 +78,8 @@ const app = Vue.createApp({
       monthEpoch: 0,
       forecastEpoch: 0,
       diffEpoch: 0,
+      confirmDialog: null,
+      confirmResolver: null,
     }
   },
   computed: {
@@ -589,8 +591,27 @@ const app = Vue.createApp({
         await Promise.all([this.loadMonth(), this.loadDiff()])
       } catch (error) { notify(error.message, 'error') }
     },
+    askConfirm({ title = '确认操作', message = '', confirmText = '确定', cancelText = '取消', danger = false } = {}) {
+      if (this.confirmResolver) this.confirmResolver(false)
+      return new Promise((resolve) => {
+        this.confirmResolver = resolve
+        this.confirmDialog = { title, message, confirmText, cancelText, danger }
+      })
+    },
+    resolveConfirm(ok) {
+      const resolve = this.confirmResolver
+      this.confirmResolver = null
+      this.confirmDialog = null
+      if (resolve) resolve(Boolean(ok))
+    },
     async deleteItem(item) {
-      if (!item || !window.confirm(`删除小项「${item.title}」？\n\n删除后从当前计划移除；以前的版本仍保留在「变化」中。`)) return
+      if (!item) return
+      if (!await this.askConfirm({
+        title: '删除小项',
+        message: `删除「${item.title}」？\n\n删除后从当前计划移除；以前的版本仍保留在「变化」中。`,
+        confirmText: '删除',
+        danger: true,
+      })) return
       try {
         const result = await post(`/items/${item.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除小项' })
         if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
@@ -603,7 +624,12 @@ const app = Vue.createApp({
     async deleteBlock(block) {
       if (!block) return
       const count = (block.items || []).filter((item) => ['scheduled', 'cancelled'].includes(item.state)).length
-      if (!window.confirm(`删除时段「${block.title}」？\n\n删除后此时段和未执行项从当前计划移除；已完成记录和以前的版本仍保留。`)) return
+      if (!await this.askConfirm({
+        title: '删除时段',
+        message: `删除「${block.title}」？\n\n删除后此时段和未执行项从当前计划移除；已完成记录和以前的版本仍保留。`,
+        confirmText: '删除',
+        danger: true,
+      })) return
       try {
         const result = await post(`/blocks/${block.id}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除时段' })
         if (!result?.plan) throw new Error('删除失败：服务器没有返回计划')
@@ -615,7 +641,12 @@ const app = Vue.createApp({
     },
     async deleteDay(date) {
       if (!date) return
-      if (!window.confirm(`删除 ${date} 的整天计划？\n\n删除后当天计划移入历史，当前显示无计划；以前的版本仍保留。定时规划仍照常运行，删除不会立即触发规划。`)) return
+      if (!await this.askConfirm({
+        title: '删除整天计划',
+        message: `删除 ${date} 的整天计划？\n\n删除后当天计划移入历史，当前显示无计划；以前的版本仍保留。定时规划仍照常运行，删除不会立即触发规划。`,
+        confirmText: '删除',
+        danger: true,
+      })) return
       try {
         await post(`/plans/${date}/delete?persona=${encodeURIComponent(state.selectedPersona)}`, { reason: 'WebUI 删除整天' })
         await this.refresh()
@@ -738,7 +769,11 @@ const app = Vue.createApp({
         if (conflicts.length) {
           const preview = conflicts.slice(0, 8).map((item) => `${item.date}：${item.names}`).join('\n')
           const more = conflicts.length > 8 ? `\n……另有 ${conflicts.length - 8} 天` : ''
-          if (!confirm(`这个日型会和其他日型在同一天生效：\n${preview}${more}\n\n名称和提示词会按优先级拼接。仍要保存吗？`)) return
+          if (!await this.askConfirm({
+            title: '日型冲突',
+            message: `这个日型会和其他日型在同一天生效：\n${preview}${more}\n\n名称和提示词会按优先级拼接。仍要保存吗？`,
+            confirmText: '继续保存',
+          })) return
         }
         await post(`/day-types?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
         state.dayTypeEditor = null
@@ -747,7 +782,7 @@ const app = Vue.createApp({
       } catch (error) { notify(error.message, 'error') }
     },
     async deleteDayType(entry) {
-      if (!confirm(`删除日型「${entry.name}」？`)) return
+      if (!await this.askConfirm({ title: '删除日型', message: `删除日型「${entry.name}」？`, confirmText: '删除', danger: true })) return
       try {
         await requestDelete(`/day-types/${encodeURIComponent(entry.id)}?persona=${encodeURIComponent(state.selectedPersona)}`)
         this.data.day_types = await get(`/day-types?persona=${encodeURIComponent(state.selectedPersona)}`)
@@ -828,7 +863,7 @@ const app = Vue.createApp({
       return upload(`/assets?persona=${encodeURIComponent(state.selectedPersona)}`, file)
     },
     async deleteTemplate(template) {
-      if (!confirm(`删除模板「${template.name}」？`)) return
+      if (!await this.askConfirm({ title: '删除模板', message: `删除模板「${template.name}」？`, confirmText: '删除', danger: true })) return
       try {
         await requestDelete(`/templates/${encodeURIComponent(template.id)}?persona=${encodeURIComponent(state.selectedPersona)}`)
         await this.loadCustomTemplates()
@@ -1040,7 +1075,11 @@ const app = Vue.createApp({
       try {
         const data = JSON.parse(await file.text())
         const preview = await post(`/import/preview?persona=${encodeURIComponent(state.selectedPersona)}`, data)
-        if (!confirm(`将导入 ${preview.plans} 个计划；运行不会重放。继续？`)) return
+        if (!await this.askConfirm({
+          title: '导入数据',
+          message: `将导入 ${preview.plans} 个计划；运行不会重放。继续？`,
+          confirmText: '继续导入',
+        })) return
         const result = await post(`/import/commit?persona=${encodeURIComponent(state.selectedPersona)}`, data)
         notify(`导入完成：${result.imported_plans} 个新计划`)
         await this.refresh()
@@ -1083,7 +1122,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.10'
+import { del as requestDelete } from './api.js?v=1.2.11'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
