@@ -152,7 +152,11 @@ class PlanService:
         if not raw_blocks:
             for alias in ("items", "entries", "schedule"):
                 if isinstance(payload.get(alias), list) and payload[alias]:
-                    raw_blocks = [{"title": str(payload.get("title", "生活片段"))[:80], "items": payload[alias]}]
+                    grouped: dict[str, list[dict[str, Any]]] = {}
+                    for item in payload[alias]:
+                        key = str(item.get("block", "生活片段")).strip()[:80] if isinstance(item, dict) else "生活片段"
+                        grouped.setdefault(key or "生活片段", []).append(item)
+                    raw_blocks = [{"title": title, "items": items} for title, items in grouped.items()]
                     break
         if not isinstance(raw_blocks, list):
             raise KRDError("invalid_plan", "blocks must be a list")
@@ -174,6 +178,8 @@ class PlanService:
                     raise KRDError("invalid_item", "Each item must be an object")
                 if not raw_item.get("target") and raw_item.get("session"):
                     raw_item["target"] = raw_item["session"]
+                if "execution_probability" not in raw_item and "probability" in raw_item:
+                    raw_item["execution_probability"] = raw_item["probability"]
                 schedule = raw_item.get("schedule") or {}
                 if not schedule:
                     if raw_item.get("at"):
@@ -546,7 +552,29 @@ class PlanService:
             result.append({**row, "diff": diff})
         return result
 
+    async def resolve_item_id(self, persona_id: str, reference: str) -> str:
+        """Resolve a full item id or a short item-id prefix within a persona."""
+        reference = str(reference or "").strip()
+        if not reference:
+            raise KRDError("item_required", "item_id is required")
+        row = await self.store.one(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id=?",
+            (persona_id, reference))
+        if row:
+            return row["id"]
+        if not reference.startswith("itm_"):
+            reference = f"itm_{reference}"
+        rows = await self.store.all(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id LIKE ?",
+            (persona_id, f"{reference}%"))
+        if len(rows) == 1:
+            return rows[0]["id"]
+        if len(rows) > 1:
+            raise KRDError("ambiguous_item", "Short item id matches more than one item")
+        raise KRDError("not_found", "Item not found")
+
     async def update_item(self, persona_id: str, item_id: str, patch: dict[str, Any], *, actor: str, reason: str = "") -> dict[str, Any]:
+        item_id = await self.resolve_item_id(persona_id, item_id)
         row = await self.store.one("SELECT plan_id FROM items WHERE id=?", (item_id,))
         if not row:
             raise KRDError("not_found", "Item not found")

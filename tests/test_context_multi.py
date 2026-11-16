@@ -61,3 +61,25 @@ def test_llm_payload_drops_empty_values_but_keeps_meaningful_false():
         "off": False, "zero": 0, "keep": "x", "timezone": "Asia/Shanghai",
     }, "Asia/Shanghai", "Asia/Shanghai")
     assert compact == {"off": False, "zero": 0, "keep": "x"}
+
+@pytest.mark.asyncio
+async def test_short_item_reference_resolves_within_persona():
+    from pathlib import Path
+    import tempfile
+    from tests.fakes import FakeRuntime
+
+    runtime = FakeRuntime(Path(tempfile.mkdtemp(prefix="krd-short-id-")))
+    await runtime.store.initialize()
+    day = datetime.now().date().isoformat()
+    result = await runtime.plans.apply_plan("persona-a", {
+        "date": day, "title": "短 ID",
+        "blocks": [{"title": "组", "items": [
+            {"title": "一", "schedule": {"type": "exact", "at": "09:00"}},
+            {"title": "二", "schedule": {"type": "exact", "at": "10:00"}},
+        ]}],
+    }, actor="user", expected_revision=0)
+    item = result["plan"]["blocks"][0]["items"][0]
+    short = item["id"].split("_", 1)[1][:12]
+    updated = await runtime.plans.update_item("persona-a", short, {"title": "短 ID 更新"}, actor="bot")
+    assert any(item["title"] == "短 ID 更新" for block in updated["plan"]["blocks"] for item in block["items"])
+    await runtime.close()
