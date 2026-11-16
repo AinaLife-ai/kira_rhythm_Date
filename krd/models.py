@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-TERMINAL_ITEM_STATES = {"triggered", "triggered_silent", "skipped_probability", "missed", "cancelled"}
+TERMINAL_ITEM_STATES = {"triggered", "triggered_silent", "skipped_probability", "missed", "cancelled", "deleted"}
 ACTIVE_ITEM_STATES = {"scheduled", "queued", "running"}
 RUNNING_RUN_STATES = {"prepared", "queued", "running"}
 INTERACTIONS = {"auto", "must_message", "silent"}

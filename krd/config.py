@@ -79,10 +79,18 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "blocked_execution_windows": [],
     "quiet_delivery_windows": [],
     "required_coverage_windows": [],
+    "calendar_refresh_hours": 6,
     "weather": {
         "mode": "off",
         "provider": "open_meteo",
         "locations": {},
+        "chat_current": True,
+        "chat_forecast": False,
+        "chat_forecast_days": 2,
+        "target_detail": True,
+        "future_detail": False,
+        "item_next": True,
+        "forecast_days": 7,
         "current_ttl_seconds": 1800,
         "forecast_ttl_seconds": 21600,
         "timeout_seconds": 3,
@@ -214,6 +222,14 @@ def validate_config(config: dict[str, Any]) -> None:
                 if type(minimum) is not int or type(maximum) is not int or not 0 <= minimum <= maximum <= 500:
                     raise KRDError("invalid_config", "Required coverage item limits are invalid")
     weather = _typed(config, "weather", dict)
+    for key in ("chat_current", "chat_forecast", "target_detail", "future_detail", "item_next"):
+        _typed(weather, key, bool)
+    if type(config.get("calendar_refresh_hours")) is not int or not 1 <= config["calendar_refresh_hours"] <= 168:
+        raise KRDError("invalid_config", "calendar_refresh_hours must be between 1 and 168")
+    for key, minimum, maximum in (("chat_forecast_days", 1, 7), ("forecast_days", 1, 16)):
+        value = weather.get(key)
+        if type(value) is not int or not minimum <= value <= maximum:
+            raise KRDError("invalid_config", f"weather.{key} is outside its range")
     if weather.get("mode") not in {"off", "real", "virtual", "hybrid"}:
         raise KRDError("invalid_config", "Unknown weather mode")
     providers = {"open_meteo", "met_norway", "nws", "bright_sky", "weatherapi", "visualcrossing", "qweather", "weatherbit", "openweather"}
