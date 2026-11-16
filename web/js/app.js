@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.11'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.11'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.11'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.11'
-import { PetCompanion } from './pet.js?v=1.2.11'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.12'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.12'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.12'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.12'
+import { PetCompanion } from './pet.js?v=1.2.12'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.11'
+const ASSET_VERSION = '1.2.12'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -80,6 +80,8 @@ const app = Vue.createApp({
       diffEpoch: 0,
       confirmDialog: null,
       confirmResolver: null,
+      planningCooldownUntil: 0,
+      runCooldownUntil: 0,
     }
   },
   computed: {
@@ -102,6 +104,12 @@ const app = Vue.createApp({
       if (!timezone || timezone === 'system') return date.getHours()
       try { return Number(new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hourCycle: 'h23' }).format(date)) % 24 }
       catch (_) { return date.getHours() }
+    },
+    planningCooldownRemaining() {
+      return Math.min(5, Math.max(0, Math.ceil((this.planningCooldownUntil - this.clockNow * 1000) / 1000)))
+    },
+    runCooldownRemaining() {
+      return Math.min(5, Math.max(0, Math.ceil((this.runCooldownUntil - this.clockNow * 1000) / 1000)))
     },
     localClock() {
       const date = new Date(this.clockNow * 1000)
@@ -535,6 +543,9 @@ const app = Vue.createApp({
       return text.length > 42 ? `${text.slice(0, 42)}…` : text
     },
     async runPlanning() {
+      const wait = this.planningCooldownRemaining
+      if (wait > 0) { notify(`操作防抖中，${wait} 秒后可再次规划`, 'error'); return }
+      this.planningCooldownUntil = Date.now() + 5000
       try {
         const date = state.selectedDate || this.data.date
         await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, {
@@ -579,7 +590,10 @@ const app = Vue.createApp({
       } catch (error) { notify(error.message, 'error') }
     },
     async runItem(item) {
-      try { await post(`/items/${item.id}/run?persona=${encodeURIComponent(state.selectedPersona)}`) ; notify('已交给框架触发') }
+      const wait = this.runCooldownRemaining
+      if (wait > 0) { notify(`操作防抖中，${wait} 秒后可再次触发`, 'error'); return }
+      this.runCooldownUntil = Date.now() + 5000
+      try { await post(`/items/${item.id}/run?persona=${encodeURIComponent(state.selectedPersona)}`); notify('已交给框架触发') }
       catch (error) { notify(error.message, 'error') }
     },
     async skipItem(item) {
@@ -829,6 +843,9 @@ const app = Vue.createApp({
       state.templateEditor = { template: { name: state.selectedPlan.title || '我的生活模板', description: '', plan, planning_prompt: '', execution_prompt: '', icon: 'sparkle' } }
     },
     async planWithTemplate(template) {
+      const wait = this.planningCooldownRemaining
+      if (wait > 0) { notify(`操作防抖中，${wait} 秒后可再次规划`, 'error'); return }
+      this.planningCooldownUntil = Date.now() + 5000
       try {
         const date = state.selectedDate || this.data.date
         const guidance = String(template.planning_prompt || template.prompt || template.description || '').trim()
@@ -1122,7 +1139,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.11'
+import { del as requestDelete } from './api.js?v=1.2.12'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
