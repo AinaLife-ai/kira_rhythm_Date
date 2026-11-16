@@ -471,12 +471,12 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'sessions'" class="settings-section">
         <span class="eyebrow">会话权限</span><h2>允许生活在哪些地方发生</h2>
-        <p class="field-hint">先决定 bot 可以在哪些聊天里生活，再分别选择“规划开始时”和“执行日程时”优先使用的会话。</p>
+        <p class="field-hint">会话权限是总开关，会同时限制规划和执行两个池。两个池留空时，会自动使用权限范围内的全部会话；不需要把同一批会话再勾一遍。只有想进一步缩小某个池的范围时，才勾选该池；池中已被权限排除的会话不会生效。</p>
         <label class="full-field"><span>名单模式</span><select v-model="$root.draft.session_access.mode"><option value="deny_list">黑名单：默认全部允许</option><option value="allow_list">白名单：仅列表允许</option></select></label>
         <div class="session-picker"><label v-for="session in $root.allSessions" :class="{selected: $root.draft.session_access.sessions.includes(session.sid)}"><input type="checkbox" :checked="$root.draft.session_access.sessions.includes(session.sid)" @change="$root.toggleAccess(session.sid)"><span>{{ session.title }}</span><small>{{ session.sid }}</small></label></div>
         <div v-for="kind in ['planning', 'execution']" class="pool-editor"><h3>{{ kind === 'planning' ? '规划起始会话池' : '小项执行会话池' }}</h3>
           <label class="full-field"><span>选择策略</span><select v-model="$root.draft[kind + '_pool'].strategy"><option value="pure_random">完全随机</option><option value="no_immediate_repeat">避免连续重复</option><option value="shuffle_bag">一轮内不重复</option><option value="round_robin">顺序轮换</option><option value="weighted_random">加权随机</option></select></label>
-          <p class="field-hint">不勾选表示使用权限范围内的全部会话；勾选后只使用池内会话。</p>
+          <p class="field-hint">留空 = 自动使用权限范围内的全部会话；勾选后只使用池内会话。权限外或已停用的会话不会生效。</p>
           <div class="session-picker"><label v-for="session in $root.allSessions" :class="{selected: $root.draft[kind + '_pool'].sessions.some(v => (v.sid || v) === session.sid)}"><input type="checkbox" :checked="$root.draft[kind + '_pool'].sessions.some(v => (v.sid || v) === session.sid)" @change="$root.togglePool(kind, session.sid)"><span>{{ session.title }}</span><small>{{ session.sid }}</small></label></div>
         </div>
       </section>
