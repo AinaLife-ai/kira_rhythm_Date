@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.6'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.6'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.6'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.6'
-import { PetCompanion } from './pet.js?v=1.2.6'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.7'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.7'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.7'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.7'
+import { PetCompanion } from './pet.js?v=1.2.7'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.6'
+const ASSET_VERSION = '1.2.7'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -26,6 +26,7 @@ const app = Vue.createApp({
       assetBase,
       booted: false,
       bootTimer: null,
+      motionLevel: (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced') ? 'reduced' : 'full',
       navItems: [
         { id: 'today', label: '此刻', icon: 'home' },
         { id: 'calendar', label: '日历', icon: 'calendar' },
@@ -285,6 +286,17 @@ const app = Vue.createApp({
   },
   methods: {
     notify(text, type = 'success') { notify(text, type) },
+    toggleMotion() {
+      const next = this.motionLevel === 'full' ? 'reduced' : 'full'
+      this.motionLevel = next
+      document.documentElement.dataset.motion = next
+      try { localStorage.setItem('krd_motion', next) } catch (_) {}
+      this.notify(next === 'full' ? '完整特效已开启' : '已切换为精简特效')
+    },
+    openWeatherSettings() {
+      this.setView('settings')
+      this.settingsTab = 'weather'
+    },
     updateNetwork() {
       const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection
       this.online = navigator.onLine
@@ -990,7 +1002,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.6'
+import { del as requestDelete } from './api.js?v=1.2.7'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

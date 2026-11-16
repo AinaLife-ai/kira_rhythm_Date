@@ -1,35 +1,30 @@
-import { fmt } from './store.js?v=1.2.6'
+import { fmt } from './store.js?v=1.2.7'
+import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.7'
 
 const VOICE = {
   tomato: {
-    rain: ['雨会把番茄打湿', '撑伞也不是不行'],
-    snow: ['雪像糖霜', '围巾要裹紧'],
     event: ['要出发了', '时间到了'],
-    crouch: ['蹲低一点，番茄也安全', '从下面看世界'],
+    crouch: ['蹲低一点，我也安全', '从下面看世界'],
     drink: ['番茄汁也不错', '先喝一口'],
-    idle: ['番茄，最好了。', '今天也不想动……'],
+    idle: ['我在这里。', '今天也不想动……'],
     look: ['那边红红的，是番茄吗？', '城市好吵，但还可以。'],
-    stretch: ['伸个懒腰，番茄不会掉。', '骨头在响。'],
-    dance: ['番茄也会跳舞吗？', '只跳一下。'],
+    stretch: ['伸个懒腰，我不会掉。', '骨头在响。'],
+    dance: ['我也会跳舞吗？', '只跳一下。'],
     phone: ['红红的图标，像番茄。', '消息好多，不想回。'],
-    sleep: ['番茄城堡……先睡一下。', '三分钟，再睡三分钟。'],
+    sleep: ['梦里有番茄城堡……先睡一下。', '三分钟，再睡三分钟。'],
     read: ['这一页有番茄的味道。', '读完就睡。'],
     eat: ['番茄酱是我的。', '这个可以蘸番茄吗？'],
     work: ['好麻烦……但会做完。', '别催，我在想。'],
-    music: ['耳机里的歌很轻。', '番茄也在听。'],
-    umbrella: ['伞往我这边一点。', '雨会把番茄打湿。'],
-    scarf: ['围巾像番茄酱的颜色。', '暖和。'],
-    run: ['要出发了吗？', '番茄跟上。'],
-    pat: ['摸头可以，番茄不能拿走。', '再摸一下也可以。'],
-    held: ['放我下来，番茄要掉了。', '我抓着你的袖子。'],
+    music: ['耳机里的歌很轻。', '我也在听。'],
+    run: ['要出发了吗？', '我跟上。'],
+    pat: ['摸头可以，别把我拿走。', '再摸一下也可以。'],
+    held: ['放我下来，我要掉了。', '我抓着你的袖子。'],
     thrown: ['不要转圈。', '我会飞吗？'],
-    land: ['番茄安全着陆。', '脚先落地。'],
-    dizzy: ['番茄在晃。', '世界转得慢一点。'],
-    default: ['番茄在这里。', '……嗯。'],
+    land: ['我安全着陆。', '脚先落地。'],
+    dizzy: ['我在晃。', '世界转得慢一点。'],
+    default: ['我在这里。', '……嗯。'],
   },
   mint: {
-    rain: ['雨声像节拍', '伞下的空气很凉'],
-    snow: ['雪落在尾巴上', '好冷好冷'],
     event: ['该出门了', '我准备好啦'],
     crouch: ['猫蹲好了', '尾巴收起来'],
     drink: ['气泡水在冒泡', '这杯很清凉'],
@@ -43,8 +38,6 @@ const VOICE = {
     eat: ['苏打气泡在跳。', '这个甜甜的。'],
     work: ['先把这件事做好。', '做完就去玩。'],
     music: ['耳机分你一只。', '这个歌单很适合海边。'],
-    umbrella: ['雨落在伞上，好好听。', '靠近一点。'],
-    scarf: ['围巾毛茸茸的。', '尾巴也想围。'],
     run: ['要追上去吗？', '我跑得很快。'],
     pat: ['耳朵不能一直摸……', '再摸一下。'],
     held: ['我的尾巴！', '轻一点。'],
@@ -54,8 +47,6 @@ const VOICE = {
     default: ['薄荷在这里。', '喵。'],
   },
   garnet: {
-    rain: ['雨比预报大', '别站在雨里'],
-    snow: ['风夹着雪', '走吧'],
     event: ['时间到了', '先走一步'],
     crouch: ['低一点，风小', '别管我'],
     drink: ['咖啡不加糖', '喝一口再继续'],
@@ -69,8 +60,6 @@ const VOICE = {
     eat: ['先吃饭。', '别浪费。'],
     work: ['先把事情做完。', '专注一会儿。'],
     music: ['这首歌可以。', '音量小一点。'],
-    umbrella: ['雨比预想的大。', '伞够用。'],
-    scarf: ['风很冷。', '围巾正好。'],
     run: ['我先过去。', '别掉队。'],
     pat: ['只准一下。', '手拿开。'],
     held: ['放我下来。', '别拎衣领。'],
@@ -80,8 +69,6 @@ const VOICE = {
     default: ['我在。', '有事说。'],
   },
   xun: {
-    rain: ['雨把灯笼洗亮了', '进来避雨'],
-    snow: ['雪落得安静', '茶要凉了'],
     event: ['该动身了', '客人，失陪'],
     crouch: ['蹲下来看看花', '膝盖还好'],
     drink: ['茶要趁热', '先润润嗓子'],
@@ -95,19 +82,15 @@ const VOICE = {
     eat: ['坐下，先吃点热的。', '汤要趁热。'],
     work: ['今天账还没对。', '做完就收摊。'],
     music: ['留声机还能转。', '这首听过。'],
-    umbrella: ['雨大，站进来。', '红伞够两个人。'],
-    scarf: ['夜里凉。', '披上。'],
-    run: ['要出门？', '伞带上。'],
+    run: ['要出门？', '路上小心。'],
     pat: ['老板娘可不是随便摸的。', '……下不为例。'],
     held: ['放我下来。', '衣服会皱。'],
-    thrown: ['别闹。', '这把伞会掉。'],
+    thrown: ['别闹。', '会摔。'],
     land: ['站稳了。', '毛手毛脚。'],
     dizzy: ['老了，经不起转。', '缓一缓。'],
     default: ['客人，慢慢看。', '我在店里。'],
   },
   hathor: {
-    rain: ['能见度下降', '改走地下线'],
-    snow: ['路面会滑', '围巾系紧'],
     event: ['目标时间到', '行动开始'],
     crouch: ['低姿态观察', '检查脚下'],
     drink: ['咖啡，提神', '补给完成'],
@@ -121,8 +104,6 @@ const VOICE = {
     eat: ['先补充能量。', '咖啡就好。'],
     work: ['按路线执行。', '目标出现。'],
     music: ['头盔里放点歌。', '这首适合夜路。'],
-    umbrella: ['雨会影响能见度。', '伞给你。'],
-    scarf: ['夜风很冷。', '围巾不影响行动。'],
     run: ['目标出现，开始行动。', '我先过去，你跟上。'],
     pat: ['翅膀不可以乱碰。', '只准一下。'],
     held: ['放我下来，还有单。', '别抓翅膀。'],
@@ -135,7 +116,7 @@ const VOICE = {
 
 
 const VOICE_TAILS = {
-  tomato: ['番茄看完了', '番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '番茄在这里', '今天慢慢来'],
+  tomato: ['我看完了', '梦里的番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '我在这里', '今天慢慢来'],
   mint: ['尾巴说好', '海风刚好', '猫耳朵听见了', '气泡还在跳', '今天也精神满满', '再来一次'],
   garnet: ['风有点大', '就这样', '我在听', '别靠太近', '这件事有意思', '稳住'],
   xun: ['茶还热着', '店里照常', '慢慢来', '我听着呢', '雨还没停', '客人先请'],
@@ -149,7 +130,7 @@ const RANDOM_ACTION_WEIGHTS = [
 
 const ACTIONS = {
   idle: '发呆', jump: '运动中', read: '看书', eat: '吃点东西', drink: '喝点东西', phone: '看手机', crouch: '蹲一会儿',
-  work: '专注', music: '听歌', sleep: '打盹', umbrella: '撑伞', scarf: '围巾',
+  work: '专注', music: '听歌', sleep: '打盹',
   run: '赶路', happy: '开心', stretch: '伸懒腰', dance: '跳舞', look: '看风景',
   held: '被拿起', thrown: '被丢起来', land: '落地', dizzy: '晕乎乎',
 }
@@ -163,6 +144,7 @@ export const PetCompanion = {
     event: { type: String, default: 'quiet' },
     activity: { type: String, default: '' },
     plan: { type: Object, default: null },
+    sessions: { type: Array, default: () => [] },
     now: { type: Number, default: () => Date.now() / 1000 },
     poses: { type: Object, default: () => ({}) },
     large: { type: Boolean, default: false },
@@ -174,6 +156,17 @@ export const PetCompanion = {
       action: 'idle',
       speech: '',
       speechUntil: 0,
+      speechKind: 'none',
+      speechParts: [],
+      chatterTimer: null,
+      chatterPreferred: '',
+      chatterCooldownUntil: 0,
+      lastChatterKey: '',
+      lastChatterTemplateKey: '',
+      lastInteractionKey: '',
+      lastInteractionTemplateKey: '',
+      recentChatterKeys: [],
+      recentInteractionKeys: [],
       panel: false,
       hearts: 0,
       idleTimer: null,
@@ -217,8 +210,6 @@ export const PetCompanion = {
       return this.poses.idle
     },
     label() { return ACTIONS[this.action] || '发呆' },
-    isUmbrella() { return this.action === 'umbrella' },
-    isScarf() { return this.action === 'scarf' },
     isBook() { return this.action === 'read' },
     isPhone() { return this.action === 'phone' },
     isCup() { return false },
@@ -239,17 +230,17 @@ export const PetCompanion = {
     statusLine() {
       if (this.event === 'imminent') return '下一件事快到了'
       if (this.weather === 'rain') return '正在听雨'
-      if (this.weather === 'snow') return '雪落在围巾上'
+      if (this.weather === 'snow') return '雪落得很轻'
       if (this.phase === 'night') return '夜色刚好'
       return '今天也在陪你'
     },
   },
   watch: {
     nextItem() { this.chooseAction(true) },
-    weather() { this.chooseAction(false) },
+    weather(value) { if (value !== 'off') this.queueChatter(1400, 'weather') },
     phase() { this.chooseAction(false) },
-    event() { this.chooseAction(false) },
-    activity() { this.chooseAction(true) },
+    event() { this.queueChatter(1800) },
+    activity() { this.chooseAction(true); this.queueChatter(1600) },
   },
   mounted() {
     if (window.innerWidth >= 1100) this.x = 90
@@ -257,11 +248,13 @@ export const PetCompanion = {
     this.showCare()
     this.chooseAction(true)
     this.idleTimer = setInterval(() => this.chooseAction(false), 7000)
+    this.scheduleChatter(5200)
   },
   beforeUnmount() {
     clearInterval(this.idleTimer)
     clearTimeout(this.jumpTimer)
     clearTimeout(this.speechTimer)
+    clearTimeout(this.chatterTimer)
     clearTimeout(this.labelTimer)
     clearTimeout(this.careTimer)
   },
@@ -277,12 +270,86 @@ export const PetCompanion = {
       clearTimeout(this.careTimer)
       this.careTimer = setTimeout(() => { this.careVisible = false }, ms)
     },
-    setSpeech(text, ms = 4200) {
-      if (!text) return
-      this.speech = text
+    setSpeech(input, ms = 4200, kind = 'action') {
+      const parts = Array.isArray(input)
+        ? input.filter((part) => part && String(part.text || '').trim())
+        : (input ? [{ text: String(input), tone: 'plain' }] : [])
+      if (!parts.length) return
+      this.speechParts = parts
+      this.speech = parts.map((part) => part.text).join('')
       this.speechUntil = Date.now() + ms
+      this.speechKind = kind
       clearTimeout(this.speechTimer)
-      this.speechTimer = setTimeout(() => { this.speech = '' }, ms)
+      this.speechTimer = setTimeout(() => this.clearSpeech(), ms)
+    },
+    clearSpeech() {
+      this.speech = ''
+      this.speechParts = []
+      this.speechKind = 'none'
+      this.speechUntil = 0
+      clearTimeout(this.speechTimer)
+    },
+    rememberSpeechKey(kind, key) {
+      const list = kind === 'chatter' ? this.recentChatterKeys : this.recentInteractionKeys
+      if (!key || list.includes(key)) return
+      list.push(key)
+      if (list.length > 6) list.shift()
+    },
+    scheduleChatter(delay = null) {
+      clearTimeout(this.chatterTimer)
+      const wait = delay == null
+        ? 9000 + Math.random() * 9000
+        : Math.max(400, delay)
+      this.chatterTimer = setTimeout(() => this.sayChatter(), wait)
+    },
+    queueChatter(delay = 1200, preferred = '') {
+      this.chatterPreferred = preferred
+      this.chatterCooldownUntil = Math.min(this.chatterCooldownUntil, Date.now())
+      this.scheduleChatter(delay)
+    },
+    sayChatter() {
+      if (this.dragging || this.panel || (typeof document !== 'undefined' && document.hidden)) {
+        this.scheduleChatter(4000)
+        return
+      }
+      if (Date.now() < this.speechUntil) {
+        this.scheduleChatter(3200)
+        return
+      }
+      if (Date.now() < this.chatterCooldownUntil) {
+        this.scheduleChatter(4200)
+        return
+      }
+      const preferred = this.chatterPreferred
+      this.chatterPreferred = ''
+      let payload = null
+      try {
+        payload = buildPetChatter({
+          variant: this.variant,
+          plan: this.plan,
+          nextItem: this.nextItem,
+          sessions: this.sessions,
+          weather: this.weather,
+          phase: this.phase,
+          event: this.event,
+          activity: this.activity,
+          now: this.now,
+          lastKey: this.lastChatterTemplateKey,
+          preferredTopic: preferred,
+          avoidKeys: this.recentChatterKeys,
+        })
+      } catch (_) {
+        this.scheduleChatter(6000)
+        return
+      }
+      if (payload?.parts?.length) {
+        this.setSpeech(payload.parts, 5600, 'chatter')
+        this.lastChatterKey = payload.key
+        this.lastChatterTemplateKey = payload.templateKey || ''
+        this.rememberSpeechKey('chatter', payload.templateKey || payload.key)
+        this.chatterCooldownUntil = Date.now() + 5200
+      }
+      this.scheduleChatter()
     },
     keywordAction() {
       const item = this.nextItem || {}
@@ -298,27 +365,16 @@ export const PetCompanion = {
     },
     chooseAction(force) {
       if (this.dragging || Date.now() < this.actionLockUntil) return
-      if (this.stickyAction && !force) {
-        if (this.action === 'sleep') return
-        if (Date.now() < this.stickyUntil) return
-      }
+      if (this.stickyAction && !force && Date.now() < this.stickyUntil) return
       if (!force && Date.now() < this.interactionLockUntil) return
       if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
       else this.sleepiness = 0
-      if (this.event === 'imminent') {
+      if (force && this.event === 'imminent') {
         this.setAction('look', this.speechFor('event'), false)
         return
       }
-      if (this.event === 'live') {
+      if (force && this.event === 'live') {
         this.setAction('work', this.speechFor('event'), false)
-        return
-      }
-      if (this.weather === 'rain') {
-        this.setAction('umbrella', this.speechFor('rain'), false)
-        return
-      }
-      if (this.weather === 'snow') {
-        this.setAction('scarf', this.speechFor('snow'), false)
         return
       }
       const keyword = this.keywordAction()
@@ -349,7 +405,7 @@ export const PetCompanion = {
       const changed = this.action !== action
       this.action = action
       this.stickyAction = sticky
-      this.stickyUntil = sticky && action !== 'sleep' ? Date.now() + 15000 : 0
+      this.stickyUntil = sticky ? Date.now() + (action === 'sleep' ? 12000 : 15000) : 0
       if (action !== 'jump') { clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0 }
       if (changed) { this.showLabel(true); if (text) this.setSpeech(text) }
     },
@@ -388,6 +444,24 @@ export const PetCompanion = {
         else { this.action = 'idle'; this.stickyAction = false; this.stickyUntil = 0; this.jumpSchedule = false }
       }, 460)
     },
+    interactionFor(kind) {
+      try {
+        return buildPetInteraction({
+          kind,
+          variant: this.variant,
+          plan: this.plan,
+          nextItem: this.nextItem,
+          sessions: this.sessions,
+          weather: this.weather,
+          phase: this.phase,
+          activity: this.activity,
+          lastKey: this.lastInteractionTemplateKey,
+          avoidKeys: this.recentInteractionKeys,
+        })
+      } catch (_) {
+        return null
+      }
+    },
     pat() {
       if (this.dragging || this.suppressClick) return
       clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
@@ -398,7 +472,15 @@ export const PetCompanion = {
       this.action = 'happy'
       this.stickyAction = false
       this.interactionLockUntil = 0
-      this.setSpeech(this.speechFor('pat'))
+      const interaction = this.interactionFor('pat')
+      if (interaction?.parts?.length) {
+        this.setSpeech(interaction.parts, 5600, 'pat')
+        this.lastInteractionKey = interaction.key
+        this.lastInteractionTemplateKey = interaction.templateKey || ''
+        this.rememberSpeechKey('interaction', interaction.templateKey || interaction.key)
+      } else {
+        this.setSpeech(this.speechFor('pat'))
+      }
       setTimeout(() => { this.hearts = 0 }, 900)
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
@@ -413,9 +495,18 @@ export const PetCompanion = {
       this.panel = false
     },
     talk() {
-      this.setAction('phone', this.speechFor('phone'), false)
-      this.interactionLockUntil = Date.now() + 4200
+      this.setAction('phone', '', false)
+      this.interactionLockUntil = Date.now() + 5200
       this.panel = false
+      const interaction = this.interactionFor('talk')
+      if (interaction?.parts?.length) {
+        this.setSpeech(interaction.parts, 6800, 'talk')
+        this.lastInteractionKey = interaction.key
+        this.lastInteractionTemplateKey = interaction.templateKey || ''
+        this.rememberSpeechKey('interaction', interaction.templateKey || interaction.key)
+      } else {
+        this.setSpeech(this.speechFor('phone'))
+      }
     },
     rest() {
       this.setAction('sleep', this.speechFor('sleep'), true)
@@ -489,17 +580,15 @@ export const PetCompanion = {
       }
       this.panel = !this.panel
       this.showCare()
-      if (this.panel) { this.showLabel(false); this.setSpeech('', 0) }
+      if (this.panel) { this.showLabel(false); this.clearSpeech() }
     },
   },
   template: `
   <div class="pet-companion" :class="[petClass, 'pet-action-' + action, { 'pet-large': large, 'pet-panel-open': panel, 'pet-left': x < 45, 'pet-dragging': dragging, 'pet-facing-left': facing < 0 }]" :style="petStyle">
     <transition name="pet-bubble">
-      <div v-if="speech" class="pet-bubble" @click="openPanel">{{ speech }}<i></i></div>
+      <div v-if="speechParts.length" class="pet-bubble" @click="openPanel"><span v-for="(part, index) in speechParts" :key="index" :class="['talk-seg', 'talk-' + part.tone]">{{ part.text }}</span><i></i></div>
     </transition>
     <div class="pet-hearts" v-if="hearts"><span v-for="n in hearts" :key="n" :style="{left:(n*6-6)+'px', animationDelay:(n*.07)+'s'}"></span></div>
-    <div class="pet-umbrella" v-if="isUmbrella"><i></i><b></b></div>
-    <div class="pet-scarf" aria-hidden="true"></div>
     <button class="pet-hit" @click="pat" @pointerdown="startDrag" aria-label="摸摸像素伙伴">
       <span class="pet-shadow"></span>
       <span class="pet-figure">
@@ -516,7 +605,7 @@ export const PetCompanion = {
       <div v-if="panel" class="pet-panel">
         <div class="pet-panel-head"><span>陪伴模式</span><button @click="panel = false" aria-label="关闭">×</button></div>
         <strong>{{ statusLine }}</strong>
-        <p>她会读懂下一项日程、关键词和天气。按住可以拖拽、提起或丢下，也会自己跳一跳和打盹。</p>
+        <p>点「聊天」或「摸摸」，她会说出当前事项、时间、内容与目标会话；直接摸小人也会回应。按住还能拖拽、提起或丢下。</p>
         <div class="pet-schedule">
           <div class="pet-schedule-head"><span>今日节奏</span><b>{{ planDone }}/{{ planTotal }}</b></div>
           <i class="pet-progress"><b :style="{width: planProgress + '%'}"></b></i>

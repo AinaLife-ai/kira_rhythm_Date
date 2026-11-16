@@ -108,9 +108,6 @@ body {
   .lunar-label { font-size: 8px; }
   .calendar-facts small { margin-left: 0; width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .boot-screen { display: none; }
-}
 
 .hero-card { min-height: 48vh; align-items:flex-end; background: linear-gradient(120deg, color-mix(in srgb,var(--panel-solid) 82%,transparent) 0%, color-mix(in srgb,var(--panel-solid) 34%,transparent) 62%, transparent 100%) !important; }
 .hero-hud { position:absolute; top:19px; right:22px; display:flex; align-items:center; gap:10px; color:var(--muted); font:9px/1.2 ui-monospace,monospace; letter-spacing:.12em; }
