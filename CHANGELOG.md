@@ -1,5 +1,13 @@
 # 更新日志
 
+## 1.2.13 · 2026-11-17
+
+- 修复日历翻月后 `monthAnchor` 被写成完整日期，导致 API 收到 `2026-11-01-01` 并抛出 `Expected YYYY-MM-DD`。
+- 翻月/读数统一使用 `YYYY-MM`，并在 `loadMonth` 对锚点做防御性截断。
+- 修复天气预览按钮：虚拟模式无需地点；真实模式缺地点给出明确提示；增加加载态、成功 toast 和结果自动滚动。
+- 天气预览接口对关闭模式/缺地点返回友好错误，不再 500/TypeError。
+- 版本键、单文件预览和安装包同步更新。
+
 ## 1.2.12 · 2026-11-17
 
 - 修复插件页面 WebSocket 未携带认证 token 导致实时事件收不到；改用 `PluginPageContext.createWebSocket`，并保留 buildWsUrl + token 后备。

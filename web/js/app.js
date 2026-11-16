@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.12'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.12'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.12'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.12'
-import { PetCompanion } from './pet.js?v=1.2.12'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.13'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.13'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.13'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.13'
+import { PetCompanion } from './pet.js?v=1.2.13'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.12'
+const ASSET_VERSION = '1.2.13'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -47,6 +47,7 @@ const app = Vue.createApp({
       cityQuery: '',
       cityResults: [],
       weatherResult: '',
+      weatherPreviewing: false,
       diagnostics: null,
       liveTimer: null,
       refreshing: false,
@@ -436,13 +437,13 @@ const app = Vue.createApp({
     async shiftMonth(delta) {
       const [year, month] = this.monthAnchor.split('-').map(Number)
       const date = new Date(Date.UTC(year, month - 1 + delta, 1, 12))
-      this.monthAnchor = date.toISOString().slice(0, 10)
+      this.monthAnchor = date.toISOString().slice(0, 7)
       await this.loadMonth()
     },
     async loadMonth() {
       if (!this.monthAnchor) return
       const epoch = ++this.monthEpoch
-      const anchor = this.monthAnchor
+      const anchor = String(this.monthAnchor).slice(0, 7)
       const persona = state.selectedPersona
       const [year, month] = anchor.split('-').map(Number)
       const start = `${anchor}-01`
@@ -1066,14 +1067,30 @@ const app = Vue.createApp({
       this.cityQuery = city.name
     },
     async weatherPreview() {
+      if (this.weatherPreviewing) return
+      const mode = this.draft.weather.mode
+      if (mode === 'off') {
+        this.weatherResult = '天气服务已关闭'
+        notify('天气服务已关闭')
+        return
+      }
+      if (mode !== 'virtual' && !this.currentLocation) {
+        notify('请先选择并保存天气地点，再预览真实天气', 'error')
+        return
+      }
+      this.weatherPreviewing = true
       try {
-        this.weatherResult = JSON.stringify(await post('/weather/preview', {
-          mode: this.draft.weather.mode,
+        const result = await post('/weather/preview', {
+          mode,
           provider: this.draft.weather.provider,
           location: this.currentLocation,
           virtual: this.draft.weather.virtual,
-        }), null, 2)
+        })
+        this.weatherResult = JSON.stringify(result, null, 2)
+        notify('天气预览已更新')
+        this.$nextTick(() => document.querySelector('.weather-preview')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
       } catch (error) { notify(error.message, 'error') }
+      finally { this.weatherPreviewing = false }
     },
     async exportData() {
       try {
@@ -1139,7 +1156,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.12'
+import { del as requestDelete } from './api.js?v=1.2.13'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.12'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.12'
+import { fmt } from './store.js?v=1.2.13'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.13'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -517,7 +517,11 @@ export const SettingsView = {
         <p v-else class="field-hint">当前服务无需 API Key，保存后会直接使用无需账号的公共接口。</p>
         <div class="location-editor"><input v-model="$root.cityQuery" placeholder="搜索城市，例如 桂林 或 桂林 广西" @keyup.enter="$root.geocode"><button class="soft-button" @click="$root.geocode">查找地点</button></div>
         <div v-if="$root.cityResults.length" class="city-results"><button v-for="city in $root.cityResults" @click="$root.chooseCity(city)"><strong>{{ city.name }}</strong><span class="city-admin">{{ [city.country, city.admin1, city.admin2, city.admin3, city.admin4].filter(Boolean).join(' · ') }}</span><small>{{ city.latitude }}, {{ city.longitude }}</small></button></div>
-        <div v-if="$root.currentLocation" class="current-location">当前地点：<strong>{{ $root.currentLocation.name }}</strong><span>{{ $root.currentLocation.latitude }}, {{ $root.currentLocation.longitude }}</span><button class="text-button" @click="$root.weatherPreview">预览天气</button></div>
+        <div v-if="$root.currentLocation" class="current-location">当前地点：<strong>{{ $root.currentLocation.name }}</strong><span>{{ $root.currentLocation.latitude }}, {{ $root.currentLocation.longitude }}</span></div>
+        <div class="weather-preview-actions" v-if="$root.draft.weather.mode !== 'off'">
+          <button class="soft-button" :disabled="$root.weatherPreviewing" @click="$root.weatherPreview">{{ $root.weatherPreviewing ? '正在预览…' : '预览天气' }}</button>
+          <small>虚拟模式无需地点；真实天气需要先保存地点。</small>
+        </div>
         <div class="form-grid"><label><span>虚拟地点</span><input v-model="$root.draft.weather.virtual.location"></label><label><span>虚拟气候</span><select v-model="$root.draft.weather.virtual.climate"><option value="temperate">温带四季</option><option value="island">海岛</option><option value="rainforest">雨林</option><option value="snow">雪原</option><option value="desert">沙漠</option><option value="floating_city">幻想浮空城</option></select></label></div>
         <label class="full-field"><span>虚拟随机种子</span><input v-model="$root.draft.weather.virtual.seed"></label>
         <pre v-if="$root.weatherResult" class="weather-preview">{{ $root.weatherResult }}</pre>
