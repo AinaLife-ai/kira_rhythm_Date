@@ -4,25 +4,25 @@ import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.7'
 const VOICE = {
   tomato: {
     event: ['要出发了', '时间到了'],
-    crouch: ['蹲低一点，番茄也安全', '从下面看世界'],
+    crouch: ['蹲低一点，我也安全', '从下面看世界'],
     drink: ['番茄汁也不错', '先喝一口'],
-    idle: ['番茄，最好了。', '今天也不想动……'],
+    idle: ['我在这里。', '今天也不想动……'],
     look: ['那边红红的，是番茄吗？', '城市好吵，但还可以。'],
-    stretch: ['伸个懒腰，番茄不会掉。', '骨头在响。'],
-    dance: ['番茄也会跳舞吗？', '只跳一下。'],
+    stretch: ['伸个懒腰，我不会掉。', '骨头在响。'],
+    dance: ['我也会跳舞吗？', '只跳一下。'],
     phone: ['红红的图标，像番茄。', '消息好多，不想回。'],
-    sleep: ['番茄城堡……先睡一下。', '三分钟，再睡三分钟。'],
+    sleep: ['梦里有番茄城堡……先睡一下。', '三分钟，再睡三分钟。'],
     read: ['这一页有番茄的味道。', '读完就睡。'],
     eat: ['番茄酱是我的。', '这个可以蘸番茄吗？'],
     work: ['好麻烦……但会做完。', '别催，我在想。'],
-    music: ['耳机里的歌很轻。', '番茄也在听。'],
-    run: ['要出发了吗？', '番茄跟上。'],
-    pat: ['摸头可以，番茄不能拿走。', '再摸一下也可以。'],
-    held: ['放我下来，番茄要掉了。', '我抓着你的袖子。'],
+    music: ['耳机里的歌很轻。', '我也在听。'],
+    run: ['要出发了吗？', '我跟上。'],
+    pat: ['摸头可以，别把我拿走。', '再摸一下也可以。'],
+    held: ['放我下来，我要掉了。', '我抓着你的袖子。'],
     thrown: ['不要转圈。', '我会飞吗？'],
-    land: ['番茄安全着陆。', '脚先落地。'],
-    dizzy: ['番茄在晃。', '世界转得慢一点。'],
-    default: ['番茄在这里。', '……嗯。'],
+    land: ['我安全着陆。', '脚先落地。'],
+    dizzy: ['我在晃。', '世界转得慢一点。'],
+    default: ['我在这里。', '……嗯。'],
   },
   mint: {
     event: ['该出门了', '我准备好啦'],
@@ -116,7 +116,7 @@ const VOICE = {
 
 
 const VOICE_TAILS = {
-  tomato: ['番茄看完了', '番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '番茄在这里', '今天慢慢来'],
+  tomato: ['我看完了', '梦里的番茄城堡今天也开着', '番茄酱要留一点', '再等一下下', '我在这里', '今天慢慢来'],
   mint: ['尾巴说好', '海风刚好', '猫耳朵听见了', '气泡还在跳', '今天也精神满满', '再来一次'],
   garnet: ['风有点大', '就这样', '我在听', '别靠太近', '这件事有意思', '稳住'],
   xun: ['茶还热着', '店里照常', '慢慢来', '我听着呢', '雨还没停', '客人先请'],
@@ -162,7 +162,11 @@ export const PetCompanion = {
       chatterPreferred: '',
       chatterCooldownUntil: 0,
       lastChatterKey: '',
+      lastChatterTemplateKey: '',
       lastInteractionKey: '',
+      lastInteractionTemplateKey: '',
+      recentChatterKeys: [],
+      recentInteractionKeys: [],
       panel: false,
       hearts: 0,
       idleTimer: null,
@@ -285,6 +289,12 @@ export const PetCompanion = {
       this.speechUntil = 0
       clearTimeout(this.speechTimer)
     },
+    rememberSpeechKey(kind, key) {
+      const list = kind === 'chatter' ? this.recentChatterKeys : this.recentInteractionKeys
+      if (!key || list.includes(key)) return
+      list.push(key)
+      if (list.length > 6) list.shift()
+    },
     scheduleChatter(delay = null) {
       clearTimeout(this.chatterTimer)
       const wait = delay == null
@@ -324,8 +334,9 @@ export const PetCompanion = {
           event: this.event,
           activity: this.activity,
           now: this.now,
-          lastKey: this.lastChatterKey,
+          lastKey: this.lastChatterTemplateKey,
           preferredTopic: preferred,
+          avoidKeys: this.recentChatterKeys,
         })
       } catch (_) {
         this.scheduleChatter(6000)
@@ -334,6 +345,8 @@ export const PetCompanion = {
       if (payload?.parts?.length) {
         this.setSpeech(payload.parts, 5600, 'chatter')
         this.lastChatterKey = payload.key
+        this.lastChatterTemplateKey = payload.templateKey || ''
+        this.rememberSpeechKey('chatter', payload.templateKey || payload.key)
         this.chatterCooldownUntil = Date.now() + 5200
       }
       this.scheduleChatter()
@@ -442,7 +455,8 @@ export const PetCompanion = {
           weather: this.weather,
           phase: this.phase,
           activity: this.activity,
-          lastKey: this.lastInteractionKey,
+          lastKey: this.lastInteractionTemplateKey,
+          avoidKeys: this.recentInteractionKeys,
         })
       } catch (_) {
         return null
@@ -462,6 +476,8 @@ export const PetCompanion = {
       if (interaction?.parts?.length) {
         this.setSpeech(interaction.parts, 5600, 'pat')
         this.lastInteractionKey = interaction.key
+        this.lastInteractionTemplateKey = interaction.templateKey || ''
+        this.rememberSpeechKey('interaction', interaction.templateKey || interaction.key)
       } else {
         this.setSpeech(this.speechFor('pat'))
       }
@@ -486,6 +502,8 @@ export const PetCompanion = {
       if (interaction?.parts?.length) {
         this.setSpeech(interaction.parts, 6800, 'talk')
         this.lastInteractionKey = interaction.key
+        this.lastInteractionTemplateKey = interaction.templateKey || ''
+        this.rememberSpeechKey('interaction', interaction.templateKey || interaction.key)
       } else {
         this.setSpeech(this.speechFor('phone'))
       }

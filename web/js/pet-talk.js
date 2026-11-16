@@ -16,41 +16,41 @@ const TONE = {
 
 const VOICES = {
   tomato: {
-    name: '番茄',
+    name: '我',
     progress: [
-      '番茄数了数，今天 {{total}} 件事，已经做完 {{done}} 件，还剩 {{left}} 件。',
-      '今天有 {{total}} 件，番茄做完 {{done}} 件啦……还剩 {{left}} 件。',
-      '番茄记着呢：{{total}} 件里完成 {{done}} 件，{{left}} 件还在等。',
+      '我数了数，今天 {{total}} 件事，已经做完 {{done}} 件，还剩 {{left}} 件。',
+      '今天有 {{total}} 件，我做完 {{done}} 件啦……还剩 {{left}} 件。',
+      '我记着呢：{{total}} 件里完成 {{done}} 件，{{left}} 件还在等。',
     ],
     next: [
-      '{{index}}是 {{title}}，{{time}} 开始。番茄会在 {{session}} 等你。',
+      '{{index}}是 {{title}}，{{time}} 开始。我会在 {{session}} 等你。',
       '接下来是 {{index}}，{{title}}。{{time}}，在 {{session}}。',
-      '{{title}}排在{{index}}，{{time}}。番茄没忘，在 {{session}}。',
+      '{{title}}排在{{index}}，{{time}}。我没忘，在 {{session}}。',
     ],
     item: [
-      '{{title}}呀，{{detail}}。番茄觉得慢慢来就好。',
+      '{{title}}呀，{{detail}}。我觉得慢慢来就好。',
       '{{index}}是 {{title}}，{{detail}}。不急。',
-      '番茄看到 {{title}} 了，{{detail}}。',
+      '我看到 {{title}} 了，{{detail}}。',
     ],
     session: [
-      '{{session}} 那边有 {{index}} {{title}}。番茄记住了。',
-      '要去 {{session}} 呀。{{index}}是 {{title}}，番茄会跟着。',
-      '{{index}} {{title}} 在 {{session}}。番茄先看一眼。',
+      '{{session}} 那边有 {{index}} {{title}}。我记住了。',
+      '要去 {{session}} 呀。{{index}}是 {{title}}，我会跟着。',
+      '{{index}} {{title}} 在 {{session}}。我先看一眼。',
     ],
     weather: [
-      '外面{{weather}}，番茄会待在 {{session}}。还剩 {{left}} 件事。',
-      '{{weather}}天呀。番茄数过了，还有 {{left}} 件事。',
-      '听见{{weather}}了。{{index}} {{title}} 在 {{session}}，番茄会记得。',
+      '外面{{weather}}，我会待在 {{session}}。还剩 {{left}} 件事。',
+      '{{weather}}天呀。我数过了，还有 {{left}} 件事。',
+      '听见{{weather}}了。{{index}} {{title}} 在 {{session}}，我会记得。',
     ],
     quiet: [
-      '今天没有安排。番茄就晒晒太阳，也很好。',
-      '没有要赶的时间。番茄在等下一件小事。',
-      '今天留白。番茄把时间留给你。',
+      '今天没有安排。我就晒晒太阳，也很好。',
+      '没有要赶的时间。我在等下一件小事。',
+      '今天留白。我把时间留给你。',
     ],
     done: [
-      '今天的 {{total}} 件事都做完啦。番茄要奖励自己一颗番茄。',
-      '全都完成了。{{done}} 件，一件不少。番茄可以发呆了。',
-      '清单空了。番茄把最后一点力气也收好了。',
+      '今天的 {{total}} 件事都做完啦。我要奖励自己一颗番茄。',
+      '全都完成了。{{done}} 件，一件不少。我可以发呆了。',
+      '清单空了。我把最后一点力气也收好了。',
     ],
   },
   mint: {
@@ -210,21 +210,21 @@ const VOICES = {
 const INTERACTIONS = {
   tomato: {
     talk: [
-      '番茄在听。今天还剩 {{left}} 件，{{index}}是 {{title}}，{{time}} 去 {{session}}，{{detail}}',
-      '要聊今天吗？番茄把 {{index}} {{title}} 记在 {{session}} 了，{{time}} 开始，{{detail}}',
+      '我在听。今天还剩 {{left}} 件，{{index}}是 {{title}}，{{time}} 去 {{session}}，{{detail}}',
+      '要聊今天吗？我把 {{index}} {{title}} 记在 {{session}} 了，{{time}} 开始，{{detail}}',
       '现在是{{phase}}。{{total}} 件里做完 {{done}} 件，{{index}} {{title}} 还在等，{{time}} 在 {{session}}',
-      '番茄没有走神。{{title}}在{{index}}，{{time}}，{{session}}；{{detail}}',
+      '我没有走神。{{title}}在{{index}}，{{time}}，{{session}}；{{detail}}',
     ],
     pat: [
-      '摸头可以……番茄在。{{index}} {{title}}，{{time}} 在 {{session}}，{{detail}}',
-      '再摸一下也可以。番茄记得还剩 {{left}} 件，{{index}} {{title}} 在 {{session}}',
-      '番茄被你摸醒了。{{title}} 在 {{index}}，{{time}}，别担心',
-      '呼……{{phase}}里，番茄在{{activity}}，{{index}} {{title}} 在 {{session}}',
+      '摸头可以……我在。{{index}} {{title}}，{{time}} 在 {{session}}，{{detail}}',
+      '再摸一下也可以。我记得还剩 {{left}} 件，{{index}} {{title}} 在 {{session}}',
+      '我被你摸醒了。{{title}} 在 {{index}}，{{time}}，别担心',
+      '呼……{{phase}}里，我在{{activity}}，{{index}} {{title}} 在 {{session}}',
     ],
-    talkQuiet: ['今天没有安排。番茄在这里，想聊什么都可以', '番茄把时间留给你了。没有要赶的事，慢慢说'],
-    patQuiet: ['今天没有安排……番茄在，摸头也可以', '没有下一件了。番茄把一点安静分给你'],
-    talkDone: ['今天的 {{total}} 件都做完了。番茄可以陪你聊一会儿', '清单空了。{{done}} 件一件不少，番茄在这里'],
-    patDone: ['全都做完了……番茄把剩下的时间给你', '今天的 {{total}} 件收好了。番茄可以安心被你摸头'],
+    talkQuiet: ['今天没有安排。我在这里，想聊什么都可以', '我把时间留给你了。没有要赶的事，慢慢说'],
+    patQuiet: ['今天没有安排……我在，摸头也可以', '没有下一件了。我把一点安静分给你'],
+    talkDone: ['今天的 {{total}} 件都做完了。我可以陪你聊一会儿', '清单空了。{{done}} 件一件不少，我在这里'],
+    patDone: ['全都做完了……我把剩下的时间给你', '今天的 {{total}} 件收好了。我可以安心被你摸头'],
   },
   mint: {
     talk: [
@@ -335,15 +335,13 @@ const sessionText = (item, sessions) => {
 
 const chooseOne = (list, rng) => list[Math.floor(rng() * list.length)] || list[0]
 
-const pickTemplate = (voice, topic, rng, lastKey) => {
+const pickTemplate = (voice, topic, rng, lastKey, avoidKeys = []) => {
   const list = voice[topic] || voice.quiet
-  let index = Math.floor(rng() * list.length)
-  let key = `${topic}:${index}`
-  if (lastKey === key && list.length > 1) {
-    index = (index + 1 + Math.floor(rng() * (list.length - 1))) % list.length
-    key = `${topic}:${index}`
-  }
-  return { text: list[index], key }
+  const blocked = new Set([lastKey, ...avoidKeys])
+  const free = list.map((_, index) => index).filter((index) => !blocked.has(`${topic}:${index}`))
+  const pool = free.length ? free : list.map((_, index) => index)
+  const index = pool[Math.floor(rng() * pool.length)]
+  return { text: list[index], key: `${topic}:${index}` }
 }
 
 const render = (template, values) => {
@@ -385,7 +383,7 @@ const stripTrailingPeriod = (parts) => {
 export function buildPetChatter({
   variant = 'tomato', plan = null, nextItem = null, sessions = [], weather = 'off',
   phase = 'day', event = 'quiet', activity = '', now = Date.now() / 1000,
-  rng = Math.random, lastKey = '', preferredTopic = '',
+  rng = Math.random, lastKey = '', preferredTopic = '', avoidKeys = [],
 } = {}) {
   const voice = VOICES[variant] || VOICES.tomato
   const items = flattenItems(plan)
@@ -423,16 +421,119 @@ export function buildPetChatter({
   }
   const usablePreferred = preferredTopic === 'weather' && !weatherText ? '' : preferredTopic
   const topic = (usablePreferred && voice[usablePreferred]) ? usablePreferred : (chooseOne(weighted, rng) || 'quiet')
-  const picked = pickTemplate(voice, topic, rng, lastKey)
+  const picked = pickTemplate(voice, topic, rng, lastKey, avoidKeys)
   const parts = stripTrailingPeriod(render(picked.text, values))
   return {
     key: `${variant}:${picked.key}`,
+    templateKey: picked.key,
     topic,
     parts,
     text: parts.map((part) => part.text).join(''),
     index,
     title: values.title,
     session: values.session,
+  }
+}
+
+const EXTRA_VOICES = {
+  tomato: {
+    progress: ['我掰着手指数：{{total}} 件，完成 {{done}} 件，还剩 {{left}} 件', '{{left}} 件还没做完。我把它们排好了'],
+    next: ['{{time}} 的 {{title}}，在 {{session}}。我已经记住了', '下一件不是番茄，是 {{title}}。{{index}}，{{time}}'],
+    item: ['{{title}}，{{detail}}。我想配一颗小番茄', '{{detail}} 的 {{title}}，我会慢慢做'],
+    session: ['{{session}} 里等着的，是 {{index}} {{title}}', '我会去 {{session}}，{{title}} 排在 {{index}}'],
+    weather: ['{{weather}}的时候，我想喝番茄汤，还剩 {{left}} 件', '外面{{weather}}。{{session}} 的 {{title}}，我会记得'],
+    quiet: ['今天没有安排。我在窗边晒一会儿', '清单是空的。我把番茄酱留到明天'],
+    done: ['{{total}} 件全做完了。我奖励自己一颗番茄', '清单空了。我可以慢慢吃番茄了'],
+  },
+  mint: {
+    progress: ['喵，{{left}} 件还没做，薄荷的尾巴数得过来', '{{done}} 件完成啦，剩下 {{left}} 件交给薄荷'],
+    next: ['薄荷已经把 {{title}} 放进 {{session}} 的路线了', '{{index}} {{title}}，{{time}}，薄荷先跑一步'],
+    item: ['{{title}} 呀，{{detail}}。薄荷陪你拆成小块', '{{detail}}，听起来像小鱼干……薄荷会认真'],
+    session: ['要去 {{session}} 找 {{title}}，薄荷不会迷路', '{{session}} 的 {{index}} {{title}}，薄荷记得味道'],
+    weather: ['{{weather}}天，薄荷的耳朵湿了一点，还剩 {{left}} 件', '天气变了也不怕，{{index}} {{title}} 在 {{session}}'],
+    quiet: ['没有安排，薄荷在追自己的尾巴', '今天留白，薄荷把海风分你一半'],
+    done: ['{{total}} 件完成，薄荷要打个滚', '清单空了，薄荷把尾巴绕成一个圈'],
+  },
+  garnet: {
+    progress: ['{{total}} 件，完成 {{done}} 件，剩余 {{left}} 件。别让我重复', '{{left}} 件没清。{{done}} 件已结案'],
+    next: ['{{index}} {{title}}。{{time}}，{{session}}。迟到不等人', '下一项 {{title}}。{{time}}，去 {{session}}'],
+    item: ['{{title}}。{{detail}}。别拖', '{{index}} {{title}}，{{detail}}。做完再说话'],
+    session: ['{{session}}。{{title}}。别走错', '{{index}} {{title}}，目标 {{session}}。收到'],
+    weather: ['{{weather}}。{{left}} 件，自己安排', '{{weather}}天。{{session}} 的 {{title}}，别忘'],
+    quiet: ['没有下一件。安静点', '今天清单为空。别来吵我'],
+    done: ['{{total}} 件清完。收工', '{{done}} 件。可以安静了'],
+  },
+  xun: {
+    progress: ['客人，今天 {{total}} 件，做完 {{done}} 件，还剩 {{left}} 件。先喝口茶', '店里记着 {{left}} 件，慢慢来，茶不会凉'],
+    next: ['{{time}} 的 {{title}}，在 {{session}}。客人，别让茶等', '下一件 {{title}}，{{index}}。{{time}}，{{session}} 见'],
+    item: ['{{title}}，{{detail}}。像一碗热汤，慢慢喝', '{{index}} {{title}}。{{detail}}，先做起来'],
+    session: ['去 {{session}} 吧，{{index}} {{title}}，茶给你留着', '{{session}} 的 {{title}}，客人，慢慢走'],
+    weather: ['外面{{weather}}，店里正好有热茶。还剩 {{left}} 件', '{{weather}}天，{{index}} {{title}} 在 {{session}}，进来坐坐'],
+    quiet: ['今天不忙。客人，坐一会儿', '没有下一件，灯笼还没点，茶已经好了'],
+    done: ['{{total}} 件都做完了。客人，收摊喝茶', '{{done}} 件完成。今天辛苦了'],
+  },
+  hathor: {
+    progress: ['清单 {{total}} 项，完成 {{done}} 项，剩余 {{left}} 项。状态正常', '{{left}} 项待处理，{{done}} 项已归档'],
+    next: ['{{index}} {{title}}，{{time}}。目标 {{session}}，路线已更新', '下一项 {{title}}。{{time}}，{{session}}，确认'],
+    item: ['{{title}}，{{detail}}。记录完毕', '{{index}} {{title}}，{{detail}}。执行序列确认'],
+    session: ['{{session}}，{{index}} {{title}}。联络点确认', '目标 {{session}}，{{title}}，{{time}}。保持频道'],
+    weather: ['{{weather}}，环境变化。剩余 {{left}} 项，按计划', '{{weather}}。{{index}} {{title}}，{{session}}，注意'],
+    quiet: ['今日无任务。通讯保持', '清单为空。可以待命'],
+    done: ['清单完成。{{done}} 项，归档', '{{total}} 项全部完成。收工'],
+  },
+}
+
+const EXTRA_INTERACTIONS = {
+  tomato: {
+    talk: ['我在。{{phase}}的{{activity}}，{{index}} {{title}} 在 {{session}}，{{detail}}', '{{total}} 件里还剩 {{left}} 件，{{title}} 在 {{index}}，{{time}}；我陪你'],
+    pat: ['我在呢……{{index}} {{title}}，{{time}}，{{session}}，{{detail}}', '摸头收到。{{left}} 件小事，{{index}} {{title}}，我记着'],
+    talkQuiet: ['想聊什么都没有也可以，我在这里'],
+    patQuiet: ['摸头也可以，今天我归你管'],
+    talkDone: ['{{total}} 件都收好了，我可以陪你到很晚'],
+    patDone: ['全都做完了……再摸一下也没关系'],
+  },
+  mint: {
+    talk: ['薄荷在听！{{index}} {{title}}，{{time}} 在 {{session}}，{{detail}}', '{{left}} 件还剩着，{{title}} 在 {{index}}，{{time}}，薄荷陪你'],
+    pat: ['呼噜……{{title}} 在 {{index}}，{{time}}，薄荷记着', '摸头收到！{{left}} 件，{{index}} {{title}}，薄荷陪你'],
+    talkQuiet: ['薄荷在，今天可以慢慢聊'],
+    patQuiet: ['呼噜……今天可以多摸一下'],
+    talkDone: ['全都做完了，薄荷要陪你玩一会儿'],
+    patDone: ['清单空了，薄荷的尾巴归你摸'],
+  },
+  garnet: {
+    talk: ['{{index}}：{{title}}。{{time}}，{{session}}。{{detail}}。说完了', '还剩 {{left}} 件。{{title}}，{{time}}。别让我提醒'],
+    pat: ['手拿开。{{index}} {{title}}，{{time}}，{{session}}。记住', '摸一下就够了。{{left}} 件，{{title}} 在 {{index}}'],
+    talkQuiet: ['没安排。你可以说，我听'],
+    patQuiet: ['只准一下。今天没有下一件'],
+    talkDone: ['都做完了。现在可以说话'],
+    patDone: ['做完了。手可以拿开……再放一会儿也行'],
+  },
+  xun: {
+    talk: ['客人，{{index}} {{title}}，{{time}} 在 {{session}}，{{detail}}，慢慢来', '茶还热着。还剩 {{left}} 件，{{title}} 排在 {{index}}'],
+    pat: ['摸头可以，{{index}} {{title}}，{{time}}，{{session}}，茶要凉了', '客人，{{left}} 件还在，{{title}} 在 {{index}}，不急'],
+    talkQuiet: ['客人，今天店里不忙，想聊什么'],
+    patQuiet: ['摸头可以，今天茶管够'],
+    talkDone: ['都做完了。客人，坐下喝杯茶'],
+    patDone: ['收摊了。今天可以多摸一下'],
+  },
+  hathor: {
+    talk: ['通讯稳定。{{index}} {{title}}，{{time}}，{{session}}，{{detail}}', '剩余 {{left}} 项。{{title}}，{{time}}，目标 {{session}}'],
+    pat: ['接触确认。{{index}} {{title}}，{{time}}，{{session}}', '许可。{{left}} 项待处理，{{title}} 在 {{index}}'],
+    talkQuiet: ['今日无任务。通讯保持，可以聊'],
+    patQuiet: ['接触确认。今日无任务，可以摸'],
+    talkDone: ['清单清空。可以聊别的'],
+    patDone: ['任务结束。摸头许可'],
+  },
+}
+
+for (const [variant, topics] of Object.entries(EXTRA_VOICES)) {
+  for (const [topic, lines] of Object.entries(topics)) {
+    if (VOICES[variant]?.[topic]) VOICES[variant][topic].push(...lines)
+  }
+}
+for (const [variant, groups] of Object.entries(EXTRA_INTERACTIONS)) {
+  for (const [group, lines] of Object.entries(groups)) {
+    if (INTERACTIONS[variant]?.[group]) INTERACTIONS[variant][group].push(...lines)
   }
 }
 
@@ -445,7 +546,7 @@ const PHASE_TEXT = { dawn: '清晨', morning: '上午', day: '白昼', dusk: '�
  */
 export function buildPetInteraction({
   kind = 'talk', variant = 'tomato', plan = null, nextItem = null, sessions = [],
-  weather = 'off', phase = 'day', activity = '', rng = Math.random, lastKey = '',
+  weather = 'off', phase = 'day', activity = '', rng = Math.random, lastKey = '', avoidKeys = [],
 } = {}) {
   const interactionKind = kind === 'pat' ? 'pat' : 'talk'
   const voice = INTERACTIONS[variant] || INTERACTIONS.tomato
@@ -475,10 +576,11 @@ export function buildPetInteraction({
     ? `${interactionKind}Quiet`
     : (leftCount ? interactionKind : `${interactionKind}Done`)
   const templates = voice[group] || voice[interactionKind]
-  const picked = pickTemplate({ [group]: templates }, group, rng, lastKey)
+  const picked = pickTemplate({ [group]: templates }, group, rng, lastKey, avoidKeys)
   const parts = stripTrailingPeriod(render(picked.text, values))
   return {
     key: `${variant}:${interactionKind}:${picked.key}`,
+    templateKey: picked.key,
     kind: interactionKind,
     topic: group,
     parts,
