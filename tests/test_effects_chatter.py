@@ -76,6 +76,7 @@ console.log(JSON.stringify(output));
     output = json.loads(result.stdout)
     assert len({line["variant"] for line in output["lines"]}) == 5
     assert all(line["text"] and "伞" not in line["text"] for line in output["lines"])
+    assert all(not line["text"].rstrip().endswith("。") for line in output["lines"])
     assert all("count" in line["tones"] or "title" in line["tones"] for line in output["lines"])
     named = output["named"]
     assert "测试会话" in named["text"]

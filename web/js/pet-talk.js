@@ -318,6 +318,17 @@ export function buildPetChatter({
   const topic = (usablePreferred && voice[usablePreferred]) ? usablePreferred : (chooseOne(weighted, rng) || 'quiet')
   const picked = pickTemplate(voice, topic, rng, lastKey)
   const parts = render(picked.text, values)
+  // Chatter never ends with a flat Chinese full stop; keep !/?/ellipsis intact.
+  let last = parts[parts.length - 1]
+  while (last) {
+    const cleaned = last.text.replace(/。\s*$/, '')
+    if (cleaned) {
+      last.text = cleaned
+      break
+    }
+    parts.pop()
+    last = parts[parts.length - 1]
+  }
   return {
     key: `${variant}:${picked.key}`,
     topic,
