@@ -1,5 +1,5 @@
 import { fmt } from './store.js?v=1.2.7'
-import { buildPetChatter } from './pet-talk.js?v=1.2.7'
+import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.7'
 
 const VOICE = {
   tomato: {
@@ -162,6 +162,7 @@ export const PetCompanion = {
       chatterPreferred: '',
       chatterCooldownUntil: 0,
       lastChatterKey: '',
+      lastInteractionKey: '',
       panel: false,
       hearts: 0,
       idleTimer: null,
@@ -430,6 +431,23 @@ export const PetCompanion = {
         else { this.action = 'idle'; this.stickyAction = false; this.stickyUntil = 0; this.jumpSchedule = false }
       }, 460)
     },
+    interactionFor(kind) {
+      try {
+        return buildPetInteraction({
+          kind,
+          variant: this.variant,
+          plan: this.plan,
+          nextItem: this.nextItem,
+          sessions: this.sessions,
+          weather: this.weather,
+          phase: this.phase,
+          activity: this.activity,
+          lastKey: this.lastInteractionKey,
+        })
+      } catch (_) {
+        return null
+      }
+    },
     pat() {
       if (this.dragging || this.suppressClick) return
       clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
@@ -440,7 +458,13 @@ export const PetCompanion = {
       this.action = 'happy'
       this.stickyAction = false
       this.interactionLockUntil = 0
-      this.setSpeech(this.speechFor('pat'))
+      const interaction = this.interactionFor('pat')
+      if (interaction?.parts?.length) {
+        this.setSpeech(interaction.parts, 5600, 'pat')
+        this.lastInteractionKey = interaction.key
+      } else {
+        this.setSpeech(this.speechFor('pat'))
+      }
       setTimeout(() => { this.hearts = 0 }, 900)
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
@@ -455,9 +479,16 @@ export const PetCompanion = {
       this.panel = false
     },
     talk() {
-      this.setAction('phone', this.speechFor('phone'), false)
-      this.interactionLockUntil = Date.now() + 4200
+      this.setAction('phone', '', false)
+      this.interactionLockUntil = Date.now() + 5200
       this.panel = false
+      const interaction = this.interactionFor('talk')
+      if (interaction?.parts?.length) {
+        this.setSpeech(interaction.parts, 6800, 'talk')
+        this.lastInteractionKey = interaction.key
+      } else {
+        this.setSpeech(this.speechFor('phone'))
+      }
     },
     rest() {
       this.setAction('sleep', this.speechFor('sleep'), true)
@@ -556,7 +587,7 @@ export const PetCompanion = {
       <div v-if="panel" class="pet-panel">
         <div class="pet-panel-head"><span>陪伴模式</span><button @click="panel = false" aria-label="关闭">×</button></div>
         <strong>{{ statusLine }}</strong>
-        <p>她会按自己的口吻聊日程、数量、会话和天气；按住可以拖拽、提起或丢下，也会自己跳一跳和打盹。</p>
+        <p>点「聊天」或「摸摸」，她会说出当前事项、时间、内容与目标会话；直接摸小人也会回应。按住还能拖拽、提起或丢下。</p>
         <div class="pet-schedule">
           <div class="pet-schedule-head"><span>今日节奏</span><b>{{ planDone }}/{{ planTotal }}</b></div>
           <i class="pet-progress"><b :style="{width: planProgress + '%'}"></b></i>

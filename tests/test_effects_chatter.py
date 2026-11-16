@@ -45,14 +45,14 @@ def test_crouch_keeps_its_new_cumulative_scale():
 
 def test_pet_chatter_is_persona_specific_and_prefers_session_titles():
     script = r'''
-import { buildPetChatter } from './web/js/pet-talk.js';
+import { buildPetChatter, buildPetInteraction } from './web/js/pet-talk.js';
 const plan = { blocks: [{ items: [
   { title: '出门散步', intent: '换一换节奏', state: 'scheduled', scheduled_at: 1794795480, target: 'qq:dm:1' },
   { title: '整理房间', intent: '把桌面收一收', state: 'scheduled', scheduled_at: 1794796000, target: 'qq:dm:2' },
 ]}]};
 const sessions = [{ sid: 'qq:dm:1', title: '测试会话' }, { sid: 'qq:dm:2', title: '' }];
 const variants = ['tomato', 'mint', 'garnet', 'xun', 'hathor'];
-const output = { lines: [], named: null, fallback: null, weather: null, quiet: null };
+const output = { lines: [], named: null, fallback: null, weather: null, quiet: null, talk: null, pat: null };
 for (const variant of variants) {
   for (let i = 0; i < 7; i += 1) {
     const result = buildPetChatter({ variant, plan, sessions, nextItem: plan.blocks[0].items[0], weather: 'off', rng: () => ((i * 31 + 7) % 83) / 83 });
@@ -63,6 +63,8 @@ output.named = buildPetChatter({ variant: 'tomato', plan, sessions, nextItem: pl
 output.fallback = buildPetChatter({ variant: 'mint', plan, sessions, nextItem: plan.blocks[0].items[1], preferredTopic: 'session', rng: () => 0.2 });
 output.weather = buildPetChatter({ variant: 'xun', plan, sessions, nextItem: plan.blocks[0].items[0], weather: 'rain', preferredTopic: 'weather', rng: () => 0.2 });
 output.quiet = buildPetChatter({ variant: 'hathor', plan: null, weather: 'off', rng: () => 0.2 });
+output.talk = buildPetInteraction({ kind: 'talk', variant: 'tomato', plan, sessions, nextItem: plan.blocks[0].items[0], phase: 'day', activity: '出门散步', rng: () => 0.2 });
+output.pat = buildPetInteraction({ kind: 'pat', variant: 'mint', plan, sessions, nextItem: plan.blocks[0].items[0], phase: 'day', activity: '出门散步', rng: () => 0.2 });
 console.log(JSON.stringify(output));
 '''
     result = subprocess.run(
@@ -89,3 +91,11 @@ console.log(JSON.stringify(output));
     assert "雨" in weather["text"]
     assert any(part["tone"] == "weather" for part in weather["parts"])
     assert output["quiet"]["text"]
+    for kind in ("talk", "pat"):
+        line = output[kind]
+        assert line["kind"] == kind
+        assert not line["text"].rstrip().endswith("。")
+        assert "出门散步" in line["text"]
+        assert "测试会话" in line["text"]
+        assert any(part["tone"] == "title" for part in line["parts"])
+        assert any(part["tone"] == "session" for part in line["parts"])
