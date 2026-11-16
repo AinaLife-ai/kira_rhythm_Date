@@ -110,26 +110,45 @@ class PlanService:
             blocks_by_plan.setdefault(block["plan_id"], []).append(block)
         return [{**row, "blocks": blocks_by_plan.get(row["id"], [])} for row in plan_rows]
 
-    async def get_plan(self, plan_id: str, persona_id: str | None = None) -> dict[str, Any] | None:
+    async def get_plan(self, plan_id: str, persona_id: str | None = None, *,
+                       include_deleted: bool = False) -> dict[str, Any] | None:
         row = await self.store.one("SELECT * FROM plans WHERE id=?", (plan_id,))
         if row is None or (persona_id is not None and row["persona_id"] != persona_id):
+            return None
+        if row["state"] == "deleted" and not include_deleted:
             return None
         blocks = await self.store.all("SELECT * FROM blocks WHERE plan_id=? ORDER BY position,id", (plan_id,))
         items = await self.store.all(
             "SELECT * FROM items WHERE plan_id=? ORDER BY position,scheduled_at,id", (plan_id,))
-        return self._assemble_plans([row], blocks, items)[0]
+        plan = self._assemble_plans([row], blocks, items)[0]
+        return plan if include_deleted else self._visible_plan(plan)
 
-    async def get_plan_by_date(self, persona_id: str, day: str) -> dict[str, Any] | None:
-        plans = await self.list_plans(persona_id, day, day)
+    async def get_plan_by_date(self, persona_id: str, day: str, *,
+                               include_deleted: bool = False) -> dict[str, Any] | None:
+        plans = await self.list_plans(persona_id, day, day, include_deleted=include_deleted)
         return plans[0] if plans else None
 
-    async def list_plans(self, persona_id: str, start: str, end: str) -> list[dict[str, Any]]:
+    @staticmethod
+    def _visible_plan(plan: dict[str, Any]) -> dict[str, Any]:
+        blocks = []
+        for block in plan.get("blocks", []):
+            if block.get("meta", {}).get("deleted"):
+                continue
+            block = {**block, "items": [item for item in block.get("items", []) if item.get("state") != "deleted"]}
+            blocks.append(block)
+        return {**plan, "blocks": blocks}
+
+    async def list_plans(self, persona_id: str, start: str, end: str, *,
+                         include_deleted: bool = False) -> list[dict[str, Any]]:
         start = parse_date(start).isoformat()
         end = parse_date(end).isoformat()
         if start > end or (parse_date(end) - parse_date(start)).days > 366:
             raise KRDError("invalid_plan_range", "Expected an ascending range of at most 367 days")
-        rows = await self.store.all(
-            "SELECT * FROM plans WHERE persona_id=? AND date BETWEEN ? AND ? ORDER BY date", (persona_id, start, end))
+        where = "persona_id=? AND date BETWEEN ? AND ?"
+        params: list[Any] = [persona_id, start, end]
+        if not include_deleted:
+            where += " AND state<>'deleted'"
+        rows = await self.store.all(f"SELECT * FROM plans WHERE {where} ORDER BY date", tuple(params))
         if not rows:
             return []
         blocks = await self.store.all(
@@ -140,7 +159,8 @@ class PlanService:
             "SELECT i.* FROM items i JOIN plans p ON p.id=i.plan_id "
             "WHERE p.persona_id=? AND p.date BETWEEN ? AND ? ORDER BY i.plan_id,i.position,i.scheduled_at,i.id",
             (persona_id, start, end))
-        return self._assemble_plans(rows, blocks, items)
+        plans = self._assemble_plans(rows, blocks, items)
+        return plans if include_deleted else [self._visible_plan(plan) for plan in plans]
 
     async def _prepare_items(self, persona_id: str, payload: dict[str, Any], actor: str,
                              config_override: dict[str, Any] | None = None,
@@ -269,7 +289,7 @@ class PlanService:
 
     def _validate_coverage(self, blocks: list[dict[str, Any]], config: dict[str, Any], actor: str, day: str,
                            tz_name: str | None = None) -> None:
-        items = [item for item in self._flatten(blocks) if item.get("state") != "cancelled"]
+        items = [item for item in self._flatten(blocks) if item.get("state") not in {"cancelled", "deleted"}]
         block_ids = [block["id"] for block in blocks]
         if len(block_ids) != len(set(block_ids)):
             raise KRDError("duplicate_block_id", "Block IDs must be unique within a plan")
@@ -277,7 +297,10 @@ class PlanService:
         if len(identifiers) != len(set(identifiers)):
             raise KRDError("duplicate_item_id", "Item IDs must be unique within a plan")
         if actor == "bot" and not config["min_items"] <= len(items) <= config["max_items"]:
-            raise KRDError("item_count", f"Plan requires {config['min_items']}–{config['max_items']} items, got {len(items)}")
+            raise KRDError(
+                "item_count", f"Plan requires {config['min_items']}–{config['max_items']} items, got {len(items)}",
+                actual=len(items), required_min=config["min_items"], required_max=config["max_items"],
+                hint="Submit a replacement in the same rhythm_plan/rhythm_update revision, or use a full plan revision.")
         if len(items) > 500:
             raise KRDError("item_hard_limit", "A plan cannot contain more than 500 items")
         for requirement in config["required_coverage_windows"]:
@@ -288,7 +311,12 @@ class PlanService:
             minimum = int(requirement.get("min_items", 0))
             maximum = int(requirement.get("max_items", 500))
             if actor == "bot" and not minimum <= len(matched) <= maximum:
-                raise KRDError("required_coverage", f"Required window {requirement['start']}–{requirement['end']} expects {minimum}–{maximum} items, got {len(matched)}")
+                raise KRDError(
+                    "required_coverage",
+                    f"Required window {requirement['start']}–{requirement['end']} expects {minimum}–{maximum} items, got {len(matched)}",
+                    window=f"{requirement['start']}–{requirement['end']}", actual=len(matched),
+                    required_min=minimum, required_max=maximum,
+                    hint="Add or replace an item in the same revision before deleting.")
 
     async def apply_plan(self, persona_id: str, payload: dict[str, Any], *, actor: str = "bot",
                          mode: str = "revise", reason: str = "", expected_revision: int = 0) -> dict[str, Any]:
@@ -302,9 +330,14 @@ class PlanService:
         if day < current_date or (parse_date(day) - parse_date(current_date)).days > config["max_horizon_days"]:
             raise KRDError("outside_horizon", "Plan date is outside the allowed horizon")
         existing = await self.get_plan_by_date(persona_id, day)
+        existing_any = await self.get_plan_by_date(persona_id, day, include_deleted=True)
+        deleted_existing = bool(existing_any and existing_any["state"] == "deleted")
+        base = existing_any if deleted_existing else existing
         if existing and expected_revision != existing["revision"]:
             raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"])
-        if not existing and expected_revision:
+        if deleted_existing and expected_revision not in {0, existing_any["revision"]}:
+            raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing_any["revision"])
+        if not existing and not deleted_existing and expected_revision:
             raise KRDError("revision_conflict", "Plan no longer exists", current_revision=0)
         if mode not in {"create", "create_missing", "revise", "merge", "replace"}:
             raise KRDError("invalid_mode", "Unknown planning mode")
@@ -313,20 +346,21 @@ class PlanService:
                 return {"plan": existing, "revision": existing["revision"], "diff": [], "change_units": 0}
             raise KRDError("revision_conflict", "Plan already exists", current_revision=existing["revision"])
         day_type_id = (payload.get("day_type_id") if actor == "user" and payload.get("day_type_id") else
-                       existing["day_type_id"] if existing else await self.resolve_day_type(persona_id, day))
+                       base["day_type_id"] if base else await self.resolve_day_type(persona_id, day))
         effective = await self.effective_config(persona_id, day_type_id)
         before_items = self._flatten(existing["blocks"]) if existing else []
+        plan_id = base["id"] if base else new_id("pln")
         prepared, _ = await self._prepare_items(
             persona_id, payload, actor, config_override=effective,
             existing_items={item["id"]: item for item in before_items})
         # IDs are globally unique across plans, not merely unique inside one day.
         for block in prepared:
             existing_block = await self.store.one("SELECT plan_id FROM blocks WHERE id=?", (block["id"],))
-            if existing_block and (not existing or existing_block["plan_id"] != existing["id"]):
+            if existing_block and existing_block["plan_id"] != plan_id:
                 raise KRDError("block_identity_conflict", "Block ID belongs to another plan")
             for item in block["items"]:
                 other = await self.store.one("SELECT plan_id FROM items WHERE id=?", (item["id"],))
-                if other and (not existing or other["plan_id"] != existing["id"]):
+                if other and other["plan_id"] != plan_id:
                     raise KRDError("item_identity_conflict", "Item ID belongs to another plan")
         merged = copy.deepcopy(prepared)
         if existing:
@@ -355,8 +389,7 @@ class PlanService:
                     old_block["meta"] = {**old_block.get("meta", {}), "archived": True}
                     merged.append(old_block)
         self._validate_coverage(merged, effective, actor, day, self.policy.timezone_name(effective))
-        revision = (existing["revision"] if existing else 0) + 1
-        plan_id = existing["id"] if existing else new_id("pln")
+        revision = (base["revision"] if base else 0) + 1
         timestamp = now()
         state = "draft" if config["approval_required"] and actor == "bot" else "active"
         plan_row = {
@@ -369,11 +402,12 @@ class PlanService:
             "state": state, "revision": revision,
         }
         async with self.store.transaction() as db:
-            if existing:
+            if existing or deleted_existing:
+                guard = existing["revision"] if existing else existing_any["revision"]
                 cursor = await db.execute(
                     "UPDATE plans SET day_type_id=?,title=?,overview=?,planned_appearance=?,planned_mood=?,state=?,revision=?,updated_at=? WHERE id=? AND revision=?",
                     (plan_row["day_type_id"], plan_row["title"], plan_row["overview"], plan_row["planned_appearance"],
-                     plan_row["planned_mood"], state, revision, timestamp, plan_id, expected_revision))
+                     plan_row["planned_mood"], state, revision, timestamp, plan_id, guard))
                 if cursor.rowcount != 1:
                     raise KRDError("revision_conflict", "Plan was changed concurrently")
             else:
@@ -399,12 +433,12 @@ class PlanService:
                         changed = any(previous.get(field) != item.get(field) for field in ITEM_FIELDS)
                         if changed or desired_state != previous["state"] or previous["block_id"] != block["id"]:
                             raise KRDError("item_running", f"Cannot edit a running item: {item['id']}")
-                    if previous and previous["state"] in TERMINAL_ITEM_STATES:
+                    if previous and previous["state"] in TERMINAL_ITEM_STATES and previous["state"] != "cancelled":
                         changed = any(previous.get(field) != item.get(field) for field in (*ITEM_FIELDS, "scheduled_at"))
                         if changed or desired_state != previous["state"]:
                             raise KRDError("item_terminal", f"Cannot rewrite a triggered item: {item['id']}")
                         item["state"] = previous["state"]
-                    elif previous and desired_state not in {"scheduled", "cancelled", previous["state"]}:
+                    elif previous and desired_state not in {"scheduled", "cancelled", "deleted", previous["state"]}:
                         raise KRDError("invalid_item_state", "Client cannot directly set an execution state")
                     elif not previous and desired_state not in {"scheduled", "cancelled"}:
                         raise KRDError("invalid_item_state", "New items must start as scheduled or cancelled")
@@ -433,7 +467,10 @@ class PlanService:
                     (persona_id, timestamp - config["modify_window_seconds"])) as cursor:
                     used = (await cursor.fetchone())[0]
                 if used > config["max_change_units"]:
-                    raise KRDError("modify_budget", "The rolling modification budget is exhausted", used=used)
+                    raise KRDError(
+                        "modify_budget", "The rolling modification budget is exhausted",
+                        used=used, limit=config["max_change_units"],
+                        hint="Reduce this batch, wait for the rolling window, or let the user raise max_change_units.")
             await db.execute(
                 "INSERT OR IGNORE INTO day_states(persona_id,date,current_appearance,current_mood,current_location,current_activity,current_note,revision,source,updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)",
                 (persona_id, day, plan_row["planned_appearance"], plan_row["planned_mood"], "", "", plan_row["overview"], actor, timestamp))
@@ -460,7 +497,7 @@ class PlanService:
     @staticmethod
     def _diff(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[dict[str, Any]]:
         old = {item["id"]: item for item in before}
-        new = {item["id"]: item for item in after}
+        new = {item["id"]: item for item in after if item.get("state") != "deleted"}
         result = []
         for identifier in sorted(old.keys() - new.keys()):
             result.append({"op": "removed", "item_id": identifier, "title": old[identifier]["title"]})
@@ -555,6 +592,27 @@ class PlanService:
             result.append({**row, "diff": diff})
         return result
 
+    async def recent_changes(self, persona_id: str, day: str, limit: int = 3, *,
+                             meaningful_only: bool = False) -> list[dict[str, Any]]:
+        day = parse_date(day).isoformat()
+        rows = await self.store.all(
+            "SELECT p.id AS plan_id,p.state AS plan_state,r.revision,r.diff_json,r.actor,r.reason,r.created_at "
+            "FROM plan_revisions r JOIN plans p ON p.id=r.plan_id "
+            "WHERE p.persona_id=? AND p.date=? ORDER BY r.revision DESC LIMIT ?",
+            (persona_id, day, max(1, min(10, limit))))
+        result = []
+        for row in rows:
+            diff = loads(row.pop("diff_json"), [])
+            if meaningful_only:
+                meaningful = row["plan_state"] == "deleted" or any(
+                    change.get("op") == "removed" or
+                    (change.get("op") == "changed" and change.get("changes", {}).get("state", {}).get("to") in {"cancelled", "deleted"})
+                    for change in diff)
+                if not meaningful:
+                    continue
+            result.append({**row, "diff": diff})
+        return result
+
     async def resolve_item_id(self, persona_id: str, reference: str) -> str:
         """Resolve a full item id or a short item-id prefix within a persona."""
         reference = str(reference or "").strip()
@@ -602,6 +660,102 @@ class PlanService:
         if not found:
             raise KRDError("not_found", "Item not found")
         return await self.apply_plan(persona_id, plan, actor=actor, mode="revise", reason=reason, expected_revision=plan["revision"])
+
+    async def delete_item(self, persona_id: str, item_id: str, *, actor: str, reason: str = "") -> dict[str, Any]:
+        item_id = await self.resolve_item_id(persona_id, item_id)
+        row = await self.store.one("SELECT plan_id FROM items WHERE id=?", (item_id,))
+        if not row:
+            raise KRDError("not_found", "Item not found")
+        plan = await self.get_plan(row["plan_id"], persona_id)
+        if not plan:
+            raise KRDError("not_found", "Item not found in an active plan")
+        target = None
+        for block in plan["blocks"]:
+            for item in block["items"]:
+                if item["id"] == item_id:
+                    target = item
+                    break
+        if target is None:
+            raise KRDError("not_found", "Item not found")
+        if target["state"] in {"queued", "running"}:
+            raise KRDError("item_running", "Cannot delete a running item")
+        if target["state"] not in {"scheduled", "cancelled"}:
+            raise KRDError("item_terminal", "Cannot delete a completed item")
+        target["state"] = "deleted"
+        target["reason"] = reason or "Deleted"
+        return await self.apply_plan(persona_id, plan, actor=actor, mode="revise", reason=reason,
+                                     expected_revision=plan["revision"])
+
+    async def delete_block(self, persona_id: str, block_ref: str, *, actor: str, reason: str = "") -> dict[str, Any]:
+        plan = await self.get_plan_by_date(persona_id, await self.current_date(persona_id))
+        # The front end may delete a block on a selected future date; resolve by id across active plans first.
+        if plan is None:
+            rows = await self.store.all(
+                "SELECT p.date FROM blocks b JOIN plans p ON p.id=b.plan_id "
+                "WHERE b.id=? AND p.persona_id=? AND p.state<>'deleted'", (block_ref, persona_id))
+            if rows:
+                plan = await self.get_plan_by_date(persona_id, rows[0]["date"])
+        if plan is None:
+            raise KRDError("not_found", "Block not found in an active plan")
+        block = next((item for item in plan["blocks"] if item["id"] == block_ref), None)
+        if block is None:
+            block = next((item for item in plan["blocks"] if item["title"] == block_ref), None)
+        if block is None:
+            raise KRDError("not_found", "Block not found")
+        if any(item["state"] in {"queued", "running"} for item in block["items"]):
+            raise KRDError("item_running", "Cannot delete a block containing a running item")
+        for item in block["items"]:
+            if item["state"] in {"scheduled", "cancelled"}:
+                item["state"] = "deleted"
+                item["reason"] = reason or "Block deleted"
+        block["meta"] = {**block.get("meta", {}), "deleted": True, "deleted_at": now()}
+        return await self.apply_plan(persona_id, plan, actor=actor, mode="revise", reason=reason,
+                                     expected_revision=plan["revision"])
+
+    async def delete_day(self, persona_id: str, day: str, *, reason: str = "") -> dict[str, Any]:
+        day = parse_date(day).isoformat()
+        plan = await self.get_plan_by_date(persona_id, day)
+        if plan is None:
+            raise KRDError("not_found", "Plan not found")
+        if any(item["state"] in {"queued", "running"} for block in plan["blocks"] for item in block["items"]):
+            raise KRDError("item_running", "Cannot delete a plan containing a running item")
+        before_items = self._flatten(plan["blocks"])
+        blocks = copy.deepcopy(plan["blocks"])
+        affected = 0
+        timestamp = now()
+        for block in blocks:
+            block["meta"] = {**block.get("meta", {}), "deleted": True, "deleted_at": timestamp}
+            for item in block["items"]:
+                if item["state"] in {"scheduled", "queued", "cancelled"}:
+                    item["state"] = "deleted"
+                    item["reason"] = reason or "Deleted by user"
+                    affected += 1
+        revision = plan["revision"] + 1
+        plan_row = {**plan, "state": "deleted", "revision": revision}
+        diff = self._diff(before_items, self._flatten(blocks))
+        async with self.store.transaction() as db:
+            cursor = await db.execute(
+                "UPDATE plans SET state='deleted',revision=?,updated_at=? WHERE id=? AND revision=?",
+                (revision, timestamp, plan["id"], plan["revision"]))
+            if cursor.rowcount != 1:
+                raise KRDError("revision_conflict", "Plan was changed concurrently")
+            for block in blocks:
+                await db.execute("UPDATE blocks SET meta_json=? WHERE id=?", (dumps(block.get("meta", {})), block["id"]))
+                for item in block["items"]:
+                    if item["state"] == "deleted":
+                        await db.execute(
+                            "UPDATE items SET state='deleted',reason=?,revision=revision+1,updated_at=? WHERE id=?",
+                            (item.get("reason", ""), timestamp, item["id"]))
+            await db.execute(
+                "INSERT INTO plan_revisions(plan_id,revision,snapshot_json,diff_json,actor,reason,created_at) VALUES(?,?,?,?,?,?,?)",
+                (plan["id"], revision, dumps({"plan": plan_row, "blocks": blocks}), dumps(diff), "user", reason or "删除整天", timestamp))
+            await db.execute(
+                "INSERT INTO mutations(id,plan_id,revision,actor,reason,units,operation,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (new_id("mut"), plan["id"], revision, "user", reason or "删除整天",
+                 sum(1 for change in diff if change["op"] != "unchanged"), "delete_day",
+                 dumps(before_items), dumps(self._flatten(blocks)), timestamp))
+        return {"plan_id": plan["id"], "date": day, "deleted": True, "affected_items": affected,
+                "history_preserved": True, "revision": revision}
 
     async def append_item(self, persona_id: str, plan_id: str, block_title: str, raw_item: dict[str, Any], *, actor: str, reason: str = "") -> dict[str, Any]:
         plan = await self.get_plan(plan_id, persona_id)

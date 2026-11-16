@@ -84,7 +84,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_update",
-        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。计划输入使用扁平 items[]，不要使用 blocks 包装。",
+        description="主动调整后续日程、DayState，或记录确有后续价值的梦与体验。operations[].type 支持 day_state、record_experience、update_item、append_item、delete_item、delete_block；整天删除仅限用户，bot 不可 delete_day。删除若低于最小项数/必需时段会返回错误，需同事务替换或重新规划。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。计划输入使用扁平 items[]，不要使用 blocks 包装。",
         params={"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object"}}, "reason": {"type": "string"}}, "required": ["operations"]},
     )
     async def rhythm_update(self, event, **kwargs):

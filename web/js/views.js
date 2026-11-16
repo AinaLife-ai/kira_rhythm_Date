@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.8'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.8'
+import { fmt } from './store.js?v=1.2.9'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.9'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -44,7 +44,7 @@ export const UiIcon = {
 
 export const ItemCard = {
   props: ['item', 'serverTime'],
-  emits: ['edit', 'run', 'skip'],
+  emits: ['edit', 'run', 'skip', 'delete'],
   computed: {
     itemStateClass() { return `state-${this.item.state}` },
     scheduleText() {
@@ -73,7 +73,8 @@ export const ItemCard = {
       <div class="item-actions">
         <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('edit', item)">调整</button>
         <button v-if="item.state === 'scheduled'" class="text-button" @click="$emit('run', item)">立即触发</button>
-        <button v-if="item.state === 'scheduled'" class="text-button muted" @click="$emit('skip', item)">跳过</button>
+        <button v-if="item.state === 'scheduled'" class="text-button muted" @click="$emit('skip', item)">跳过本次</button>
+        <button v-if="['scheduled', 'cancelled'].includes(item.state)" class="text-button danger" @click="$emit('delete', item)">删除</button>
       </div>
     </div>
   </article>`,
@@ -82,16 +83,17 @@ export const ItemCard = {
 export const Timeline = {
   components: { ItemCard },
   props: ['plan', 'serverTime'],
-  emits: ['edit', 'run', 'skip'],
+  emits: ['edit', 'run', 'skip', 'delete', 'delete-block'],
   template: `
   <div class="timeline" v-if="plan && plan.blocks?.length">
-    <section v-for="block in plan.blocks" :key="block.id" class="timeline-block" v-show="!block.meta?.archived">
+    <section v-for="block in plan.blocks" :key="block.id" class="timeline-block" v-show="!block.meta?.archived && block.items.length">
       <div class="block-heading">
         <span class="block-swatch" :style="{background: block.color || 'var(--accent)'}"></span>
         <h3>{{ block.title }}</h3><span>{{ block.items.length }} 项</span>
+        <button class="text-button muted block-delete" @click="$emit('delete-block', block)">删除时段</button>
       </div>
       <item-card v-for="item in block.items" :key="item.id" :item="item" :server-time="serverTime"
-        @edit="$emit('edit', {item, block})" @run="$emit('run', $event)" @skip="$emit('skip', $event)" />
+        @edit="$emit('edit', {item, block})" @run="$emit('run', $event)" @skip="$emit('skip', $event)" @delete="$emit('delete', $event)" />
     </section>
   </div>
   <div v-else class="empty-state">
@@ -171,8 +173,8 @@ export const TodayView = {
     </aside>
 
     <section class="timeline-console">
-      <div class="console-heading"><div><span class="kicker">SCHEDULE / 行为序列</span><h2>今天的生活轨迹</h2></div><span class="console-count">{{ $root.planStats.total }} ENTRIES</span></div>
-      <timeline :plan="$root.data.plan" :server-time="$root.data.server_time" @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
+      <div class="console-heading"><div><span class="kicker">SCHEDULE / 行为序列</span><h2>今天的生活轨迹</h2></div><div class="console-actions"><span class="console-count">{{ $root.planStats.total }} ENTRIES</span><button v-if="$root.data.plan" class="text-button danger" @click="$root.deleteDay($root.data.date)">删除整天</button></div></div>
+      <timeline :plan="$root.data.plan" :server-time="$root.data.server_time" @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" @delete="$root.deleteItem($event)" @delete-block="$root.deleteBlock($event)" />
     </section>
 
     <aside class="life-signal">
@@ -229,7 +231,7 @@ export const CalendarView = {
     </section>
     <section class="day-detail glass">
       <div class="section-heading"><div><span class="eyebrow">{{ $root.selectedDate }}</span><h2>{{ $root.selectedPlan?.title || '未安排的一天' }}</h2></div>
-        <button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div>
+        <div class="console-actions"><button v-if="$root.selectedPlan" class="text-button danger" @click="$root.deleteDay($root.selectedDate)">删除整天</button><button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div></div>
       <div v-if="$root.selectedCalendar" class="calendar-facts"><strong v-if="$root.calendarFlags.lunar_date">{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.calendarFlags.solar_terms && $root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="($root.calendarFlags.holiday && $root.selectedCalendar.holiday?.is_off_day) || ($root.calendarFlags.adjusted_workday && $root.selectedCalendar.holiday && !$root.selectedCalendar.holiday.is_off_day)">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.solar_festivals" :key="'s-'+name">{{ name }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.lunar_festivals" :key="'l-'+name">{{ name }}</span></div>
       <div v-if="$root.selectedForecast" class="calendar-weather-detail">
         <strong>预报</strong>
@@ -238,7 +240,7 @@ export const CalendarView = {
       <p v-if="$root.selectedDayTypes.length" class="day-types-line">日型：{{ $root.selectedDayTypes.join(' / ') }}</p>
       <p v-if="$root.selectedPlan" class="plan-overview">{{ $root.selectedPlan.overview }}</p>
       <timeline :plan="$root.selectedPlan" :server-time="$root.data.server_time"
-        @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" />
+        @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" @delete="$root.deleteItem($event)" @delete-block="$root.deleteBlock($event)" />
     </section>
   </div>`,
 }

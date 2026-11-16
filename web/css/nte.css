@@ -1067,3 +1067,13 @@ body { background:#08090c; }
   .calendar-sync-note { display:none; }
   .calendar-refresh-button { padding:6px 7px; font-size:9px; }
 }
+.block-delete { margin-left:auto; font-size:8px; opacity:.55; }
+.block-delete:hover { opacity:1; }
+.console-actions { display:flex; align-items:center; gap:10px; }
+.text-button.danger { color:#ff6b7f; }
+.text-button.danger:hover { color:#ff9aaa; border-color:rgba(255,107,127,.5); }
+@media (max-width:700px) {
+  .block-delete { font-size:0; width:22px; height:22px; padding:0; }
+  .block-delete::after { content:'×'; font-size:15px; }
+  .console-actions { gap:6px; }
+}

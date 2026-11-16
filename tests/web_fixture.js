@@ -83,6 +83,20 @@ window.fetch = async (url, options = {}) => {
   }
   if (path.includes('/avatar?')) return response(data.avatar)
   if (path.includes('/weather/forecast')) return response(data.weather_forecast)
+  if (path.includes('/items/') && path.includes('/delete') && options.method === 'POST') {
+    const itemId = path.split('/items/')[1].split('/delete')[0]
+    if (data.plan) for (const block of data.plan.blocks || []) block.items = (block.items || []).filter((item) => item.id !== itemId)
+    return response({ plan: data.plan, revision: (data.plan?.revision || 0) + 1, diff: [{ op: 'removed', item_id: itemId }] })
+  }
+  if (path.includes('/blocks/') && path.includes('/delete') && options.method === 'POST') {
+    const blockId = path.split('/blocks/')[1].split('/delete')[0]
+    if (data.plan) data.plan.blocks = (data.plan.blocks || []).filter((block) => block.id !== blockId)
+    return response({ plan: data.plan, revision: (data.plan?.revision || 0) + 1, diff: [] })
+  }
+  if (path.includes('/plans/') && path.includes('/delete') && options.method === 'POST') {
+    data.plan = null
+    return response({ deleted: true, affected_items: 0, history_preserved: true })
+  }
   if (path.includes('/weather/current')) return response(data.weather)
   if (path.includes('/calendar?')) {
     const params = new URL(path, location.origin).searchParams

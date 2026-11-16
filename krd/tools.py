@@ -55,6 +55,7 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
             raise KRDError("invalid_operations", "Provide 1–50 operations")
         results = []
         changed_plan_ids = set()
+        deleted_plan_ids = set()
         async with runtime.store.transaction():
             for operation in operations:
                 if not isinstance(operation, dict):
@@ -78,10 +79,18 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                     result = await runtime.plans.append_item(
                         persona_id, operation["plan_id"], operation.get("block_title", "生活片段"),
                         operation.get("item") or {}, actor="bot", reason=reason)
+                elif kind == "delete_item":
+                    result = await runtime.plans.delete_item(persona_id, operation["item_id"], actor="bot", reason=reason)
+                    deleted_plan_ids.add(result["plan"]["id"])
+                elif kind == "delete_block":
+                    result = await runtime.plans.delete_block(persona_id, operation["block_id"], actor="bot", reason=reason)
+                    deleted_plan_ids.add(result["plan"]["id"])
+                elif kind == "delete_day":
+                    raise KRDError("permission_denied", "Whole-day deletion is a user-only action")
                 else:
                     raise KRDError("invalid_operation", f"Unknown operation type: {kind}")
                 results.append({"type": kind, "result": result})
-        for plan_id in changed_plan_ids:
+        for plan_id in changed_plan_ids - deleted_plan_ids:
             await runtime.scheduler.check_all_triggered(plan_id)
         runtime.scheduler.wake()
         await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "rhythm_update"})
@@ -110,7 +119,8 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
             result = await runtime.calendar.range(start, end, allow_network=False)
         elif scope in {"current", "today"}:
             result = {"date": today, "day_state": await plans_service.day_state(persona_id, today),
-                      "plan": await plans_service.get_plan_by_date(persona_id, today)}
+                      "plan": await plans_service.get_plan_by_date(persona_id, today),
+                      "recent_changes": await plans_service.recent_changes(persona_id, today, 2, meaningful_only=True)}
         elif scope == "block":
             if not item_id:
                 raise KRDError("item_required", "item_id is required for block view")
@@ -123,7 +133,9 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
                 raise KRDError("not_found", "Item not found in the active persona")
             result = next((block for block in plan["blocks"] if block["id"] == row["block_id"]), None)
         elif scope == "day":
-            result = await plans_service.get_plan_by_date(persona_id, today)
+            plan = await plans_service.get_plan_by_date(persona_id, today)
+            result = ({**plan, "recent_changes": await plans_service.recent_changes(persona_id, today, 3, meaningful_only=True)}
+                      if plan else {"plan": None, "recent_changes": await plans_service.recent_changes(persona_id, today, 3, meaningful_only=True)})
         elif scope in {"range", "history"}:
             config = await runtime.store.get_config(persona_id)
             end = end or (datetime.fromisoformat(today) - timedelta(days=1)).date().isoformat()

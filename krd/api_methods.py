@@ -121,6 +121,36 @@ class ApiMixin:
             return result
         return await self._call(skip)
 
+    @register.api(method="POST", path="/v1/items/{item_id}/delete")
+    async def api_delete_item(self, item_id: str, payload: dict | None = None, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def delete():
+            reason = (payload or {}).get("reason", "Deleted by user")
+            result = await self.runtime.plans.delete_item(persona_id, item_id, actor="user", reason=reason)
+            await self._notify("plan_changed", persona_id, items=[item_id])
+            return result
+        return await self._call(delete)
+
+    @register.api(method="POST", path="/v1/blocks/{block_id}/delete")
+    async def api_delete_block(self, block_id: str, payload: dict | None = None, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def delete():
+            reason = (payload or {}).get("reason", "Deleted by user")
+            result = await self.runtime.plans.delete_block(persona_id, block_id, actor="user", reason=reason)
+            await self._notify("plan_changed", persona_id, days=[result["plan"]["date"]])
+            return result
+        return await self._call(delete)
+
+    @register.api(method="POST", path="/v1/plans/{day}/delete")
+    async def api_delete_day(self, day: str, payload: dict | None = None, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def delete():
+            reason = (payload or {}).get("reason", "Deleted by user")
+            result = await self.runtime.plans.delete_day(persona_id, day, reason=reason)
+            await self._notify("plan_changed", persona_id, days=[day])
+            return result
+        return await self._call(delete)
+
     @register.api(method="GET", path="/v1/day-state/{day}")
     async def api_day_state(self, day: str, persona: str = ""):
         persona_id = await self._persona(persona)

@@ -152,8 +152,10 @@ class ContextBuilder:
             "SELECT title,scheduled_at FROM items WHERE plan_id=? AND state='scheduled' ORDER BY scheduled_at LIMIT 1",
             (plan["id"],)) if plan else None
         calendar = self._calendar_context(await self._calendar_day(day), base_config)
+        recent = await self.plans.recent_changes(persona_id, day, 1, meaningful_only=True)
         payload = {
             "date": day,
+            "recent_change": self._compact_changes(recent)[0] if recent else None,
             "day_types": self._day_types_text(matches),
             "calendar": calendar,
             "daily_limits": self._limits(effective, plan),
@@ -209,6 +211,7 @@ class ContextBuilder:
                 "blocked_execution_windows", "quiet_delivery_windows", "required_coverage_windows")},
             "current_plan": self._plan_data(current, tz_name=tz_name) if current else None,
             "previous_plans": history,
+            "recent_changes": self._compact_changes(await self.plans.recent_changes(persona_id, target_date, 2, meaningful_only=True)),
             "weather": weather
         }
         host_tz = self.host_timezone_name()
@@ -221,8 +224,11 @@ class ContextBuilder:
         persona_id = metadata["persona_id"]
         target_date = metadata.get("date") or await self.plans.current_date(persona_id)
         plan = await self.plans.get_plan_by_date(persona_id, target_date)
+        recent_changes = await self.plans.recent_changes(persona_id, target_date, 3, meaningful_only=True)
         if not plan:
-            return "[KRD review context · request only]\n{\"status\":\"plan_missing\",\"instruction\":\"仅在确有必要时创建计划；不要因为一次检查而无条件新建。\"}"
+            context = {"status": "plan_missing", "recent_changes": self._compact_changes(recent_changes),
+                       "instruction": "仅在确有必要时创建计划；不要因为一次检查而无条件新建。"}
+            return "[KRD review context · request only]\n" + self._bounded(context, 1200)
         base_config = await self.store.get_config(persona_id)
         matches = await self._active_day_types(persona_id, target_date)
         effective = await self.plans.effective_config(persona_id, matches[0]["id"] if matches else "")
@@ -247,6 +253,7 @@ class ContextBuilder:
             "day_state": await self.plans.day_state(persona_id, target_date),
             "weather": weather,
             "recent_diff": await self.plans.revisions(plan["id"], effective["diff_revisions"], persona_id),
+            "recent_changes": self._compact_changes(recent_changes),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
                                 "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
                                             "只在确有调整价值时自然分享；否则输出 <msg/>。"}
@@ -319,6 +326,33 @@ class ContextBuilder:
         payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
         return "[KRD item context · request only]\n" + self._bounded(payload, 10000)
 
+    @staticmethod
+    def _compact_changes(changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        result = []
+        for change in changes:
+            removed = []
+            cancelled = []
+            other = 0
+            for diff in change.get("diff", []):
+                if diff.get("op") == "removed":
+                    removed.append(diff.get("title", ""))
+                elif diff.get("op") == "changed":
+                    target = diff.get("changes", {}).get("state", {}).get("to")
+                    if target in {"cancelled", "deleted"}:
+                        cancelled.append(diff.get("title", ""))
+                    else:
+                        other += 1
+            result.append({
+                "revision": change.get("revision"),
+                "actor": change.get("actor"),
+                "reason": change.get("reason", ""),
+                "plan_state": change.get("plan_state"),
+                "removed": removed[:8],
+                "cancelled": cancelled[:8],
+                "other_changes": other,
+            })
+        return result
+
     def _plan_data(self, plan: dict[str, Any] | None, include_instruction: bool = True,
                    tz_name: str = "Asia/Shanghai") -> dict[str, Any] | None:
         if plan is None:
@@ -334,6 +368,8 @@ class ContextBuilder:
                 view = {key: item[key] for key in (
                     "title", "intent", "instruction" if include_instruction else "title",
                     "schedule", "target", "interaction", "category", "execution_probability", "state") if key in item}
+                if item.get("reason"):
+                    view["reason"] = item["reason"]
                 view.update(self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name))
                 items.append(view)
             result["blocks"].append({"title": block["title"], "items": items})
