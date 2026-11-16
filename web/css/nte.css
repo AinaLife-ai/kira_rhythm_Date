@@ -1038,7 +1038,7 @@ body { background:#08090c; }
 .day-type-switch input { width:auto; }
 
 /* Per-action sprite scale: these poses have more opaque content in their source frames. */
-.pet-action-crouch .pet-sprite { transform:scale(.75); transform-origin:center bottom; }
-.pet-facing-left.pet-action-crouch .pet-sprite { transform:scaleX(-1) scale(.75); }
-.pet-action-sleep .pet-sprite { transform:scale(.85); transform-origin:center bottom; }
-.pet-facing-left.pet-action-sleep .pet-sprite { transform:scaleX(-1) scale(.85); }
+.pet-action-crouch .pet-sprite { transform:scale(.525); transform-origin:center bottom; }
+.pet-facing-left.pet-action-crouch .pet-sprite { transform:scaleX(-1) scale(.525); }
+.pet-action-sleep .pet-sprite { transform:scale(.7225); transform-origin:center bottom; }
+.pet-facing-left.pet-action-sleep .pet-sprite { transform:scaleX(-1) scale(.7225); }
