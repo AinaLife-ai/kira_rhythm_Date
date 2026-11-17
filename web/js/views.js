@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.14'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.14'
+import { fmt } from './store.js?v=1.2.15'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.15'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
