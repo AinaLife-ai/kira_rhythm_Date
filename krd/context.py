@@ -165,10 +165,7 @@ class ContextBuilder:
                 return f"{start}-{end}"
         scheduled = item.get("scheduled_at")
         if scheduled:
-            clock = self._clock_fields(scheduled, day, tz_name)
-            at = clock.get("at", "")
-            on = clock.get("on")
-            return f"{on} {at}".strip() if on else at
+            return self._clock_fields(scheduled, day, tz_name).get("at", "")
         at = str(schedule.get("at", "") or "")
         return at[:8]
 
