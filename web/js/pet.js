@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.15'
-import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.15'
+import { fmt } from './store.js?v=1.2.16'
+import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.16'
 
 const VOICE = {
   tomato: {
@@ -222,18 +222,11 @@ export const PetCompanion = {
       return `pet-${this.variant}`
     },
     planItems() {
-      return (this.plan?.blocks || []).flatMap((block) => block.items || [])
+      return (this.plan?.blocks || []).flatMap((block) => block.items || []).filter((item) => item.state !== 'deleted')
     },
-    planTotal() { return this.planItems.length },
+    planTotal() { return this.planItems.filter((item) => item.state !== 'cancelled').length },
     planDone() { return this.planItems.filter((item) => ['triggered', 'triggered_silent'].includes(item.state)).length },
     planProgress() { return this.planTotal ? Math.round(this.planDone / this.planTotal * 100) : 0 },
-    isLateNight() {
-      return this.hour >= 23 || this.hour < 6
-    },
-    nightSleepEligible() {
-      if (!this.isLateNight()) return false
-      return !this.planItems.some((item) => ['scheduled', 'queued', 'running'].includes(item.state))
-    },
     nextClock() { return this.nextItem ? fmt.time(this.nextItem.scheduled_at) : '—' },
     nextIn() { return this.nextItem ? fmt.countdown(this.nextItem.scheduled_at, this.now) : '今天留白' },
     statusLine() {
@@ -246,6 +239,7 @@ export const PetCompanion = {
   },
   watch: {
     nextItem() { this.chooseAction(true) },
+    hour() { this.chooseAction(true) },
     weather(value) { if (value !== 'off') this.queueChatter(1400, 'weather') },
     phase() { this.chooseAction(false) },
     event() { this.queueChatter(1800) },
@@ -268,6 +262,13 @@ export const PetCompanion = {
     clearTimeout(this.careTimer)
   },
   methods: {
+    isLateNight() {
+      return this.hour >= 23 || this.hour < 6
+    },
+    nightSleepEligible() {
+      if (!this.isLateNight()) return false
+      return !this.planItems.some((item) => ['scheduled', 'queued', 'running'].includes(item.state))
+    },
     showLabel(hint = false, ms = 3000) {
       this.labelVisible = true
       this.labelHint = hint

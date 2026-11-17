@@ -6,6 +6,8 @@ import json
 import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from datetime import date, time as dt_time
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -47,6 +49,28 @@ async def test_revision_preserves_window_draw_and_allows_elapsed_time(runtime):
     assert item["scheduled_at"] == elapsed
     assert item["series_id"] == original["series_id"]
     assert revised["diff"] == []
+
+
+@pytest.mark.asyncio
+async def test_past_exact_schedule_is_rejected_without_blocking(runtime):
+    day = date.today().isoformat()
+    with patch("krd.plans.now", return_value=datetime.combine(date.today(), dt_time(12)).timestamp()):
+        with pytest.raises(KRDError) as error:
+            await asyncio.wait_for(runtime.plans.apply_plan(
+                "persona-a", {"date": day, "blocks": [{"title": "B", "items": [{
+                    "title": "过期项", "schedule": {"type": "exact", "at": "09:00"},
+                    "target": "qq:dm:10001"}]}]},
+                actor="user", expected_revision=0,
+            ), 2)
+    assert error.value.code == "schedule_in_past"
+
+
+@pytest.mark.asyncio
+async def test_hash_prefixed_short_item_id_is_accepted(runtime):
+    result = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    item = result["plan"]["blocks"][0]["items"][0]
+    short = "#" + item["id"].split("_", 1)[1][:8]
+    assert await runtime.plans.resolve_item_id("persona-a", short) == item["id"]
 
 
 @pytest.mark.asyncio

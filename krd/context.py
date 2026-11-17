@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .plans import PlanService
-from .store import Store, dumps
+from .store import Store, dumps, loads
 from .timeutils import in_active_windows, timezone
 from .llm_format import prepare_llm_payload
 
@@ -148,6 +148,9 @@ class ContextBuilder:
 
     @staticmethod
     def _item_date(item: dict[str, Any], day: str, tz_name: str) -> str | None:
+        schedule = ContextBuilder._item_schedule(item)
+        if schedule.get("type") == "window":
+            return day
         scheduled = item.get("scheduled_at")
         if scheduled:
             try:
@@ -156,8 +159,16 @@ class ContextBuilder:
                 return None
         return day
 
+    @staticmethod
+    def _item_schedule(item: dict[str, Any]) -> dict[str, Any]:
+        schedule = item.get("schedule")
+        if isinstance(schedule, dict):
+            return schedule
+        loaded = loads(item.get("schedule_json"), {})
+        return loaded if isinstance(loaded, dict) else {}
+
     def _item_time_text(self, item: dict[str, Any], day: str, tz_name: str) -> str:
-        schedule = item.get("schedule") or {}
+        schedule = self._item_schedule(item)
         if schedule.get("type") == "window":
             start = str(schedule.get("start", ""))[:8]
             end = str(schedule.get("end", ""))[:8]
@@ -171,7 +182,7 @@ class ContextBuilder:
 
     @staticmethod
     def _item_crosses_day(item: dict[str, Any]) -> bool:
-        schedule = item.get("schedule") or {}
+        schedule = ContextBuilder._item_schedule(item)
         if schedule.get("type") == "window":
             start, end = str(schedule.get("start", "")), str(schedule.get("end", ""))
             return bool(start and end and end < start)
@@ -183,11 +194,12 @@ class ContextBuilder:
             return "[KRD Agenda]\nno plan"
         items = self._plan_items(plan)
         cross_day = any(self._item_date(item, day, tz_name) not in {None, day} or self._item_crosses_day(item) for item in items)
-        done = sum(1 for item in items if item.get("state") in {"triggered", "triggered_silent"})
+        active_items = [item for item in items if item.get("state") not in {"cancelled", "deleted"}]
+        done = sum(1 for item in active_items if item.get("state") in {"triggered", "triggered_silent"})
         lines = ["[KRD Agenda]"]
         if cross_day:
             lines.append(f"date: {day}")
-        lines.extend((f"rev: {plan.get('revision', 0)}", f"progress: {done}/{len(items)}"))
+        lines.extend((f"rev: {plan.get('revision', 0)}", f"progress: {done}/{len(active_items)}"))
         for block in plan.get("blocks", []):
             block_items = [item for item in block.get("items", []) if item.get("state") != "deleted"]
             if not block_items:
@@ -242,20 +254,21 @@ class ContextBuilder:
                             current_sid: str | None = None) -> str:
         base_config = config or await self.store.get_config(persona_id)
         tz_name = self.plans.policy.timezone_name(base_config)
-        day = await self.plans.current_date(persona_id)
+        day = datetime.now(timezone(tz_name)).date().isoformat()
         state = await self.plans.day_state(persona_id, day)
         plan = await self.plans.get_plan_by_date(persona_id, day)
         matches = await self._active_day_types(persona_id, day)
         effective = await self.plans.effective_config(persona_id, matches[0]["id"] if matches else "")
         next_item = await self.store.one(
-            "SELECT id,title,scheduled_at,target FROM items WHERE plan_id=? AND state='scheduled' ORDER BY scheduled_at LIMIT 1",
+            "SELECT id,title,scheduled_at,target,schedule_json FROM items WHERE plan_id=? AND state='scheduled' ORDER BY scheduled_at LIMIT 1",
             (plan["id"],)) if plan else None
         calendar = self._calendar_context(await self._calendar_day(day), base_config)
         recent = await self.plans.recent_changes(persona_id, day, 1, meaningful_only=True)
         lines = ["[KRD DayState]"]
         if self._date_needs_display(tz_name):
             lines.extend((f"date: {day}", f"timezone: {tz_name}"))
-        lines.append(f"day_types: {self._day_types_text(matches)}")
+        day_types = self._day_types_text(matches) or "none"
+        lines.append(f"day_types: {day_types}")
         for key in ("appearance", "mood", "activity", "note"):
             value = state.get(f"current_{key}")
             if value:
@@ -263,10 +276,10 @@ class ContextBuilder:
         limits = self._limits(effective, plan)
         lines.append(f"daily_limits: {limits['min_items']}–{limits['max_items']} items, planned {limits['planned_items']}")
         if next_item:
-            clock = self._clock_fields(next_item["scheduled_at"], day, tz_name)
-            next_bits = [str(next_item.get("title") or ""), clock.get("at", "")]
-            if clock.get("on"):
-                next_bits.insert(1, clock["on"])
+            next_bits = [str(next_item.get("title") or ""), self._item_time_text(next_item, day, tz_name)]
+            next_day = self._item_date(next_item, day, tz_name)
+            if next_day and next_day != day:
+                next_bits.insert(1, next_day)
             suffix = f" #{self._short_item_id(next_item.get('id', ''))}"
             target = str(next_item.get("target") or "")
             if target and target != current_sid:
@@ -289,7 +302,7 @@ class ContextBuilder:
         weather_text = ""
         if self.weather is not None:
             weather_text = self._weather_text(await self._weather(persona_id, day, "chat"))
-        agenda_text = self._agenda_text(plan, day, tz_name, current_sid)
+        agenda_text = self._bounded(self._agenda_text(plan, day, tz_name, current_sid), 2400)
         return self._bounded("\n".join(lines), 1400) + ("\n\n" + weather_text if weather_text else "") + "\n\n" + agenda_text
 
     async def chat_weather(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
