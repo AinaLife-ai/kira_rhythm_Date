@@ -122,4 +122,3 @@ m.chooseAction.call(woken, true);
 assert(woken.action !== 'sleep', 'interaction suppression must prevent immediate re-sleep');
 
 console.log('PET_LOGIC_OK');
-

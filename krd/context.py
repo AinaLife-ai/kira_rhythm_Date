@@ -269,7 +269,7 @@ class ContextBuilder:
             lines.extend((f"date: {day}", f"timezone: {tz_name}"))
         day_types = self._day_types_text(matches) or "none"
         lines.append(f"day_types: {day_types}")
-        for key in ("appearance", "mood", "activity", "note"):
+        for key in ("appearance", "mood", "location", "activity", "note"):
             value = state.get(f"current_{key}")
             if value:
                 lines.append(f"{key}: {value}")
