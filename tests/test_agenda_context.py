@@ -44,3 +44,22 @@ async def test_cross_day_window_uses_plan_date(tmp_path):
     assert "23:30-01:00 深夜整理" in text
     assert "跨日" not in text
     await rt.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_item_is_not_counted_in_progress_or_limits(tmp_path):
+    rt = FakeRuntime(tmp_path)
+    await rt.store.initialize()
+    day = await rt.plans.current_date("persona-a")
+    with patch("krd.plans.now", return_value=datetime.combine(date.today(), time(12)).timestamp()):
+        result = await rt.plans.apply_plan("persona-a", {"date": day, "blocks": [{"title": "B", "items": [
+            {"title": "A", "schedule": {"type": "exact", "at": "18:00"}, "target": "qq:dm:10001"},
+            {"title": "B", "schedule": {"type": "exact", "at": "20:00"}, "target": "qq:dm:10001"}]}]},
+            actor="user", expected_revision=0)
+    item = result["plan"]["blocks"][0]["items"][0]
+    await rt.store.execute("UPDATE items SET state='cancelled' WHERE id=?", (item["id"],))
+    text = await rt.context_builder.compact_state("persona-a", config=await rt.store.get_config("persona-a"),
+                                                 current_sid="qq:dm:10001")
+    assert "progress: 0/1" in text
+    assert "planned 1" in text
+    await rt.close()

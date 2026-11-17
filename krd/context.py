@@ -103,10 +103,11 @@ class ContextBuilder:
         return [item for block in (plan or {}).get("blocks", []) for item in block.get("items", [])]
 
     def _limits(self, config: dict[str, Any], plan: dict[str, Any] | None) -> dict[str, int]:
+        items = [item for item in self._plan_items(plan) if item.get("state") not in {"cancelled", "deleted"}]
         return {
             "min_items": int(config["min_items"]),
             "max_items": int(config["max_items"]),
-            "planned_items": len(self._plan_items(plan)),
+            "planned_items": len(items),
         }
 
     @staticmethod

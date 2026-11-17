@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **123 passed** |
-| KiraAI 3.1.2 同一套测试 | **123 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **124 passed** |
+| KiraAI 3.1.2 同一套测试 | **124 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、41 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -42,7 +42,7 @@
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **123 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **124 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -76,7 +76,7 @@
 | 桌宠方法 | `isLateNight`/`nightSleepEligible` 位于 methods；真实浏览器五页无 `TypeError`；JS 逻辑测试覆盖 23:00、22:00、待办、休息、互动唤醒 |
 | 桌宠进度一致性 | Agenda 与 planStats/桌宠均排除 cancelled；取消项不占分母 |
 | 短 ID 体验 | rhythm_update 的体验 item_id 支持 8 位短 ID 解析 |
-| 最终全量 | 双版本各 123 passed；真实 PluginManager/API/E2E/压力、发布审计、桌宠 JS 测试全部通过 |
+| 最终全量 | 双版本各 124 passed；真实 PluginManager/API/E2E/压力、发布审计、桌宠 JS 测试全部通过 |
 
 | 性能 | 天气预报缺失时只排后台任务，不等待；日历读取仅缓存/内置，自动更新在后台；100 项压力读取约 1.9–3.3ms |
 | 天气入口 | 顶栏天气 chip 可点击并打开“设置 → 天气与地点”，不再是无响应图标 |
