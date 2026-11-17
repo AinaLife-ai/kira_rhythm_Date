@@ -36,7 +36,7 @@
 
 本轮未使用子代理。除上述双版本测试外，执行了以下额外验收：
 
-## 第三轮完整审计（v1.2.17 收尾，2026-11-17）
+## 第三轮完整审计（v1.2.18 收尾，2026-11-17）
 
 本轮同样未使用子代理，基于真实 PluginManager、真实 FastAPI HTTP/WS、真实 SQLite 和真实 Chromium 页面完成。
 
@@ -76,6 +76,7 @@
 | 桌宠方法 | `isLateNight`/`nightSleepEligible` 位于 methods；真实浏览器五页无 `TypeError`；JS 逻辑测试覆盖 23:00、22:00、待办、休息、互动唤醒 |
 | 设置页兼容性 | 独立预览页在缺少 `calendar_context` 的旧/精简配置下也能打开设置；六个页签均无 Vue 渲染错误，日历信息栏正常显示 |
 | Agenda 设置 | `inject_agenda` 控制普通聊天是否附带清单，`agenda_max_chars` 控制上限；默认开启/2400，保存即热生效 |
+| 天气地点 | 天气块新增 `location`；设置桂林市显示 `location: 桂林市`，真实天气使用地理编码地点名，虚拟天气使用虚拟地点 |
 | 设置说明 | 规划、时间、日历、会话、天气、数据与诊断的可见字段均补齐简洁小白说明；预览 fixture 同步新字段 |
 | 桌宠进度一致性 | Agenda 与 planStats/桌宠均排除 cancelled；取消项不占分母 |
 | 短 ID 体验 | rhythm_update 的体验 item_id 支持 8 位短 ID 解析 |
@@ -89,7 +90,7 @@
 | 雨伞/围巾道具 | 桌宠 DOM/CSS 无 `pet-umbrella`/`pet-scarf`；动作列表与随机权重不再包含这两类道具 |
 | 桌宠缩放 | 下蹲最终 `0.5565`（0.525 × 1.06），睡觉 `0.7225`，左右镜像保留 |
 | 响应式 | 1440px 桌面和 390px 手机五视图、五设置页签实际渲染；`scrollWidth == innerWidth`，零 JS 异常 |
-| 单文件预览 | `KRD-1.2.17-preview.html` 零外部资源请求、零 JS 错误、启动和页面渲染正常 |
+| 单文件预览 | `KRD-1.2.18-preview.html` 零外部资源请求、零 JS 错误、启动和页面渲染正常 |
 | 长稳 | 31 秒空闲 `data_version 2→2`、零新事件、调度器存活 |
 | 头像占位 | 未设置或图片加载失败显示问号头像；上传成功后显示真实头像（`naturalWidth=40`） |
 | 陪伴面板 | 使用真实日程：今日完成/总数、进度条、下一项标题/时间/倒计时；不再使用假饱腹/心情 |
@@ -109,7 +110,7 @@
 | 工具 schema | `rhythm_plan` 仅暴露 plans[] + 扁平 items；无具体示例；框架工具注册通过 |
 | 模板 | 结构化分组/小项编辑、图标预设/上传、预设模板分区折叠、按模板规划 |
 | 头像/图标分离 | `icon.svg` 仅作插件图标并透明化；`avatar.svg` 为问号默认生活头像；WebUI 未设置/失败仍显示问号 |
-| 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.17`；上传资产内容哈希 + immutable |
+| 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.18`；上传资产内容哈希 + immutable |
 | 性能/token | 动态 Prompt 仍为尾部 persist=False；静态工具区稳定；首屏不等待 Remote 头像/天气；日历远程刷新后台化 |
 
 真实页面验收使用 `TemporaryDirectory` 与测试人格/会话适配器，但业务数据、插件 API、SQLite 事务、WebSocket 与前端资源均为真实链路；不是业务 mock。

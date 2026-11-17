@@ -347,6 +347,16 @@ class WeatherService:
                 return {"mode": mode, "status": "unavailable", "days": [], "reason": type(exc).__name__}
 
     @staticmethod
+    def _location_label(weather: dict[str, Any], persona_id: str, current: dict[str, Any] | None = None) -> str:
+        if isinstance(current, dict) and current.get("location"):
+            return str(current["location"])
+        configured = (weather.get("locations", {}).get(persona_id)
+                      or weather.get("locations", {}).get("default") or {})
+        if configured.get("name"):
+            return str(configured["name"])
+        return str(weather.get("virtual", {}).get("location") or "")
+
+    @staticmethod
     def _pick_current(summary: dict[str, Any]) -> dict[str, Any] | None:
         for key in ("real", "virtual"):
             candidate = summary.get(key)
@@ -458,6 +468,9 @@ class WeatherService:
                 if candidates:
                     next_period = min(candidates, key=lambda entry: entry[0])
                     result["next"] = self._period_text(next_period[1], next_period[2])
+            location = self._location_label(weather, persona_id, current)
+            if location:
+                result["location"] = location
             return result or None
         if kind == "chat":
             if weather.get("chat_current", True) and current:
@@ -477,6 +490,9 @@ class WeatherService:
                         break
                 if future:
                     result["forecast"] = future
+            location = self._location_label(weather, persona_id, current)
+            if location:
+                result["location"] = location
             return result or None
         # Planning / review: target future must never fall back to current.
         target_day = days.get(target)
@@ -512,6 +528,9 @@ class WeatherService:
                                              f"{self._num(current.get('temperature')):g}°C" if self._num(current.get('temperature')) is not None else "") if part)
             if now:
                 result["now"] = now
+        location = self._location_label(weather, persona_id, current)
+        if location:
+            result["location"] = location
         return result
 
     def refresh_forecast_soon(self, persona_id: str, start_date: str, days: int = 7) -> None:

@@ -22,6 +22,7 @@ async def test_normal_context_has_state_weather_agenda(tmp_path):
     assert "[KRD DayState]" in text and "[KRD Weather]" in text and "[KRD Agenda]" in text
     assert "now:" in text and "next:" in text and "progress: 0/2" in text
     assert "location: 阳台" in text
+    assert "location: 海" in text
     assert "-> qq:dm:10001" not in text
     text_other = await rt.context_builder.compact_state("persona-a", config=await rt.store.get_config("persona-a"), current_sid="qq:dm:99999")
     assert "-> qq:dm:10001" in text_other

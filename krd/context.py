@@ -229,6 +229,8 @@ class ContextBuilder:
         if not weather:
             return ""
         lines = ["[KRD Weather]"]
+        if weather.get("location"):
+            lines.append(f"location: {weather['location']}")
         for key in ("now", "today"):
             if weather.get(key):
                 lines.append(f"{key}: {weather[key]}")
