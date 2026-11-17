@@ -63,3 +63,17 @@ async def test_cancelled_item_is_not_counted_in_progress_or_limits(tmp_path):
     assert "progress: 0/1" in text
     assert "planned 1" in text
     await rt.close()
+
+
+@pytest.mark.asyncio
+async def test_agenda_can_be_disabled_for_normal_chat(tmp_path):
+    rt = FakeRuntime(tmp_path)
+    await rt.store.initialize()
+    config, revision = await rt.store.update_config("persona-a", {"inject_agenda": False}, 0)
+    text = await rt.context_builder.compact_state("persona-a", config=config, current_sid="qq:dm:10001")
+    assert "[KRD DayState]" in text
+    assert "[KRD Agenda]" not in text
+    config, _ = await rt.store.update_config("persona-a", {"inject_agenda": True, "agenda_max_chars": 800}, revision)
+    text = await rt.context_builder.compact_state("persona-a", config=config, current_sid="qq:dm:10001")
+    assert "[KRD Agenda]" in text
+    await rt.close()

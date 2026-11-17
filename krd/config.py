@@ -74,6 +74,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "recovery_grace_seconds": 600,
     "history_mode": "notice",
     "inject_day_state": True,
+    "inject_agenda": True,
+    "agenda_max_chars": 2400,
     "approval_required": False,
     "timezone": "system",
     "blocked_execution_windows": [],
@@ -167,11 +169,11 @@ def validate_config(config: dict[str, Any]) -> None:
     if not 0 <= config["history_days"] <= 30 or not 1 <= config["diff_revisions"] <= 20:
         raise KRDError("invalid_config", "history_days or diff_revisions is outside its range")
     for key in ("enabled", "auto_plan", "startup_plan", "plan_on_all_triggered", "all_terminal_include_failed",
-                "allow_exact", "allow_window", "allow_probability", "inject_day_state", "approval_required"):
+                "allow_exact", "allow_window", "allow_probability", "inject_day_state", "inject_agenda", "approval_required"):
         _typed(config, key, bool)
     for key, minimum, maximum in (("modify_window_seconds", 1, 31536000), ("max_change_units", 0, 1000000),
                                   ("history_char_budget", 500, 100000), ("recovery_grace_seconds", 0, 86400),
-                                  ("retention_days", 1, 3650)):
+                                  ("agenda_max_chars", 300, 12000), ("retention_days", 1, 3650)):
         value = _typed(config, key, int)
         if not minimum <= value <= maximum:
             raise KRDError("invalid_config", f"{key} is outside its permitted range")

@@ -303,8 +303,11 @@ class ContextBuilder:
         weather_text = ""
         if self.weather is not None:
             weather_text = self._weather_text(await self._weather(persona_id, day, "chat"))
-        agenda_text = self._bounded(self._agenda_text(plan, day, tz_name, current_sid), 2400)
-        return self._bounded("\n".join(lines), 1400) + ("\n\n" + weather_text if weather_text else "") + "\n\n" + agenda_text
+        agenda_text = ""
+        if base_config.get("inject_agenda", True):
+            agenda_limit = int(base_config.get("agenda_max_chars", 2400))
+            agenda_text = self._bounded(self._agenda_text(plan, day, tz_name, current_sid), agenda_limit)
+        return self._bounded("\n".join(lines), 1400) + ("\n\n" + weather_text if weather_text else "") + (("\n\n" + agenda_text) if agenda_text else "")
 
     async def chat_weather(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
         base_config = config or await self.store.get_config(persona_id)
