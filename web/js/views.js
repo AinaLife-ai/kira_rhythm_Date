@@ -531,7 +531,7 @@ export const SettingsView = {
           <small>虚拟模式无需地点；真实天气需要先保存地点。</small>
         </div>
         <div class="form-grid"><label><span>虚拟地点</span><small>只用于文字展示，可以随便写。</small><input v-model="$root.draft.weather.virtual.location"></label><label><span>虚拟气候</span><small>决定虚拟天气的性格；不影响真实天气。</small><select v-model="$root.draft.weather.virtual.climate"><option value="temperate">温带四季</option><option value="island">海岛</option><option value="rainforest">雨林</option><option value="snow">雪原</option><option value="desert">沙漠</option><option value="floating_city">幻想浮空城</option></select></label></div>
-        <label class="full-field"><span>虚拟随机种子</span><small>同一个种子会得到可重复的虚拟天气；随便改一个词就能换天气。</small><input v-model="$root.draft.weather.virtual.seed"></label>
+        <label class="full-field"><span>虚拟随机种子</span><small>同一个种子只固定“同一个人格 + 同一天”的天气：同一天重进或重算不会变；换一天会继续生成新的天气，不会每天重复同一种。改种子会换整段天气序列。</small><input v-model="$root.draft.weather.virtual.seed"></label>
         <pre v-if="$root.weatherResult" class="weather-preview">{{ $root.weatherResult }}</pre>
       </section>
       <section v-if="$root.settingsTab === 'data'" class="settings-section">
