@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .plans import PlanService
-from .store import Store, dumps
+from .store import Store, dumps, loads
 from .timeutils import in_active_windows, timezone
 from .llm_format import prepare_llm_payload
 
@@ -103,10 +103,11 @@ class ContextBuilder:
         return [item for block in (plan or {}).get("blocks", []) for item in block.get("items", [])]
 
     def _limits(self, config: dict[str, Any], plan: dict[str, Any] | None) -> dict[str, int]:
+        items = [item for item in self._plan_items(plan) if item.get("state") not in {"cancelled", "deleted"}]
         return {
             "min_items": int(config["min_items"]),
             "max_items": int(config["max_items"]),
-            "planned_items": len(self._plan_items(plan)),
+            "planned_items": len(items),
         }
 
     @staticmethod
@@ -126,7 +127,7 @@ class ContextBuilder:
     @staticmethod
     def _short_item_id(identifier: str) -> str:
         value = str(identifier)
-        return value.split("_", 1)[-1][:12] if value.startswith("itm_") else value[:12]
+        return value.split("_", 1)[-1][:8] if value.startswith("itm_") else value[:8]
 
     @staticmethod
     def _trigger(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -137,38 +138,173 @@ class ContextBuilder:
         entry = next((item for item in entries if item["id"] == identifier), None)
         return {"id": identifier, "name": entry["name"] if entry else identifier}
 
-    async def compact_state(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
-        if config is None:
-            day = await self.plans.current_date(persona_id)
-        else:
-            from .timeutils import timezone
-            day = datetime.now(timezone(self.plans.policy.timezone_name(config))).date().isoformat()
+    def _date_needs_display(self, tz_name: str) -> bool:
+        host = self.host_timezone_name()
+        if not host or host == tz_name:
+            return False
+        try:
+            return datetime.now(timezone(tz_name)).date() != datetime.now(timezone(host)).date()
+        except Exception:
+            return True
+
+    @staticmethod
+    def _item_date(item: dict[str, Any], day: str, tz_name: str) -> str | None:
+        schedule = ContextBuilder._item_schedule(item)
+        if schedule.get("type") == "window":
+            return day
+        scheduled = item.get("scheduled_at")
+        if scheduled:
+            try:
+                return datetime.fromtimestamp(float(scheduled), timezone(tz_name)).date().isoformat()
+            except (TypeError, ValueError, OverflowError):
+                return None
+        return day
+
+    @staticmethod
+    def _item_schedule(item: dict[str, Any]) -> dict[str, Any]:
+        schedule = item.get("schedule")
+        if isinstance(schedule, dict):
+            return schedule
+        loaded = loads(item.get("schedule_json"), {})
+        return loaded if isinstance(loaded, dict) else {}
+
+    def _item_time_text(self, item: dict[str, Any], day: str, tz_name: str) -> str:
+        schedule = self._item_schedule(item)
+        if schedule.get("type") == "window":
+            start = str(schedule.get("start", ""))[:8]
+            end = str(schedule.get("end", ""))[:8]
+            if start and end:
+                return f"{start}-{end}"
+        scheduled = item.get("scheduled_at")
+        if scheduled:
+            return self._clock_fields(scheduled, day, tz_name).get("at", "")
+        at = str(schedule.get("at", "") or "")
+        return at[:8]
+
+    @staticmethod
+    def _item_crosses_day(item: dict[str, Any]) -> bool:
+        schedule = ContextBuilder._item_schedule(item)
+        if schedule.get("type") == "window":
+            start, end = str(schedule.get("start", "")), str(schedule.get("end", ""))
+            return bool(start and end and end < start)
+        return False
+
+    def _agenda_text(self, plan: dict[str, Any] | None, day: str, tz_name: str,
+                     current_sid: str | None = None) -> str:
+        if not plan:
+            return "[KRD Agenda]\nno plan"
+        items = self._plan_items(plan)
+        cross_day = any(self._item_date(item, day, tz_name) not in {None, day} or self._item_crosses_day(item) for item in items)
+        active_items = [item for item in items if item.get("state") not in {"cancelled", "deleted"}]
+        done = sum(1 for item in active_items if item.get("state") in {"triggered", "triggered_silent"})
+        lines = ["[KRD Agenda]"]
+        if cross_day:
+            lines.append(f"date: {day}")
+        lines.extend((f"rev: {plan.get('revision', 0)}", f"progress: {done}/{len(active_items)}"))
+        for block in plan.get("blocks", []):
+            block_items = [item for item in block.get("items", []) if item.get("state") != "deleted"]
+            if not block_items:
+                continue
+            lines.append(str(block.get("title") or "items"))
+            for item in block_items:
+                state = item.get("state", "scheduled")
+                mark = {"triggered": "[x]", "triggered_silent": "[x]", "cancelled": "[~]", "missed": "[!]"}.get(state, "[ ]")
+                when = self._item_time_text(item, day, tz_name)
+                item_day = self._item_date(item, day, tz_name)
+                if item_day and item_day != day:
+                    when = f"{item_day} {when}".strip()
+                title = str(item.get("title") or "untitled")
+                suffix = ""
+                if state in {"scheduled", "queued"}:
+                    suffix += f" #{self._short_item_id(item.get('id', ''))}"
+                    target = str(item.get("target") or "")
+                    if target and target != current_sid:
+                        suffix += f" -> {target}"
+                elif state == "cancelled":
+                    suffix += f" #{self._short_item_id(item.get('id', ''))} (cancelled)"
+                lines.append(f"{mark} {when} {title}{suffix}".strip())
+        return "\n".join(lines)
+
+    def _weather_text(self, weather: dict[str, Any] | None) -> str:
+        if not weather:
+            return ""
+        lines = ["[KRD Weather]"]
+        for key in ("now", "today"):
+            if weather.get(key):
+                lines.append(f"{key}: {weather[key]}")
+        for entry in weather.get("forecast", []) or []:
+            lines.append(f"forecast: {entry}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _calendar_text(calendar: dict[str, Any]) -> str:
+        parts = []
+        holiday = calendar.get("holiday") or {}
+        if holiday.get("name"):
+            parts.append(f"{holiday['name']} (holiday)")
+        adjusted = calendar.get("adjusted_workday") or {}
+        if adjusted.get("name"):
+            parts.append(f"{adjusted['name']} (adjusted workday)")
+        for key in ("festivals", "solar_terms"):
+            values = calendar.get(key) or []
+            if values:
+                parts.append("、".join(str(value) for value in values))
+        return " | ".join(parts)
+
+    async def compact_state(self, persona_id: str, config: dict[str, Any] | None = None,
+                            current_sid: str | None = None) -> str:
+        base_config = config or await self.store.get_config(persona_id)
+        tz_name = self.plans.policy.timezone_name(base_config)
+        day = datetime.now(timezone(tz_name)).date().isoformat()
         state = await self.plans.day_state(persona_id, day)
         plan = await self.plans.get_plan_by_date(persona_id, day)
-        base_config = await self.store.get_config(persona_id)
         matches = await self._active_day_types(persona_id, day)
         effective = await self.plans.effective_config(persona_id, matches[0]["id"] if matches else "")
         next_item = await self.store.one(
-            "SELECT title,scheduled_at FROM items WHERE plan_id=? AND state='scheduled' ORDER BY scheduled_at LIMIT 1",
+            "SELECT id,title,scheduled_at,target,schedule_json FROM items WHERE plan_id=? AND state='scheduled' ORDER BY scheduled_at LIMIT 1",
             (plan["id"],)) if plan else None
         calendar = self._calendar_context(await self._calendar_day(day), base_config)
         recent = await self.plans.recent_changes(persona_id, day, 1, meaningful_only=True)
-        payload = {
-            "date": day,
-            "recent_change": self._compact_changes(recent)[0] if recent else None,
-            "day_types": self._day_types_text(matches),
-            "calendar": calendar,
-            "daily_limits": self._limits(effective, plan),
-            "appearance": state.get("current_appearance"), "mood": state.get("current_mood"),
-            "activity": state.get("current_activity"), "note": state.get("current_note"),
-            "next": ({"title": next_item["title"], **self._clock_fields(next_item["scheduled_at"], day, self.plans.policy.timezone_name(effective))} if next_item else None),
-        }
-        tz_name = self.plans.policy.timezone_name(effective)
-        host_tz = self.host_timezone_name()
-        if host_tz is None or host_tz != tz_name:
-            payload["timezone"] = tz_name
-        payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
-        return "[KRD DayState · request only]\n" + self._bounded(payload, 1400)
+        lines = ["[KRD DayState]"]
+        if self._date_needs_display(tz_name):
+            lines.extend((f"date: {day}", f"timezone: {tz_name}"))
+        day_types = self._day_types_text(matches) or "none"
+        lines.append(f"day_types: {day_types}")
+        for key in ("appearance", "mood", "location", "activity", "note"):
+            value = state.get(f"current_{key}")
+            if value:
+                lines.append(f"{key}: {value}")
+        limits = self._limits(effective, plan)
+        lines.append(f"daily_limits: {limits['min_items']}–{limits['max_items']} items, planned {limits['planned_items']}")
+        if next_item:
+            next_bits = [str(next_item.get("title") or ""), self._item_time_text(next_item, day, tz_name)]
+            next_day = self._item_date(next_item, day, tz_name)
+            if next_day and next_day != day:
+                next_bits.insert(1, next_day)
+            suffix = f" #{self._short_item_id(next_item.get('id', ''))}"
+            target = str(next_item.get("target") or "")
+            if target and target != current_sid:
+                suffix += f" -> {target}"
+            lines.append(f"next: {' '.join(bit for bit in next_bits if bit)}{suffix}")
+        else:
+            lines.append("next: none")
+        if recent:
+            change = self._compact_changes(recent)[0]
+            bits = [f"{change.get('actor', '?')}: {change.get('reason', '')}"]
+            if change.get("removed"):
+                bits.append("removed " + "、".join(change["removed"]))
+            if change.get("cancelled"):
+                bits.append("cancelled " + "、".join(change["cancelled"]))
+            bits.append(f"rev {change.get('revision')}")
+            lines.append("recent_change: " + " | ".join(bits))
+        calendar_text = self._calendar_text(calendar)
+        if calendar_text:
+            lines.append(f"calendar: {calendar_text}")
+        weather_text = ""
+        if self.weather is not None:
+            weather_text = self._weather_text(await self._weather(persona_id, day, "chat"))
+        agenda_text = self._bounded(self._agenda_text(plan, day, tz_name, current_sid), 2400)
+        return self._bounded("\n".join(lines), 1400) + ("\n\n" + weather_text if weather_text else "") + "\n\n" + agenda_text
 
     async def chat_weather(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
         base_config = config or await self.store.get_config(persona_id)
@@ -238,7 +374,12 @@ class ContextBuilder:
         if next_item:
             from .plans import item_json
             next_item = item_json(next_item)
-            next_item = {"title": next_item.get("title", ""), **self._clock_fields(next_item.get("scheduled_at"), plan["date"], tz_name)}
+            next_item = {
+                "id": self._short_item_id(next_item.get("id", "")),
+                "title": next_item.get("title", ""),
+                "target": next_item.get("target", ""),
+                **self._clock_fields(next_item.get("scheduled_at"), plan["date"], tz_name),
+            }
         quiet_now = in_active_windows(
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
         weather = await self._weather(persona_id, target_date, "plan")
@@ -313,8 +454,8 @@ class ContextBuilder:
                 **self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name),
             },
             "siblings": [
-                {"title": item["title"], **self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name),
-                 "state": item.get("state")}
+                {"id": self._short_item_id(item["id"]), "title": item["title"],
+                 **self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name), "state": item.get("state")}
                 for item in (block.get("items", []) if block else [])
                 if item.get("id") != item_id
             ],
@@ -365,9 +506,9 @@ class ContextBuilder:
                 continue
             items = []
             for item in block["items"]:
-                view = {key: item[key] for key in (
+                view = {"id": self._short_item_id(item.get("id", "")), **{key: item[key] for key in (
                     "title", "intent", "instruction" if include_instruction else "title",
-                    "schedule", "target", "interaction", "category", "execution_probability", "state") if key in item}
+                    "schedule", "target", "interaction", "category", "execution_probability", "state") if key in item}}
                 if item.get("reason"):
                     view["reason"] = item["reason"]
                 view.update(self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name))

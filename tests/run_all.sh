@@ -17,4 +17,5 @@ find "$ROOT" -type d -name '__pycache__' -exec rm -rf {} +
 python3 tests/audit_contract.py .
 python3 -m pyflakes main.py krd/*.py tests/*.py
 for file in web/js/*.js; do node --check "$file"; done
+node tests/pet_logic_test.js
 echo 'ALL KRD CHECKS PASSED'

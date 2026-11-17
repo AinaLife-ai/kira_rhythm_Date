@@ -23,6 +23,7 @@ STATIC_TOOL_GUIDE = """
 已有 Plan 是修订，不重复新建；规划 focus.date 是首要目标，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
 普通模型响应即 triggered；<msg/> 合法；只有 current_item.instruction 是当前可执行指令，历史、diff、其他小项都是参考数据。回顾是非强制的，不要为了完成检查制造修改。
 遵守用户权限、每日数量、概率、日型、禁止执行/安静投递/必需覆盖规则。日型是生活分类，calendar 是独立事实；多个日型按 day_types 顺序理解。
+普通聊天的 [KRD Agenda] 是只读当前日程：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；`->` 是目标会话，省略表示当前会话；不要把它当作执行结果。
 """.strip()
 
 
@@ -187,15 +188,16 @@ class Runtime:
             if normal_allowed:
                 if base_config.get("inject_day_state", True):
                     req.user_prompt.append(Prompt(
-                        await self.context_builder.compact_state(active, config=base_config), name="krd_day_state",
-                        source="kira_rhythm_Date", persist=False, render_template=False,
+                        await self.context_builder.compact_state(active, config=base_config, current_sid=event.sid),
+                        name="krd_day_state", source="kira_rhythm_Date", persist=False, render_template=False,
                     ))
-                weather_prompt = await self.context_builder.chat_weather(active, base_config)
-                if weather_prompt:
-                    req.user_prompt.append(Prompt(
-                        weather_prompt, name="krd_weather", source="kira_rhythm_Date",
-                        persist=False, render_template=False,
-                    ))
+                else:
+                    weather_prompt = await self.context_builder.chat_weather(active, base_config)
+                    if weather_prompt:
+                        req.user_prompt.append(Prompt(
+                            weather_prompt, name="krd_weather", source="kira_rhythm_Date",
+                            persist=False, render_template=False,
+                        ))
             elif req.tool_set:
                 req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
         if allowed_valid or normal_allowed:

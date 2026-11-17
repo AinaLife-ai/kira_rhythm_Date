@@ -247,6 +247,14 @@ class PlanService:
                 interaction = raw_item.get("interaction", "auto")
                 if interaction not in {"auto", "must_message", "silent"}:
                     raise KRDError("invalid_interaction", "Unknown interaction mode")
+                if not schedule_unchanged:
+                    for timestamp in timestamps:
+                        if timestamp < now() - 60:
+                            raise KRDError("schedule_in_past", "Cannot create an item in the past")
+                        if any(left <= timestamp < right for left, right in blocked):
+                            raise KRDError("blocked_execution_window", "This item falls into a blocked execution window")
+                        if interaction == "must_message" and any(left <= timestamp < right for left, right in quiet):
+                            raise KRDError("quiet_delivery_window", "must_message cannot be scheduled in a quiet delivery window")
                 if execution_options is None:
                     execution_options = await self.policy.session_options(persona_id, "execution", config=config)
                 target = await self.policy.require_target(
@@ -254,13 +262,6 @@ class PlanService:
                 series_id = (previous.get("series_id", "") if schedule_unchanged else
                              raw_item.get("series_id") or (new_id("ser") if len(timestamps) > 1 else ""))
                 for occurrence, timestamp in enumerate(timestamps):
-                    if not schedule_unchanged:
-                        if timestamp < now() - 60:
-                            raise KRDError("schedule_in_past", "Cannot create an item in the past")
-                        if any(left <= timestamp < right for left, right in blocked):
-                            raise KRDError("blocked_execution_window", "This item falls into a blocked execution window")
-                        if interaction == "must_message" and any(left <= timestamp < right for left, right in quiet):
-                            raise KRDError("quiet_delivery_window", "must_message cannot be scheduled in a quiet delivery window")
                     identifier = supplied_id if supplied_id and occurrence == 0 else new_id("itm")
                     item = {
                         "id": identifier, "series_id": series_id,
@@ -557,6 +558,7 @@ class PlanService:
         if not content.strip() or len(content) > 8000:
             raise KRDError("invalid_experience", "Experience must be non-empty and at most 8000 characters")
         if item_id:
+            item_id = await self.resolve_item_id(persona_id, item_id)
             owner = await self.store.one(
                 "SELECT p.persona_id FROM items i JOIN plans p ON p.id=i.plan_id WHERE i.id=?", (item_id,))
             if not owner or owner["persona_id"] != persona_id:
@@ -615,7 +617,7 @@ class PlanService:
 
     async def resolve_item_id(self, persona_id: str, reference: str) -> str:
         """Resolve a full item id or a short item-id prefix within a persona."""
-        reference = str(reference or "").strip()
+        reference = str(reference or "").strip().lstrip("#")
         if not reference:
             raise KRDError("item_required", "item_id is required")
         row = await self.store.one(
@@ -625,6 +627,15 @@ class PlanService:
             return row["id"]
         if not reference.startswith("itm_"):
             reference = f"itm_{reference}"
+        # Prefer active workspaces so an old historical item cannot steal a short prefix.
+        active_rows = await self.store.all(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id "
+            "WHERE p.persona_id=? AND p.state<>'deleted' AND i.state<>'deleted' AND i.id LIKE ?",
+            (persona_id, f"{reference}%"))
+        if len(active_rows) == 1:
+            return active_rows[0]["id"]
+        if len(active_rows) > 1:
+            raise KRDError("ambiguous_item", "Short item id matches more than one active item")
         rows = await self.store.all(
             "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id LIKE ?",
             (persona_id, f"{reference}%"))

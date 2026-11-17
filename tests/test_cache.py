@@ -75,3 +75,27 @@ async def test_normal_chat_day_state_is_nonpersistent(tmp_path):
     await runtime.on_llm_request(event, req)
     assert len(req.user_prompt) == 1 and req.user_prompt[0].name == "krd_day_state" and not req.user_prompt[0].persist
     await runtime.store.close()
+
+
+@pytest.mark.asyncio
+async def test_normal_chat_static_tool_guide_is_stable(tmp_path):
+    fake = FakeRuntime(tmp_path)
+    runtime = Runtime(fake.ctx, tmp_path)
+    await runtime.store.initialize()
+    session = Session(adapter_name="qq", session_type="dm", session_id="10001")
+    event = KiraMessageBatchEvent(supported_elements=["text"], timestamp=1,
+                                  adapter=fake.ctx.adapter_mgr.adapter.info,
+                                  session=session, messages=[])
+    prompts = []
+    for _ in range(2):
+        req = LLMRequest(messages=[], tool_set=ToolSet(),
+                         system_prompt=[Prompt("静态工具区", name="tools", source="system")],
+                         user_prompt=[])
+        await runtime.on_llm_request(event, req)
+        assert req.system_prompt[0].content.count("[KRD 生活节律]") == 1
+        assert len(req.user_prompt) == 1 and req.user_prompt[0].name == "krd_day_state"
+        assert not req.user_prompt[0].persist
+        assert req.user_prompt[0].content.count("[KRD DayState]") == 1
+        prompts.append(req.system_prompt[0].content)
+    assert prompts[0] == prompts[1]
+    await runtime.store.close()

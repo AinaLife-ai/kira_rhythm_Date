@@ -27,3 +27,12 @@ def test_delete_controls_are_wired():
     assert "@delete=\"$emit('delete', $event)\"" in views
     assert "删除时段" in views
     assert "删除整天" in views
+
+def test_pet_sleep_and_random_context_actions():
+    pet = (WEB / "pet.js").read_text(encoding="utf-8")
+    assert "nightSleepEligible" in pet
+    assert "sleepSuppressedUntil" in pet
+    assert "this.hour >= 23" in pet
+    assert "wakeFromSleep" in pet
+    assert "randomPool" in pet
+    assert "sleepiness" not in pet

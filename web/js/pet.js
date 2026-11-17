@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.2.13'
-import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.13'
+import { fmt } from './store.js?v=1.2.16'
+import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.2.16'
 
 const VOICE = {
   tomato: {
@@ -146,6 +146,7 @@ export const PetCompanion = {
     plan: { type: Object, default: null },
     sessions: { type: Array, default: () => [] },
     now: { type: Number, default: () => Date.now() / 1000 },
+    hour: { type: Number, default: () => new Date().getHours() },
     poses: { type: Object, default: () => ({}) },
     large: { type: Boolean, default: false },
   },
@@ -192,7 +193,8 @@ export const PetCompanion = {
       careVisible: true,
       labelTimer: null,
       careTimer: null,
-      sleepiness: 0,
+      sleepBias: 0,
+      sleepSuppressedUntil: 0,
     }
   },
   computed: {
@@ -220,9 +222,9 @@ export const PetCompanion = {
       return `pet-${this.variant}`
     },
     planItems() {
-      return (this.plan?.blocks || []).flatMap((block) => block.items || [])
+      return (this.plan?.blocks || []).flatMap((block) => block.items || []).filter((item) => item.state !== 'deleted')
     },
-    planTotal() { return this.planItems.length },
+    planTotal() { return this.planItems.filter((item) => item.state !== 'cancelled').length },
     planDone() { return this.planItems.filter((item) => ['triggered', 'triggered_silent'].includes(item.state)).length },
     planProgress() { return this.planTotal ? Math.round(this.planDone / this.planTotal * 100) : 0 },
     nextClock() { return this.nextItem ? fmt.time(this.nextItem.scheduled_at) : '—' },
@@ -237,6 +239,7 @@ export const PetCompanion = {
   },
   watch: {
     nextItem() { this.chooseAction(true) },
+    hour() { this.chooseAction(true) },
     weather(value) { if (value !== 'off') this.queueChatter(1400, 'weather') },
     phase() { this.chooseAction(false) },
     event() { this.queueChatter(1800) },
@@ -259,6 +262,13 @@ export const PetCompanion = {
     clearTimeout(this.careTimer)
   },
   methods: {
+    isLateNight() {
+      return this.hour >= 23 || this.hour < 6
+    },
+    nightSleepEligible() {
+      if (!this.isLateNight()) return false
+      return !this.planItems.some((item) => ['scheduled', 'queued', 'running'].includes(item.state))
+    },
     showLabel(hint = false, ms = 3000) {
       this.labelVisible = true
       this.labelHint = hint
@@ -352,7 +362,8 @@ export const PetCompanion = {
       this.scheduleChatter()
     },
     keywordAction() {
-      const item = this.nextItem || {}
+      const running = this.planItems.find((item) => item.state === 'running')
+      const item = running || this.nextItem || {}
       const text = `${item.title || ''} ${item.intent || ''} ${this.activity || ''}`
       if (/睡|梦|午休|休息/.test(text)) return 'sleep'
       if (/书|阅读|读|学习|复习/.test(text)) return 'read'
@@ -363,12 +374,31 @@ export const PetCompanion = {
       if (/散步|出门|走|逛|运动|活动/.test(text)) return 'jump'
       return ''
     },
+    randomPool() {
+      const pool = [...RANDOM_ACTION_WEIGHTS]
+      let hint = this.keywordAction()
+      if (hint === 'sleep' && Date.now() < this.sleepSuppressedUntil) hint = ''
+      if (hint && hint !== 'jump') pool.push([hint, hint === 'sleep' ? 16 : 12])
+      if (this.event === 'imminent') pool.push(['look', 8])
+      if (this.event === 'live') pool.push(['work', 8])
+      if (this.nightSleepEligible() && Date.now() >= this.sleepSuppressedUntil) {
+        pool.push(['sleep', 14 + this.sleepBias * 5])
+      }
+      return pool
+    },
+    wakeFromSleep() {
+      if (this.action === 'sleep') {
+        this.action = 'idle'
+        this.stickyAction = false
+        this.stickyUntil = 0
+      }
+      this.sleepSuppressedUntil = Date.now() + 12000
+      this.sleepBias = Math.min(6, this.sleepBias + 1)
+    },
     chooseAction(force) {
       if (this.dragging || Date.now() < this.actionLockUntil) return
       if (this.stickyAction && !force && Date.now() < this.stickyUntil) return
       if (!force && Date.now() < this.interactionLockUntil) return
-      if (this.phase === 'night') this.sleepiness = Math.min(4, this.sleepiness + 1)
-      else this.sleepiness = 0
       if (force && this.event === 'imminent') {
         this.setAction('look', this.speechFor('event'), false)
         return
@@ -377,25 +407,29 @@ export const PetCompanion = {
         this.setAction('work', this.speechFor('event'), false)
         return
       }
-      const keyword = this.keywordAction()
-      if (keyword && force) {
+      let keyword = this.keywordAction()
+      if (keyword === 'sleep' && Date.now() < this.sleepSuppressedUntil) keyword = ''
+      if (force && keyword) {
         if (keyword === 'jump') { this.startJump('schedule'); return }
         this.setAction(keyword, this.speechFor(keyword), true)
         return
       }
-      if (this.phase === 'night' && this.sleepiness > 1) {
+      if (force && this.nightSleepEligible() && Date.now() >= this.sleepSuppressedUntil) {
+        this.sleepBias = 0
         this.setAction('sleep', this.speechFor('sleep'), true)
         return
       }
-      const idle = this.pickIdle()
+      const idle = this.pickIdle(this.randomPool())
       if (idle === 'jump') { this.startJump(); return }
-      if (force) this.setAction(idle, this.speechFor(idle), false)
+      if (idle === 'sleep') this.sleepBias = 0
+      const contextual = ['read', 'drink', 'eat', 'work', 'music', 'sleep'].includes(idle)
+      if (force || contextual) this.setAction(idle, this.speechFor(idle), idle === 'sleep')
       else { this.action = idle; this.stickyAction = false }
     },
-    pickIdle() {
-      const total = RANDOM_ACTION_WEIGHTS.reduce((sum, item) => sum + item[1], 0)
+    pickIdle(pool = RANDOM_ACTION_WEIGHTS) {
+      const total = pool.reduce((sum, item) => sum + item[1], 0)
       let roll = Math.random() * total
-      for (const [action, weight] of RANDOM_ACTION_WEIGHTS) {
+      for (const [action, weight] of pool) {
         roll -= weight
         if (roll <= 0) return action
       }
@@ -464,6 +498,7 @@ export const PetCompanion = {
     },
     pat() {
       if (this.dragging || this.suppressClick) return
+      this.wakeFromSleep()
       clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
       this.panel = false
       this.showLabel(false)
@@ -485,16 +520,19 @@ export const PetCompanion = {
       setTimeout(() => { if (this.action === 'happy') this.action = 'idle' }, 1400)
     },
     feed() {
+      this.wakeFromSleep()
       this.setAction('eat', this.speechFor('eat'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     giveDrink() {
+      this.wakeFromSleep()
       this.setAction('drink', this.speechFor('drink'), false)
       this.interactionLockUntil = Date.now() + 4200
       this.panel = false
     },
     talk() {
+      this.wakeFromSleep()
       this.setAction('phone', '', false)
       this.interactionLockUntil = Date.now() + 5200
       this.panel = false
@@ -514,6 +552,7 @@ export const PetCompanion = {
       this.panel = false
     },
     startDrag(event) {
+      this.wakeFromSleep()
       clearTimeout(this.jumpTimer); this.jumpTimer = null; this.jumpLeft = 0
       this.stickyAction = false
       this.interactionLockUntil = 0
