@@ -35,6 +35,8 @@ async def store(tmp_path):
     {"weather": {"provider": "unknown"}},
     {"weather": {"locations": {"default": {"latitude": 1000, "longitude": 0}}}},
     {"appearance": {"avatar_adapter_order": {}}},
+    {"inject_agenda": "yes"},
+    {"agenda_max_chars": 200},
 ])
 @pytest.mark.asyncio
 async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):
@@ -42,6 +44,17 @@ async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):
         await store.update_config("persona-a", patch, 0)
     assert await store.config_revision("persona-a") == 0
     assert await store.one("SELECT * FROM settings WHERE key='persona:persona-a'") is None
+
+
+@pytest.mark.asyncio
+async def test_agenda_injection_is_hot_configurable(store):
+    config, revision = await store.update_config("persona-a", {
+        "inject_agenda": False,
+        "agenda_max_chars": 800,
+    }, 0)
+    assert revision == 1
+    assert config["inject_agenda"] is False
+    assert config["agenda_max_chars"] == 800
 
 
 @pytest.mark.asyncio

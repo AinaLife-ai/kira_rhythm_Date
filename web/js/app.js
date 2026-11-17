@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.16'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.16'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.16'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.16'
-import { PetCompanion } from './pet.js?v=1.2.16'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.18'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.18'
+import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.18'
+import { planTemplates, themeTemplates } from './templates.js?v=1.2.18'
+import { PetCompanion } from './pet.js?v=1.2.18'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.16'
+const ASSET_VERSION = '1.2.18'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -1021,8 +1021,32 @@ const app = Vue.createApp({
     },
     prepareSettings() {
       this.draft = clone(this.data.config || {})
-      if (!themeTemplates.some((entry) => entry.id === this.draft.appearance?.theme)) this.draft.appearance.theme = 'random'
-      const review = (this.draft.planning_review ||= {})
+      const nested = {
+        calendar_context: { holiday: true, adjusted_workday: true, festivals: true, solar_terms: true },
+        calendar_display: { holiday: true, adjusted_workday: true, festivals: true, solar_terms: true, lunar_date: true },
+        session_access: { mode: 'deny_list', sessions: [] },
+        planning_pool: { sessions: [], strategy: 'pure_random' },
+        execution_pool: { sessions: [], strategy: 'pure_random' },
+        planning_review: {},
+        weather: { mode: 'off', provider: 'open_meteo', chat_current: true, chat_forecast: false, locations: {}, virtual: {} },
+        appearance: { theme: 'random', effects: 'auto' },
+      }
+      for (const [key, defaults] of Object.entries(nested)) {
+        this.draft[key] = { ...defaults, ...(this.draft[key] || {}) }
+      }
+      this.draft.weather.virtual = { seed: 'krd', climate: 'temperate', location: '', ...(this.draft.weather.virtual || {}) }
+      this.draft.weather.locations = { ...(this.draft.weather.locations || {}) }
+      this.draft.session_access.sessions = Array.isArray(this.draft.session_access.sessions) ? this.draft.session_access.sessions : []
+      this.draft.planning_pool.sessions = Array.isArray(this.draft.planning_pool.sessions) ? this.draft.planning_pool.sessions : []
+      this.draft.execution_pool.sessions = Array.isArray(this.draft.execution_pool.sessions) ? this.draft.execution_pool.sessions : []
+      for (const key of ['blocked_execution_windows', 'quiet_delivery_windows', 'required_coverage_windows']) {
+        if (!Array.isArray(this.draft[key])) this.draft[key] = []
+      }
+      this.draft.inject_day_state ??= true
+      this.draft.inject_agenda ??= true
+      this.draft.agenda_max_chars ??= 2400
+      if (!themeTemplates.some((entry) => entry.id === this.draft.appearance.theme)) this.draft.appearance.theme = 'random'
+      const review = this.draft.planning_review
       if (typeOfSeconds(review.interval_seconds)) review.interval_seconds = Math.round(Number(review.interval_minutes) * 60)
       if (typeOfSeconds(review.min_lead_seconds)) review.min_lead_seconds = Math.round(Number(review.min_lead_minutes) * 60)
       this.settingsBaseRevision = this.data.config_revision || 0
@@ -1156,7 +1180,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.16'
+import { del as requestDelete } from './api.js?v=1.2.18'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

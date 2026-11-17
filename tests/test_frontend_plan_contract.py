@@ -36,3 +36,14 @@ def test_pet_sleep_and_random_context_actions():
     assert "wakeFromSleep" in pet
     assert "randomPool" in pet
     assert "sleepiness" not in pet
+
+
+def test_settings_draft_normalizes_preview_and_partial_config():
+    app = (WEB / "app.js").read_text(encoding="utf-8")
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+    fixture = (ROOT / "tests" / "web_fixture.js").read_text(encoding="utf-8")
+    assert "calendar_context: { holiday: true" in app
+    assert "this.draft.inject_agenda ??= true" in app
+    assert "普通聊天附带待办清单" in views
+    assert "待办清单最多字符数" in views
+    assert "calendar_context" in fixture

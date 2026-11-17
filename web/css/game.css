@@ -137,6 +137,7 @@ body {
 }
 
 .form-grid label small, .full-field > small { color:var(--muted); font-size:10px; line-height:1.5; }
+.switch-row > span small { display:block; margin-top:3px; color:var(--muted); font-size:10px; line-height:1.4; font-weight:400; }
 .field-hint { max-width:68ch; }
 .review-setting { border-radius:4px 16px 4px 16px; }
 
