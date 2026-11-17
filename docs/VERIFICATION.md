@@ -6,8 +6,8 @@
 
 | 范围 | 结果 |
 |---|---|
-| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **117 passed** |
-| KiraAI 3.1.2 同一套测试 | **117 passed** |
+| KiraAI 3.2.0-beta.1 领域/并发/调度/缓存/资源测试 | **118 passed** |
+| KiraAI 3.1.2 同一套测试 | **118 passed** |
 | 3.2 真实 PluginManager 生命周期 | 通过：3 工具、41 条鉴权 API/页面/静态路由、WS |
 | 3.1.2 真实 PluginManager 生命周期 | 同上，通过 |
 | 3.2 真实 IM 工作流 E2E | 通过：triggered、finalized、发送与历史边界 |
@@ -36,13 +36,13 @@
 
 本轮未使用子代理。除上述双版本测试外，执行了以下额外验收：
 
-## 第三轮完整审计（v1.2.13 收尾，2026-11-17）
+## 第三轮完整审计（v1.2.14 收尾，2026-11-17）
 
 本轮同样未使用子代理，基于真实 PluginManager、真实 FastAPI HTTP/WS、真实 SQLite 和真实 Chromium 页面完成。
 
 | 验收 | 真实结果 |
 |---|---|
-| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **117 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
+| 双版本全量 | KiraAI 3.1.2 / 3.2.0-beta.1 各 **118 passed**；真实 PluginManager、IM E2E、真实 HTTP API、100 项压力全部通过 |
 | 行走移除 | `assets/pets/*_walk*.webp` 为 0；源码无 `pet-action-walk`/`pixel-walk`；散步、出门、运动等关键词只触发连续跳跃 |
 | 运动中跳跃 | 真实页面连续 3–6 次跳跃，标签保持「运动中」，高度随机、横向仅小偏移、无走路位移 |
 | 真实页面闭环 | uvicorn + 真实插件 API + SQLite 页面加载通过；真实浏览器 bootstrap、计划、DayState、主题读写、刷新按钮、WebSocket 均通过 |
@@ -64,6 +64,8 @@
 | 操作防抖 | 立即规划、立即触发、按模板规划共用 5 秒防抖；按钮显示倒计时，重复点击只提示剩余秒数，不发请求 |
 | 日历翻月 | 翻月后 `monthAnchor` 保持 `YYYY-MM`；实际点击下月无 `Expected YYYY-MM-DD`；`loadMonth` 对锚点防御性截断 |
 | 天气预览 | 虚拟模式无地点可预览；真实模式缺地点显示明确提示；按钮有加载态、成功 toast，结果自动滚动；预览接口不再 TypeError |
+| 普通聊天统一上下文 | DayState + Weather + Agenda 文本；date 默认省略，时区日期不一致才显示；跨日 agenda 才显示 date；agenda 项带 8 位 ID/target |
+| 短 ID | 规划/复盘/执行投影均带 8 位短 ID；解析优先活动计划，历史前缀冲突返回 ambiguous_item 而非误操作 |
 | 性能 | 天气预报缺失时只排后台任务，不等待；日历读取仅缓存/内置，自动更新在后台；100 项压力读取约 1.9–3.3ms |
 | 天气入口 | 顶栏天气 chip 可点击并打开“设置 → 天气与地点”，不再是无响应图标 |
 | 桌宠随机聊天 | 五种桌宠口吻分别生成事项数量、序号、标题、内容、时间、会话；关键词按主题色高亮；会话标题优先、空标题回退 sid、未指定显示执行池自动选 |
@@ -72,7 +74,7 @@
 | 雨伞/围巾道具 | 桌宠 DOM/CSS 无 `pet-umbrella`/`pet-scarf`；动作列表与随机权重不再包含这两类道具 |
 | 桌宠缩放 | 下蹲最终 `0.5565`（0.525 × 1.06），睡觉 `0.7225`，左右镜像保留 |
 | 响应式 | 1440px 桌面和 390px 手机五视图、五设置页签实际渲染；`scrollWidth == innerWidth`，零 JS 异常 |
-| 单文件预览 | `KRD-1.2.13-preview.html` 零外部资源请求、零 JS 错误、启动和页面渲染正常 |
+| 单文件预览 | `KRD-1.2.14-preview.html` 零外部资源请求、零 JS 错误、启动和页面渲染正常 |
 | 长稳 | 31 秒空闲 `data_version 2→2`、零新事件、调度器存活 |
 | 头像占位 | 未设置或图片加载失败显示问号头像；上传成功后显示真实头像（`naturalWidth=40`） |
 | 陪伴面板 | 使用真实日程：今日完成/总数、进度条、下一项标题/时间/倒计时；不再使用假饱腹/心情 |
@@ -92,7 +94,7 @@
 | 工具 schema | `rhythm_plan` 仅暴露 plans[] + 扁平 items；无具体示例；框架工具注册通过 |
 | 模板 | 结构化分组/小项编辑、图标预设/上传、预设模板分区折叠、按模板规划 |
 | 头像/图标分离 | `icon.svg` 仅作插件图标并透明化；`avatar.svg` 为问号默认生活头像；WebUI 未设置/失败仍显示问号 |
-| 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.13`；上传资产内容哈希 + immutable |
+| 缓存键 | 页面 HTML no-store；前端 API GET 请求使用 no-store；CSS/JS/内置资源带 `?v=1.2.14`；上传资产内容哈希 + immutable |
 | 性能/token | 动态 Prompt 仍为尾部 persist=False；静态工具区稳定；首屏不等待 Remote 头像/天气；日历远程刷新后台化 |
 
 真实页面验收使用 `TemporaryDirectory` 与测试人格/会话适配器，但业务数据、插件 API、SQLite 事务、WebSocket 与前端资源均为真实链路；不是业务 mock。

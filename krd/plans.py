@@ -625,6 +625,15 @@ class PlanService:
             return row["id"]
         if not reference.startswith("itm_"):
             reference = f"itm_{reference}"
+        # Prefer active workspaces so an old historical item cannot steal a short prefix.
+        active_rows = await self.store.all(
+            "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id "
+            "WHERE p.persona_id=? AND p.state<>'deleted' AND i.state<>'deleted' AND i.id LIKE ?",
+            (persona_id, f"{reference}%"))
+        if len(active_rows) == 1:
+            return active_rows[0]["id"]
+        if len(active_rows) > 1:
+            raise KRDError("ambiguous_item", "Short item id matches more than one active item")
         rows = await self.store.all(
             "SELECT i.id FROM items i JOIN plans p ON p.id=i.plan_id WHERE p.persona_id=? AND i.id LIKE ?",
             (persona_id, f"{reference}%"))

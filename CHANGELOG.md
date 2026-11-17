@@ -1,5 +1,15 @@
 # 更新日志
 
+## 1.2.14 · 2026-11-17
+
+- 普通聊天上下文统一为 `[KRD DayState] + [KRD Weather] + [KRD Agenda]` 紧凑文本，减少 JSON key/引号 token。
+- Agenda 使用 todo 行：状态、时间、标题、目标会话、8 位短 ID；完成项不带 ID/target。
+- DayState 默认不显示 date；仅当插件时区与 KiraAI 主机日期不一致时显示 date/timezone。
+- Agenda 默认不显示 date；仅跨日计划显示，跨日项目带日期。
+- `next` 增加 `id` 和 `target`；target 等于当前聊天会话时省略。
+- 规划/复盘/小项执行保持原 JSON；所有项目增加 8 位短 ID，解析优先活动计划。
+- 不改变自动规划 DayState 注入策略，不改变工具 JSON 协议。
+
 ## 1.2.13 · 2026-11-17
 
 - 修复日历翻月后 `monthAnchor` 被写成完整日期，导致 API 收到 `2026-11-01-01` 并抛出 `Expected YYYY-MM-DD`。

@@ -187,15 +187,16 @@ class Runtime:
             if normal_allowed:
                 if base_config.get("inject_day_state", True):
                     req.user_prompt.append(Prompt(
-                        await self.context_builder.compact_state(active, config=base_config), name="krd_day_state",
-                        source="kira_rhythm_Date", persist=False, render_template=False,
+                        await self.context_builder.compact_state(active, config=base_config, current_sid=event.sid),
+                        name="krd_day_state", source="kira_rhythm_Date", persist=False, render_template=False,
                     ))
-                weather_prompt = await self.context_builder.chat_weather(active, base_config)
-                if weather_prompt:
-                    req.user_prompt.append(Prompt(
-                        weather_prompt, name="krd_weather", source="kira_rhythm_Date",
-                        persist=False, render_template=False,
-                    ))
+                else:
+                    weather_prompt = await self.context_builder.chat_weather(active, base_config)
+                    if weather_prompt:
+                        req.user_prompt.append(Prompt(
+                            weather_prompt, name="krd_weather", source="kira_rhythm_Date",
+                            persist=False, render_template=False,
+                        ))
             elif req.tool_set:
                 req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
         if allowed_valid or normal_allowed:
