@@ -108,6 +108,28 @@ def run(framework: Path, plugin_root: Path):
             holiday = next(entry for entry in refreshed.json() if entry["id"] == "holiday")
             assert holiday["config"]["overrides"]["planning_prompt"] == "假日 API 提示"
             assert holiday["rules"]["dates"] == ["2026-12-25"]
+            created_thread = await client.post(f"{base}/threads", json={
+                "kind": "goal", "title": "API 目标", "dossier": "API 档案",
+                "priority": 2, "next_step": "下一步", "due_at": "",
+            })
+            assert created_thread.status_code == 200, created_thread.text
+            thread = created_thread.json()
+            assert thread["status"] == "open" and thread["title"] == "API 目标"
+            assert thread["short_id"] and thread["dossier"] == "API 档案"
+            threads = await client.get(f"{base}/threads?status=open")
+            assert threads.status_code == 200 and any(row["id"] == thread["id"] for row in threads.json())
+            detail = await client.get(f"{base}/threads/{thread['id']}")
+            assert detail.status_code == 200 and detail.json()["logs"] == []
+            touched = await client.post(f"{base}/threads/{thread['id']}/touch", json={
+                "note": "API 打卡", "next_step": "继续走"})
+            assert touched.status_code == 200, touched.text
+            assert touched.json()["log"]["note"] == "API 打卡"
+            updated = await client.patch(f"{base}/threads/{thread['id']}", json={
+                "title": "API 目标更新", "status": "paused"})
+            assert updated.status_code == 200, updated.text
+            assert updated.json()["title"] == "API 目标更新" and updated.json()["status"] == "paused"
+            removed = await client.delete(f"{base}/threads/{thread['id']}")
+            assert removed.status_code == 200 and removed.json()["deleted"] is True
             credentials = await client.get(f"{base}/weather/credentials")
             assert credentials.status_code == 200
             assert credentials.json()["providers"]["weatherapi"]["weatherapi_key"] is False
