@@ -81,7 +81,14 @@ def run(framework: Path, plugin_root: Path):
             saved = await client.post(f"{base}/plans", json=payload)
             assert saved.status_code == 200, saved.text
             result = saved.json()
+            assert result["plan"]["revision_actor"] == "user"
+            assert result["plan"]["revision_reason"] == "WebUI edit"
+            assert result["plan"]["planning_reason"] == ""
             item_id = result["plan"]["blocks"][0]["items"][0]["id"]
+            patched = await client.patch(f"{base}/items/{item_id}", json={"title": "API 小项改名"})
+            assert patched.status_code == 200, patched.text
+            assert patched.json()["plan"]["revision_actor"] == "user"
+            assert patched.json()["plan"]["revision_reason"] == "WebUI edit"
             plans = await client.get(f"{base}/plans?start={tomorrow}&end={tomorrow}")
             assert plans.status_code == 200 and len(plans.json()) == 1
             listed = plans.json()[0]

@@ -5,6 +5,7 @@
 - `rhythm_plan` 兼容把 `title` / `overview` / `planned_appearance` / `planned_mood` 写在 `plans` 同级的单日调用：自动并入唯一计划；多日计划会忽略并返回 `ignored_plan_meta` 警告，不再静默丢字段。
 - WebUI 计划接口附带最新修订的 `revision_actor` / `revision_reason`；此刻与日历的计划卡新增「规划理由 / 调整理由」，会过滤 WebUI 技术性默认理由，与概述重复时不重复显示。
 - 前端静态资源缓存键升至 `v=1.3.5`。
+- 兼容性：已在 KiraAI 3.1.2、3.2.0-beta.1、3.3.0 上跑通工具、Hook、页面、HTTP API 与 IM 工作流；未使用已弃用接口。
 
 ## 1.3.4 · 2026-11-25
 ### 界面

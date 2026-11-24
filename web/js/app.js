@@ -1051,7 +1051,7 @@ const app = Vue.createApp({
     saveCurrentTemplate() {
       if (!state.selectedPlan) return notify('请先选择或创建一个计划', 'error')
       const plan = clone(state.selectedPlan)
-      for (const key of ['id', 'revision', 'expected_revision', 'state', 'created_at', 'updated_at', 'created_by', 'persona_id']) delete plan[key]
+      for (const key of ['id', 'revision', 'expected_revision', 'state', 'created_at', 'updated_at', 'created_by', 'persona_id', 'revision_actor', 'revision_reason', 'planning_reason']) delete plan[key]
       for (const block of plan.blocks || []) {
         delete block.id
         delete block.meta
