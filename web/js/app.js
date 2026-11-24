@@ -423,6 +423,8 @@ const app = Vue.createApp({
         this.diffPlanId = state.selectedPlan?.id || ''
         this.prepareSettings()
         state.editor = null
+        state.threadEditor = null
+        state.threadTouch = null
         state.dayStateEditor = false
         state.dayTypeEditor = null
       }

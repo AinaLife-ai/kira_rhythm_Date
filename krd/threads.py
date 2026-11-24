@@ -259,7 +259,9 @@ class ThreadService:
             (identifier, persona_id, kind, title, dossier, status, priority, next_step, due_at,
              timestamp, timestamp, timestamp, str(payload.get("source", actor))[:40], actor, actor))
         row = await self._row(persona_id, identifier)
-        return self._public(row or {}, config, dossier_mode="full")
+        if row is None:
+            raise KRDError("thread_not_found", "Thread was removed concurrently")
+        return self._public(row, config, dossier_mode="full")
 
     async def update(self, persona_id: str, reference: str, patch: dict[str, Any], *,
                      actor: str = "bot", note: str = "") -> dict[str, Any]:
@@ -345,7 +347,9 @@ class ThreadService:
             "VALUES(?,?,?,?,?,?,?,?)",
             (log_id, identifier, persona_id, timestamp, text, str(item_id or "")[:128], "touch", actor))
         row = await self._row(persona_id, identifier)
-        result = self._public(row or {}, config, dossier_mode="excerpt")
+        if row is None:
+            raise KRDError("thread_not_found", "Thread was removed concurrently")
+        result = self._public(row, config, dossier_mode="excerpt")
         result["log"] = {"id": log_id, "at": timestamp, "note": text}
         return result
 
@@ -371,7 +375,9 @@ class ThreadService:
         if run_id:
             await self._record_one(run_id, persona_id, identifier, status, text)
         row = await self._row(persona_id, identifier)
-        result = self._public(row or {}, config, dossier_mode="excerpt")
+        if row is None:
+            raise KRDError("thread_not_found", "Thread was removed concurrently")
+        result = self._public(row, config, dossier_mode="excerpt")
         result["closed"] = status
         return result
 
