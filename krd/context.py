@@ -914,10 +914,10 @@ class ContextBuilder:
             "truncated": True,
             "note": "上下文超出预算；请用 rhythm_view 查看完整计划、目标或历史。",
         }
-        # An item run without current_item is not actionable at all. Keep the
-        # execution-critical fields even when the soft budget is exceeded.
-        for key in ("current_item", "current_plan", "next_item", "delivery_policy", "plan",
-                    "daily_limits", "constraints", "calendar", "thread", "day_so_far"):
+        # An item run without current_item/delivery_policy is not actionable.
+        # Everything else can fall back to rhythm_view, keeping the minimal
+        # object consistent with the design's last-resort budget behavior.
+        for key in ("current_item", "delivery_policy"):
             if key in payload:
                 minimal[key] = payload[key]
         # The response contract must survive any budget reduction. Dropping it

@@ -297,3 +297,12 @@ async def test_disabled_thread_layer_removes_contract_from_planning(runtime):
     assert "threads_requiring_response" not in body
     assert "threads_reference" not in body
     assert "未启用目标/约定" in body["instruction"]
+
+@pytest.mark.asyncio
+async def test_planning_does_not_force_reply_to_user_metadata(runtime):
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run",
+        "has_real_user": True})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "必须先正常回答用户" not in body["instruction"]
+    assert "必须正常回答用户" not in body["instruction"]

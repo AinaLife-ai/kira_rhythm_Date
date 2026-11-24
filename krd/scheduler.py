@@ -492,6 +492,11 @@ class Scheduler:
                     state = "triggered_silent" if silent else "triggered"
                     if silence_requested and not text_silent:
                         error = "silence_unmet"
+                    # must_message cannot be created inside a quiet window.
+                    # If a later config change moves an existing item into one,
+                    # quiet is the stronger runtime constraint: silence is
+                    # allowed and is not logged as delivery_unmet. Outside
+                    # quiet, must_message still records delivery_unmet.
                     elif item["interaction"] == "must_message" and text_silent and not quiet_now:
                         error = "delivery_unmet"
                     else:

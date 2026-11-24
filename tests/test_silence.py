@@ -47,6 +47,9 @@ async def test_mixed_user_response_is_never_rewritten(runtime):
     event.messages.append(KiraIMMessage(
         message_id="real-user", self_id="99999", chain=MessageChain([Text("用户问题")]), timestamp=1,
         sender=User("user", "用户"), is_notice=False, is_mentioned=True))
+    prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
+    assert "必须正常回答用户" not in prompt
+    assert "不得为了本日程" not in prompt
     response = SimpleNamespace(text_response="<msg><text>给用户和我的回复</text></msg>", tool_calls=[], status="success")
     original = response.text_response
     await runtime.on_llm_response(event, response)

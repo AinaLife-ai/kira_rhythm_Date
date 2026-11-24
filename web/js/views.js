@@ -568,7 +568,7 @@ export const SettingsView = {
           <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天默认给 top 5 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
           <div class="form-grid">
             <label><span>更早的摘要天数</span><small>最近 3 天之后，再往前给几天摘要；默认 4 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.history_digest_days"></label>
-            <label><span>历史上限字符数</span><small>规划上下文的硬预算；超出时先降级历史，不会切断 JSON。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
+            <label><span>历史上限字符数</span><small>规划上下文预算；超出时按摘要、历史、完整计划、档案依次降级，不会切断 JSON；最后最小对象仍保留必回应契约与当前项。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
             <label><span>历史小项说明最多字符</span><small>最近 3 天完整计划里每项 instruction 的上限；默认 200。</small><input type="number" min="0" max="2000" step="20" v-model.number="$root.draft.history_instruction_chars"></label>
             <label><span>最近实际结果天数</span><small>把最近几天真正发生了什么给 bot；默认 2 天。</small><input type="number" min="0" max="14" v-model.number="$root.draft.recent_outcomes_days"></label>
             <label><span>未完成事项回看天数</span><small>最近几天 missed/cancelled 的小项；默认 3 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.unfinished_days"></label>
@@ -588,7 +588,7 @@ export const SettingsView = {
           <div class="switch-grid">
             <label class="switch-row"><span>启用目标与约定<small>关闭后 bot 不再自动写入、展示或要求回应；WebUI 仍可手动管理已有目标。</small></span><input type="checkbox" v-model="$root.draft.threads.enabled"></label>
             <label class="switch-row"><span>普通聊天显示 [KRD Threads]<small>默认显示 top 5 的标题/截止/下一步（可在下方调整条数），不显示档案全文。默认开；上面的“普通聊天附带当前生活状态”关闭时无效。</small></span><input type="checkbox" v-model="$root.draft.threads.chat_enabled"></label>
-            <label class="switch-row"><span>规划时强制回应<small>规划回合必须先逐条回应目标/约定；缺回应时 rhythm_plan 会被拒绝。只要求表态，不要求推进。默认开。</small></span><input type="checkbox" v-model="$root.draft.threads.require_response"></label>
+            <label class="switch-row"><span>规划时强制回应<small>开启后，若上下文包含 threads_requiring_response，规划回合必须先逐条回应；缺回应在 reject 模式会被拒绝，warn 模式只提醒。只要求表态，不要求推进。默认开。</small></span><input type="checkbox" v-model="$root.draft.threads.require_response"></label>
             <label class="switch-row"><span>执行后强制打卡<small>执行完关联小项后必须写一句进展，否则标记未打卡。默认关：执行回合不一定调用工具，强制容易变成形式主义。</small></span><input type="checkbox" v-model="$root.draft.threads.force_touch"></label>
             <label class="switch-row"><span>自动打卡<small>小项触发后自动写一条“执行了 X”。默认关：信息量低，让 bot 自己写“做到哪”更有用。</small></span><input type="checkbox" v-model="$root.draft.threads.auto_touch"></label>
           </div>
