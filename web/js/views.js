@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.5'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.5'
+import { fmt } from './store.js?v=1.3.5.1'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.5.1'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -55,7 +55,8 @@ export const PlanBrief = {
     },
     revisionReasonLabel() {
       const current = this.cleanReason(this.plan?.revision_reason)
-      return current && this.plan?.revision_actor !== 'bot' ? '调整理由' : '规划理由'
+      if (!current) return '上次规划'
+      return this.plan?.revision_actor === 'bot' ? '规划理由' : '调整理由'
     },
   },
   methods: {

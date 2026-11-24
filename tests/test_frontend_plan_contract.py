@@ -121,7 +121,7 @@ def test_plan_brief_shows_revision_reason():
     fixture = (ROOT / "tests" / "web_fixture.js").read_text(encoding="utf-8")
     assert "revision_reason" in views and "planning_reason" in views
     assert "revisionReasonLabel" in views
-    assert "规划理由" in views and "调整理由" in views
+    assert "规划理由" in views and "调整理由" in views and "上次规划" in views
     assert "plan-brief-reason" in views and ".plan-brief-reason" in css
     assert '<plan-brief v-if="$root.selectedPlan"' in views
     assert "revision_reason" in fixture and "revision_actor" in fixture and "planning_reason" in fixture
