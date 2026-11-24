@@ -373,21 +373,31 @@ class ContextBuilder:
             for plan in future_plans
         ]
         threads_enabled = bool(base_config.get("threads", {}).get("enabled", True))
+        run_id = str(metadata.get("run_id", "") or "")
         try:
-            thread_payload = (await self.threads.planning_payload(persona_id)
-                              if self.threads and threads_enabled else
+            thread_payload = (await self.threads.planning_payload(persona_id, run_id=run_id)
+                              if self.threads else
                               {"required": False, "threads": [], "more": 0, "contract": ""})
         except Exception:
             thread_payload = {"required": False, "threads": [], "more": 0, "contract": ""}
         try:
-            unanswered = await self.threads.unanswered(persona_id) if self.threads and threads_enabled else []
+            unanswered = await self.threads.unanswered(persona_id) \
+                if self.threads and thread_payload.get("required") else []
         except Exception:
             unanswered = []
+        instruction = base_config["planning_prompt"]
+        if not thread_payload.get("required"):
+            if not threads_enabled:
+                instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略 threads_requiring_response / threads_reference 与 thread_* 操作。"
+            else:
+                instruction += "\n[KRD 目标层] 本次没有必须回应的目标；若上下文出现 threads_reference，仅作参考，不需要 thread_response。"
+        if metadata.get("has_real_user"):
+            instruction += "\n[KRD 混合批次] 本批次还含真实用户消息：必须先正常回答用户；规划是同一回合的附加任务，不得吞掉、删除或改写用户回答。"
         pattern = await self._recent_pattern(persona_id, target_date, max(1, full_days or digest_days or 3))
         payload = {
-            "instruction": base_config["planning_prompt"] + (("\n" + self._weather_rule()) if weather else ""),
+            "instruction": instruction + (("\n" + self._weather_rule()) if weather else ""),
             "focus": {"date": target_date,
-                      "instruction": f"这次规划的首要目标是 {target_date}。先为这一天创建或修订；仍可在配置允许的范围内处理其他日期，但不要无理由跳过这一天。",
+                      "instruction": f"这次规划部分的首要目标是 {target_date}。先为这一天创建或修订；仍可在配置允许的范围内处理其他日期，但不要无理由跳过这一天。",
                       **({"reason": metadata["reason"]} if metadata.get("reason") else {})},
             "day_types": self._day_types_text(matches),
             "day_type_prompt": await self._day_type_prompt(persona_id, matches, "planning"),
@@ -407,8 +417,13 @@ class ContextBuilder:
             "weather": weather
         }
         if thread_payload.get("threads"):
-            if thread_payload.get("required"):
-                payload["threads_requiring_response"] = thread_payload["threads"]
+            required_rows = [row for row in thread_payload["threads"] if row.get("response_required")]
+            optional_rows = [row for row in thread_payload["threads"] if not row.get("response_required")]
+            if thread_payload.get("required") and required_rows:
+                payload["threads_requiring_response"] = required_rows
+                if optional_rows:
+                    payload["threads_reference"] = optional_rows
+                    payload["threads_note"] = "threads_reference 仅供补充参考，不要求回应；只回应 threads_requiring_response。"
                 if thread_payload.get("more"):
                     payload["threads_more"] = thread_payload["more"]
                 payload["response_contract"] = thread_payload.get("contract", "")
@@ -444,8 +459,11 @@ class ContextBuilder:
         plan = await self.plans.get_plan_by_date(persona_id, target_date)
         recent_changes = await self.plans.recent_changes(persona_id, target_date, 3, meaningful_only=True)
         if not plan:
+            instruction = "仅在确有必要时创建计划；不要因为一次检查而无条件新建。"
+            if metadata.get("has_real_user"):
+                instruction += " 本批次还含真实用户消息：必须正常回答用户，不得吞掉或改写用户回答。"
             context = {"status": "plan_missing", "recent_changes": self._compact_changes(recent_changes),
-                       "instruction": "仅在确有必要时创建计划；不要因为一次检查而无条件新建。"}
+                       "instruction": instruction}
             return "[KRD review context · request only]\n" + self._bounded(context, 1200)
         base_config = await self.store.get_config(persona_id)
         matches = await self._active_day_types(persona_id, target_date)
@@ -465,8 +483,13 @@ class ContextBuilder:
         quiet_now = in_active_windows(
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
         weather = await self._weather(persona_id, target_date, "plan")
+        review_instruction = effective["planning_review"]["prompt"]
+        if not base_config.get("threads", {}).get("enabled", True):
+            review_instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略目标/约定相关提示。"
+        if metadata.get("has_real_user"):
+            review_instruction += "\n[KRD 混合批次] 本批次还含真实用户消息：必须正常回答用户；回顾是同一回合的附加任务，不得吞掉或改写用户回答。"
         payload = {
-            "instruction": effective["planning_review"]["prompt"] + (("\n" + self._weather_rule()) if weather else ""),
+            "instruction": review_instruction + (("\n" + self._weather_rule()) if weather else ""),
             "day_types": self._day_types_text(matches),
             "day_type_prompt": await self._day_type_prompt(persona_id, matches, "planning"),
             "calendar": self._calendar_context(await self._calendar_day(target_date), base_config),
@@ -480,8 +503,10 @@ class ContextBuilder:
             "threads": await self._review_threads(persona_id, effective),
             "unanswered_threads": await self._unanswered_threads(persona_id, effective),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
-                                "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
-                                            "只在确有调整价值时自然分享；否则输出 <msg/>。"}
+                                "guidance": ("本批次还含真实用户消息：必须正常回答用户；回顾是附加任务，只在确有调整价值时补充。"
+                                             if metadata.get("has_real_user") else
+                                             "当前为安静时段时仅输出 <msg/>。" if quiet_now else
+                                             "只在确有调整价值时自然分享；否则输出 <msg/>。")}
         }
         host_tz = self.host_timezone_name()
         if host_tz is None or host_tz != tz_name:
@@ -508,20 +533,31 @@ class ContextBuilder:
         state = await self.plans.day_state(persona_id, plan["date"])
         quiet_now = in_active_windows(
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
-        silence_requested = item["interaction"] == "silent" or quiet_now
+        # must_message is an explicit delivery promise. If a later config
+        # change puts it inside a quiet window, do not silently turn it into a
+        # silent item; keep the stronger explicit interaction and surface the
+        # quiet flag in the context. New must_message items are still rejected
+        # at scheduling time by PlanService.
+        silence_requested = item["interaction"] == "silent" or (quiet_now and item["interaction"] == "auto")
+        has_real_user = bool(metadata.get("has_real_user"))
         if silence_requested:
             guidance = "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，仅输出 <msg/>，不要附加说明。"
         elif item["interaction"] == "must_message":
             guidance = "本次 effective_interaction=must_message。请产生有实际内容的可见回复，不要只输出 <msg/>。"
         else:
             guidance = "本次 effective_interaction=auto。可自然行动，也可保持安静；不要把机械确认当作发言。"
+        if has_real_user:
+            guidance += " 本批次还含真实用户消息：必须正常回答用户，不得为了本日程吞掉、删除或改写给用户的回答；本日程的安静要求只约束你自己的这条日程。"
         recent = await self.plans.revisions(plan["id"], effective["diff_revisions"], persona_id)
         recent = [{"revision": row.get("revision"), "diff": row.get("diff", [])} for row in recent]
         for row in recent:
             for change in row.get("diff", []):
                 change.pop("item_id", None)
+        execution_instruction = base_config["execution_prompt"]
+        if not base_config.get("threads", {}).get("enabled", True):
+            execution_instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略 thread_touch / thread_add 等目标操作。"
         payload = {
-            "instruction": base_config["execution_prompt"],
+            "instruction": execution_instruction,
             "delivery_policy": {"scheduled_interaction": item["interaction"], "quiet_now": quiet_now,
                                 "effective_interaction": "silent" if silence_requested else item["interaction"],
                                 "enforcement": "prompt_only", "guidance": guidance},
@@ -748,8 +784,80 @@ class ContextBuilder:
                 return True
             return False
 
+        def trim_diff() -> bool:
+            diff = payload.get("recent_diff")
+            if isinstance(diff, list) and diff:
+                diff.pop(0)
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_siblings() -> bool:
+            siblings = payload.get("siblings")
+            if isinstance(siblings, list) and siblings:
+                siblings.pop()
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_item_thread() -> bool:
+            thread = payload.get("thread")
+            if not isinstance(thread, dict):
+                return False
+            logs = thread.get("logs")
+            if isinstance(logs, list) and logs:
+                thread["logs"] = []
+                payload["truncated"] = True
+                return True
+            dossier = str(thread.get("dossier") or "")
+            if len(dossier) > 301:
+                thread["dossier"] = dossier[:300] + "…"
+                payload["truncated"] = True
+                return True
+            return False
+
         def trim_threads() -> bool:
-            threads = payload.get("threads_requiring_response") or payload.get("threads_reference")
+            # Required threads are a hard contract: never remove a row from
+            # threads_requiring_response just to satisfy the byte budget. The
+            # scheduler persists the same ids and would otherwise wait forever
+            # for responses that the model can no longer see.
+            required_key = "threads_requiring_response"
+            if isinstance(payload.get(required_key), list) and payload[required_key]:
+                threads = payload[required_key]
+                for thread in reversed(threads):
+                    dossier = str(thread.get("dossier") or "")
+                    if len(dossier) > 301:
+                        thread["dossier"] = dossier[:300] + "…"
+                        payload["truncated"] = True
+                        return True
+                for thread in reversed(threads):
+                    logs = thread.get("logs")
+                    if isinstance(logs, list) and logs:
+                        thread["logs"] = []
+                        payload["truncated"] = True
+                        return True
+                # Last resort: keep every required id, but reduce each entry to
+                # the fields needed to make a response decision.
+                changed = False
+                compact_keys = ("id", "short_id", "kind", "title", "status", "priority",
+                                "next_step", "due_at", "due", "due_in_days", "overdue",
+                                "dossier", "response_required")
+                for thread in threads:
+                    if any(key not in thread for key in ("id", "response_required")):
+                        continue
+                    source = {key: thread.get(key) for key in compact_keys if key in thread}
+                    source["dossier"] = str(thread.get("dossier") or "")[:160]
+                    source.setdefault("response_required", True)
+                    if source != thread:
+                        thread.clear()
+                        thread.update(source)
+                        changed = True
+                if changed:
+                    payload["truncated"] = True
+                    return True
+                return False
+            reference_key = "threads_reference"
+            threads = payload.get(reference_key)
             if not isinstance(threads, list) or not threads:
                 return False
             for thread in reversed(threads):
@@ -766,7 +874,7 @@ class ContextBuilder:
                     return True
             if len(threads) > 3:
                 payload["threads_more"] = int(payload.get("threads_more", 0)) + 1
-                payload["threads_requiring_response"] = threads[:-1]
+                payload[reference_key] = threads[:-1]
                 payload["truncated"] = True
                 return True
             return False
@@ -803,13 +911,14 @@ class ContextBuilder:
                 return True
             return False
 
-        reducers = [trim_digest, trim_outcomes, trim_unfinished, trim_future, trim_full, trim_threads]
+        reducers = [trim_diff, trim_siblings, trim_item_thread, trim_digest, trim_outcomes,
+                    trim_unfinished, trim_future, trim_full, trim_threads]
         for reducer in reducers:
             while reducer():
                 if len(text()) <= limit:
                     return text()
         for key in ("recent_pattern", "weather", "recent_changes", "today_changes", "future_plans",
-                    "unfinished", "recent_outcomes", "threads_more", "response_contract",
+                    "unfinished", "recent_outcomes", "recent_diff", "siblings", "day_so_far",
                     "thread_untouched", "unanswered_threads"):
             if key in payload:
                 payload.pop(key, None)
@@ -817,9 +926,22 @@ class ContextBuilder:
                 if len(text()) <= limit:
                     return text()
         minimal = {
-            "instruction": payload.get("instruction", ""),
+            "instruction": str(payload.get("instruction", ""))[:20000],
             "focus": payload.get("focus", {}),
             "truncated": True,
             "note": "上下文超出预算；请用 rhythm_view 查看完整计划、目标或历史。",
         }
+        # An item run without current_item is not actionable at all. Keep the
+        # execution-critical fields even when the soft budget is exceeded.
+        for key in ("current_item", "current_plan", "next_item", "delivery_policy", "plan",
+                    "daily_limits", "constraints", "calendar", "thread", "day_so_far"):
+            if key in payload:
+                minimal[key] = payload[key]
+        # The response contract must survive any budget reduction. Dropping it
+        # while the run still requires those ids creates an impossible planning
+        # turn, so keep the compact required set even if the soft budget is
+        # exceeded.
+        for key in ("threads_requiring_response", "threads_more", "response_contract"):
+            if key in payload:
+                minimal[key] = payload[key]
         return dumps(minimal)

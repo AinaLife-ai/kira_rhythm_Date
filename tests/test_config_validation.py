@@ -40,6 +40,8 @@ async def store(tmp_path):
     {"inject_agenda": "yes"},
     {"agenda_max_chars": 200},
     {"threads": {"planning_limit": None}},
+    {"threads": {"planning_limit": 0}},
+    {"threads": {"planning_limit": 100}},
 ])
 @pytest.mark.asyncio
 async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):

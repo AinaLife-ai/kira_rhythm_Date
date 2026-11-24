@@ -175,3 +175,135 @@ async def test_thread_close_counts_as_implicit_response(runtime):
             {"title": "B", "at": "10:00", "target": "qq:dm:10001"},
         ]}]))
     assert accepted["ok"]
+
+@pytest.mark.asyncio
+async def test_planning_context_uses_persisted_run_required_ids(runtime):
+    for index in range(3):
+        await runtime.threads.add("persona-a", {
+            "kind": "goal", "title": f"既有目标 {index}", "dossier": f"档案 {index}",
+            "priority": 3 - index, "due_at": day(index + 1)})
+    await runtime.store.update_config(
+        "persona-a", {"threads": {"planning_limit": 3, "response_limit": 2}}, 0)
+    run = await runtime.scheduler.trigger_planning("persona-a", "manual", day(2), "race probe")
+    required_ids = json.loads(run["required_thread_ids_json"])
+    assert len(required_ids) == 2
+    # A thread created after the trigger must not silently become required for
+    # this already-dispatched run.
+    late = await runtime.threads.add("persona-a", {
+        "kind": "promise", "title": "触发后新增", "dossier": "晚到", "priority": 3,
+        "due_at": day(0)})
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": run["id"]})
+    body = json.loads(prompt.split("\n", 1)[1])
+    visible = body["threads_requiring_response"]
+    assert {row["id"] for row in visible} == set(required_ids)
+    assert all(row["response_required"] is True for row in visible)
+    assert late["id"] not in required_ids
+    assert late["id"] in {row["id"] for row in body.get("threads_reference", [])}
+    assert body["response_contract"]
+
+
+@pytest.mark.asyncio
+async def test_planning_budget_never_drops_required_threads(runtime):
+    for index in range(8):
+        await runtime.threads.add("persona-a", {
+            "kind": "goal", "title": f"必须回应 {index}", "dossier": "很长的档案" * 100,
+            "next_step": "下一步" * 50})
+    await runtime.store.execute(
+        "UPDATE settings SET value_json=json_set(value_json,'$.history_char_budget',500) WHERE key='global'")
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    required = body["threads_requiring_response"]
+    assert len(required) == 8
+    assert all(row.get("response_required") is True for row in required)
+    assert body["response_contract"]
+
+
+@pytest.mark.asyncio
+async def test_optional_reference_has_clear_no_response_instruction(runtime):
+    await runtime.threads.add("persona-a", {"kind": "goal", "title": "可选目标", "dossier": "档案"})
+    await runtime.store.update_config("persona-a", {"threads": {"require_response": False}}, 0)
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "threads_requiring_response" not in body
+    assert body["threads_reference"][0]["response_required"] is False
+    assert "没有必须回应的目标" in body["instruction"]
+
+@pytest.mark.asyncio
+async def test_disabled_thread_layer_rejects_model_writes(runtime):
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[], sid="qq:dm:10001")
+    await runtime.store.update_config("persona-a", {"threads": {"enabled": False}}, 0)
+    result = json.loads(await tools.rhythm_update(event, operations=[
+        {"type": "thread_add", "kind": "goal", "title": "不该写入", "dossier": "档案"},
+    ]))
+    assert result["error"]["code"] == "threads_disabled"
+
+
+@pytest.mark.asyncio
+async def test_persisted_requirement_survives_config_toggle(runtime):
+    thread = await runtime.threads.add("persona-a", {"kind": "goal", "title": "必须回应"})
+    run_id = "prn_toggle"
+    await runtime.store.execute(
+        "INSERT INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,"
+        "required_thread_ids_json,response_status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (run_id, "toggle", "persona-a", "daily", day(2), "qq:dm:10001", "prepared",
+         dumps([thread["id"]]), "pending", "test", time.time()))
+    await runtime.store.update_config("persona-a", {"threads": {"require_response": False}}, 0)
+    ev = event(runtime, run_id)
+    result = json.loads(await tools.rhythm_plan(ev, plans=[{
+        "date": day(2), "title": "测试", "items": [
+            {"title": "A", "at": "09:00", "target": "qq:dm:10001"},
+            {"title": "B", "at": "10:00", "target": "qq:dm:10001"},
+        ]}]))
+    assert result["error"]["code"] == "thread_response_required"
+
+def test_item_budget_keeps_current_item_actionable():
+    from krd.context import ContextBuilder
+    payload = {
+        "instruction": "执行说明" * 1000,
+        "current_item": {"id": "itm_keep", "title": "现在要做的事", "instruction": "执行说明"},
+        "delivery_policy": {"effective_interaction": "auto"},
+        "recent_diff": [{"revision": index, "diff": [{"op": "changed", "title": "x" * 100}]} for index in range(20)],
+        "siblings": [{"id": f"itm_{index}", "title": "参考" * 40} for index in range(100)],
+        "thread": {"id": "thr_keep", "title": "关联目标", "dossier": "档案" * 1000, "logs": [{"note": "很长的打卡" * 100}]},
+    }
+    body = json.loads(ContextBuilder._fit_payload(payload, 500))
+    assert body["current_item"]["id"] == "itm_keep"
+    assert body["delivery_policy"]["effective_interaction"] == "auto"
+
+@pytest.mark.asyncio
+async def test_closed_thread_link_does_not_block_plan_revision(runtime):
+    import copy
+    thread = await runtime.threads.add("persona-a", {"kind": "goal", "title": "已完成目标"})
+    result = await add_plan(runtime, day(2), "原计划", thread["id"])
+    await runtime.threads.close("persona-a", thread["id"], "done", "已完成")
+    payload = copy.deepcopy(result["plan"])
+    payload["title"] = "修订后的计划"
+    revised = await runtime.plans.apply_plan(
+        "persona-a", payload, actor="user", mode="revise", expected_revision=result["plan"]["revision"])
+    assert revised["plan"]["title"] == "修订后的计划"
+    linked = [item for block in revised["plan"]["blocks"] for item in block["items"] if item.get("thread_id")]
+    assert linked and linked[0]["thread_id"] == thread["id"]
+
+@pytest.mark.asyncio
+async def test_disabled_thread_layer_removes_contract_from_planning(runtime):
+    await runtime.threads.add("persona-a", {"kind": "goal", "title": "关闭后不应出现"})
+    await runtime.store.update_config("persona-a", {"threads": {"enabled": False}}, 0)
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "threads_requiring_response" not in body
+    assert "threads_reference" not in body
+    assert "未启用目标/约定" in body["instruction"]
+
+
+@pytest.mark.asyncio
+async def test_mixed_user_planning_context_scopes_priorities(runtime):
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2),
+        "run_id": "missing-run", "has_real_user": True})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "混合批次" in body["instruction"]
+    assert "规划部分的首要目标" in body["focus"]["instruction"]

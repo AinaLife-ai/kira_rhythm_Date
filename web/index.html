@@ -97,8 +97,8 @@
     <day-state-editor v-if="state.dayStateEditor"></day-state-editor>
     <day-type-editor v-if="state.dayTypeEditor" v-bind="state.dayTypeEditor"></day-type-editor>
     <template-editor v-if="state.templateEditor" v-bind="state.templateEditor"></template-editor>
-    <thread-editor v-if="state.threadEditor" :editor="state.threadEditor"></thread-editor>
-    <thread-touch v-if="state.threadTouch" :touch="state.threadTouch"></thread-touch>
+    <thread-editor v-if="state.threadEditor" :key="state.threadEditor.thread?.id || 'new'" :editor="state.threadEditor"></thread-editor>
+    <thread-touch v-if="state.threadTouch" :key="state.threadTouch.thread?.id || 'new'" :touch="state.threadTouch"></thread-touch>
     <div class="toast-stack" aria-live="polite"><div v-for="notice in state.notices" :key="notice.id" class="toast" :class="'toast-' + notice.type"><ui-icon :name="notice.type === 'error' ? 'alert' : 'check'" :size="16"></ui-icon>{{ notice.text }}</div></div>
     <div v-if="confirmDialog" class="confirm-backdrop" @click.self="resolveConfirm(false)">
       <section class="confirm-dialog" role="dialog" aria-modal="true" :aria-label="confirmDialog.title">

@@ -281,7 +281,7 @@ export const ThreadsView = {
         <div><span class="eyebrow">THREADS / 目标与约定</span><h2>长期的事，也要有地方落脚</h2></div>
         <button class="primary" @click="$root.newThread()"><ui-icon name="plus" :size="15" /> 新建目标 / 约定</button>
       </div>
-      <p class="field-hint">目标、约定、项目、习惯、未完成的小事和长期悬念都在这里。bot 会在规划时回应它们，也可以在聊天或执行后自己打卡；你随时可以新建、修改、暂停或删除。</p>
+      <p class="field-hint">目标、约定、项目、习惯、未完成的小事和长期悬念都在这里。开启强制回应时 bot 会在规划时逐条表态，也可以在聊天或执行后自己打卡；你随时可以新建、修改、暂停或删除。</p>
       <div class="thread-filters">
         <div class="thread-filter-tabs">
           <button v-for="filter in $root.threadFilters" :key="filter.id" :class="{active: $root.threadFilter === filter.id}" @click="$root.setThreadFilter(filter.id)">{{ filter.label }}</button>
@@ -355,7 +355,7 @@ export const ThreadEditor = {
       <label><span>类型</span><select v-model="form.kind"><option v-for="kind in $root.threadKinds" :key="kind.id" :value="kind.id">{{ kind.label }}</option></select></label>
       <label><span>状态</span><select v-model="form.status"><option v-for="status in statusOptions" :key="status.id" :value="status.id">{{ status.label }}</option></select></label>
       <label class="wide-field"><span>标题</span><input v-model="form.title" maxlength="120" placeholder="例如：给阿岚画头像"></label>
-      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" :maxlength="maxDossier" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 5 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
+      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" :maxlength="maxDossier" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前几条（默认 5 条）的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
       <label><span>下一步</span><input v-model="form.next_step" :maxlength="maxNextStep" placeholder="一句话，例如：修线稿"></label>
       <label><span>截止</span><input v-model="form.due_at" maxlength="19" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS"></label>
       <label><span>优先级</span><select v-model.number="form.priority"><option :value="0">0 · 低</option><option :value="1">1 · 普通</option><option :value="2">2 · 重要</option><option :value="3">3 · 很急</option></select></label>
@@ -565,7 +565,7 @@ export const SettingsView = {
         <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">推荐保持规划池。只有希望 bot 在刚完成对话的地方继续规划时，才选择“最后实际完成的会话”。</small></label>
         <div class="settings-subsection">
           <h3>给 bot 的上下文</h3>
-          <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天给 top 5 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
+          <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天默认给 top 5 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
           <div class="form-grid">
             <label><span>更早的摘要天数</span><small>最近 3 天之后，再往前给几天摘要；默认 4 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.history_digest_days"></label>
             <label><span>历史上限字符数</span><small>规划上下文的硬预算；超出时先降级历史，不会切断 JSON。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
@@ -582,12 +582,12 @@ export const SettingsView = {
       </section>
       <section v-if="$root.settingsTab === 'threads'" class="settings-section">
         <span class="eyebrow">目标与约定 / Threads</span><h2>长期的事，要求 bot 每天看见，但不强迫推进</h2>
-        <p class="field-hint">目标、约定、项目、习惯、未完成的小事和长期悬念都存在这里。规划时 bot 必须逐条回应；回应可以是“推进 / 推迟 / 等待 / 保持不动”，所以它不会被强迫改变计划。</p>
+        <p class="field-hint">目标、约定、项目、习惯、未完成的小事和长期悬念都存在这里。开启“规划时强制回应”后，bot 必须在规划回合逐条表态；回应可以是“推进 / 推迟 / 等待 / 保持不动”，所以它不会被强迫改变计划。</p>
         <div class="settings-subsection">
           <h3>开关</h3>
           <div class="switch-grid">
-            <label class="switch-row"><span>启用目标与约定<small>关闭后不再写入、展示或要求回应。</small></span><input type="checkbox" v-model="$root.draft.threads.enabled"></label>
-            <label class="switch-row"><span>普通聊天显示 [KRD Threads]<small>只显示 top 5 的标题/截止/下一步，不显示档案全文。默认开；上面的“普通聊天附带当前生活状态”关闭时无效。</small></span><input type="checkbox" v-model="$root.draft.threads.chat_enabled"></label>
+            <label class="switch-row"><span>启用目标与约定<small>关闭后 bot 不再自动写入、展示或要求回应；WebUI 仍可手动管理已有目标。</small></span><input type="checkbox" v-model="$root.draft.threads.enabled"></label>
+            <label class="switch-row"><span>普通聊天显示 [KRD Threads]<small>默认显示 top 5 的标题/截止/下一步（可在下方调整条数），不显示档案全文。默认开；上面的“普通聊天附带当前生活状态”关闭时无效。</small></span><input type="checkbox" v-model="$root.draft.threads.chat_enabled"></label>
             <label class="switch-row"><span>规划时强制回应<small>规划回合必须先逐条回应目标/约定；缺回应时 rhythm_plan 会被拒绝。只要求表态，不要求推进。默认开。</small></span><input type="checkbox" v-model="$root.draft.threads.require_response"></label>
             <label class="switch-row"><span>执行后强制打卡<small>执行完关联小项后必须写一句进展，否则标记未打卡。默认关：执行回合不一定调用工具，强制容易变成形式主义。</small></span><input type="checkbox" v-model="$root.draft.threads.force_touch"></label>
             <label class="switch-row"><span>自动打卡<small>小项触发后自动写一条“执行了 X”。默认关：信息量低，让 bot 自己写“做到哪”更有用。</small></span><input type="checkbox" v-model="$root.draft.threads.auto_touch"></label>
@@ -596,10 +596,10 @@ export const SettingsView = {
         </div>
         <div class="settings-subsection">
           <h3>规划时展示多少</h3>
-          <p class="field-hint">前几条给档案全文，其余给摘要；执行时只显示当前小项关联的那条；聊天只显示 top 5。完整档案始终可以用 rhythm_view(scope="thread") 查。</p>
+          <p class="field-hint">前几条给档案全文（默认 5 条），其余给摘要；执行时只显示当前小项关联的那条；聊天默认 top 5。完整档案始终可以用 rhythm_view(scope="thread") 查。</p>
           <div class="form-grid">
             <label><span>规划最多回应几条</span><small>按到期、停滞、优先级排序；默认 8 条。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.response_limit"></label>
-            <label><span>规划展示条数</span><small>默认 8 条；至少等于“规划最多回应几条”。低于时按回应条数展示。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.planning_limit"></label>
+            <label><span>规划展示条数</span><small>默认 8 条；不得低于“规划最多回应几条”，保存时会自动提升到该值。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.planning_limit"></label>
             <label><span>其中档案全文条数</span><small>默认 5 条；其余给摘要。</small><input type="number" min="0" max="20" v-model.number="$root.draft.threads.full_dossier_in_planning"></label>
             <label><span>档案摘要字数</span><small>没有全文的条目给多少字；默认 300。</small><input type="number" min="50" max="2000" step="50" v-model.number="$root.draft.threads.excerpt_chars"></label>
             <label><span>规划时展示打卡条数</span><small>每条目标最近几次打卡；默认 3 条。</small><input type="number" min="0" max="10" v-model.number="$root.draft.threads.logs_in_planning"></label>
@@ -815,8 +815,8 @@ export const DayTypeEditor = {
     <label class="full-field"><span>名称</span><input v-model="form.name" placeholder="考试周 / 旅行日 / 雨天宅家"></label>
     <label class="full-field"><span>日型标识（可选，创建后不可修改）</span><input v-model="form.id" :disabled="!!entry" placeholder="留空自动生成，例如 exam_week"><small class="field-hint">仅用于数据库和链接，bot 不会读取；留空会自动生成。只能用英文、数字、下划线、短横线。</small></label>
     <label class="full-field"><span>主题色</span><input type="color" v-model="form.config.color"></label>
-    <label class="full-field"><span>此日型规划提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
-    <label class="full-field"><span>此日型执行提示词（留空继承全局）</span><textarea rows="3" v-model="form.config.overrides.execution_prompt"></textarea></label>
+    <label class="full-field"><span>此日型追加规划提示词（留空只使用全局）</span><textarea rows="3" v-model="form.config.overrides.planning_prompt"></textarea></label>
+    <label class="full-field"><span>此日型追加执行提示词（留空只使用全局）</span><textarea rows="3" v-model="form.config.overrides.execution_prompt"></textarea></label>
     <div class="form-grid" style="margin-top: 17px">
       <label><span>每日最少安排</span><small>太少会显得空，推荐 2 到 4 项。</small><input type="number" min="0" max="500" v-model.number="form.config.overrides.min_items"></label>
       <label><span>每日最多安排</span><small>避免日程过密，推荐 8 到 12 项。</small><input type="number" min="1" max="500" v-model.number="form.config.overrides.max_items"></label>

@@ -40,14 +40,15 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
                 missing = []
             if missing:
                 settings = cfg.get("threads", {})
-                if settings.get("require_response", True):
-                    if settings.get("response_mode", "reject") == "reject":
-                        raise KRDError(
-                            "thread_response_required",
-                            "本次规划还没有回应目标/约定",
-                            missing=missing,
-                            hint="先调用 rhythm_update 的 thread_response；no_change 也合法。")
-                    warnings.append({"code": "thread_response_missing", "missing": missing})
+                # The run persisted its required ids. A later config toggle must
+                # not silently waive a contract that the prompt still shows.
+                if settings.get("response_mode", "reject") == "reject":
+                    raise KRDError(
+                        "thread_response_required",
+                        "本次规划还没有回应目标/约定",
+                        missing=missing,
+                        hint="先调用 rhythm_update 的 thread_response；no_change 也合法。")
+                warnings.append({"code": "thread_response_missing", "missing": missing})
         payloads = plans or ([plan] if plan else [])
         results = await runtime.plans.apply_many(persona_id, payloads, actor="bot", mode=mode, reason=reason)
         if planning_meta and runtime.threads is not None:
@@ -97,6 +98,8 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
         metadata = runtime.context_builder.metadata(event)
         planning_meta = next((item for item in metadata if item.get("kind") == "planning"), None)
         run_id = planning_meta["run_id"] if planning_meta else ""
+        cfg = await runtime.store.get_config(persona_id)
+        threads_enabled = bool(cfg.get("threads", {}).get("enabled", True))
         results = []
         thread_responses = []
         changed_plan_ids = set()
@@ -109,6 +112,9 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                 if kind in {"thread_add", "thread_touch", "thread_update", "thread_close",
                             "thread_response", "thread_delete"} and runtime.threads is None:
                     raise KRDError("runtime_unavailable", "Thread service is unavailable")
+                if kind in {"thread_add", "thread_touch", "thread_update", "thread_close",
+                            "thread_delete"} and not threads_enabled:
+                    raise KRDError("threads_disabled", "Threads are disabled for this persona")
                 if kind == "day_state":
                     day = operation.get("date") or await runtime.plans.current_date(persona_id)
                     patch = operation.get("patch") or {key: value for key, value in operation.items()

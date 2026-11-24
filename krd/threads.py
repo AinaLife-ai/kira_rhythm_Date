@@ -396,23 +396,40 @@ class ThreadService:
     # ------------------------------------------------------------------
     # Planning responses
     # ------------------------------------------------------------------
-    async def required(self, persona_id: str, limit: int | None = None) -> list[dict[str, Any]]:
+    async def required(self, persona_id: str, limit: int | None = None,
+                      identifiers: list[str] | None = None) -> list[dict[str, Any]]:
         config = await self.store.get_config(persona_id)
         limits = self._limits(config)
         limit = max(1, min(50, int(limit if limit is not None else limits["planning_limit"])))
-        rows = await self.store.all(
-            "SELECT * FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
-        if not rows:
-            return []
-        def sort_key(row: dict[str, Any]) -> tuple:
-            info = self._due_info(str(row.get("due_at") or ""), config)
-            due_days = info.get("due_in_days", 10**6)
-            return (due_days, -int(row.get("priority", 1)),
-                    -max(0, int((time.time() - float(row.get("last_touched") or 0)) // 86400)),
-                    float(row.get("last_touched") or 0))
+        if identifiers is not None:
+            # A planning run owns a fixed required set. Rebuilding it from the
+            # live table after the trigger can make the prompt and the run
+            # disagree, which is an unrecoverable response contract.
+            requested_ids = list(dict.fromkeys(str(item) for item in identifiers if str(item)))[:50]
+            if not requested_ids:
+                return []
+            placeholders = ",".join("?" for _ in requested_ids)
+            found = await self.store.all(
+                f"SELECT * FROM threads WHERE persona_id=? AND status='open' AND id IN ({placeholders})",
+                (persona_id, *requested_ids))
+            by_id = {row["id"]: row for row in found}
+            selected = [by_id[item] for item in requested_ids if item in by_id]
+        else:
+            rows = await self.store.all(
+                "SELECT * FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
+            if not rows:
+                return []
+            def sort_key(row: dict[str, Any]) -> tuple:
+                info = self._due_info(str(row.get("due_at") or ""), config)
+                due_days = info.get("due_in_days", 10**6)
+                return (due_days, -int(row.get("priority", 1)),
+                        -max(0, int((time.time() - float(row.get("last_touched") or 0)) // 86400)),
+                        float(row.get("last_touched") or 0))
 
-        rows.sort(key=sort_key)
-        selected = rows[:limit]
+            rows.sort(key=sort_key)
+            selected = rows[:limit]
+        if not selected:
+            return []
         logs = await self._logs([row["id"] for row in selected], limits["logs_in_planning"])
         for row in selected:
             row["logs"] = logs.get(row["id"], [])
@@ -428,28 +445,64 @@ class ThreadService:
             result.append(padded)
         return result
 
-    async def planning_payload(self, persona_id: str) -> dict[str, Any]:
+    async def planning_payload(self, persona_id: str, run_id: str = "") -> dict[str, Any]:
         config = await self.store.get_config(persona_id)
-        if not config.get("threads", {}).get("enabled", True):
-            return {"required": False, "threads": [], "more": 0, "contract": ""}
-        limits = self._limits(config)
         settings = config.get("threads", {})
+        limits = self._limits(config)
+        run = None
+        required_ids: list[str] = []
+        if run_id:
+            run = await self.store.one(
+                "SELECT kind,required_thread_ids_json FROM planning_runs WHERE id=? AND persona_id=?",
+                (run_id, persona_id))
+            if run and run.get("kind") != "review":
+                try:
+                    required_ids = [str(item) for item in json.loads(run.get("required_thread_ids_json") or "[]")]
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    required_ids = []
+        if run is None and not settings.get("enabled", True):
+            return {"required": False, "threads": [], "more": 0, "contract": ""}
         response_limit = int(settings.get("response_limit", limits["planning_limit"]))
         require_response = bool(settings.get("require_response", True))
         requested = max(limits["planning_limit"], response_limit)
-        required = await self.required(persona_id, requested)
-        if not required:
+        if run is not None:
+            # The required set was persisted when the run was triggered. Never
+            # recompute it from a table that may have changed in the meantime.
+            required_rows = await self.required(persona_id, identifiers=required_ids)
+            required = bool(required_ids) and bool(required_rows)
+        elif settings.get("enabled", True) and require_response:
+            required_rows = await self.required(persona_id, response_limit)
+            required = bool(required_rows)
+        else:
+            required_rows = []
+            required = False
+        required_set = {row["id"] for row in required_rows}
+        optional: list[dict[str, Any]] = []
+        if settings.get("enabled", True) and len(required_rows) < requested:
+            try:
+                candidates = await self.required(persona_id, requested)
+                optional = [row for row in candidates if row["id"] not in required_set][: max(0, requested - len(required_rows))]
+            except Exception:
+                # Optional context must never take down the required contract.
+                optional = []
+        for row in required_rows:
+            row["response_required"] = True
+        for row in optional:
+            row["response_required"] = False
+        threads = [*required_rows, *optional]
+        if not threads:
             return {"required": False, "threads": [], "more": 0, "contract": ""}
-        for index, row in enumerate(required):
-            row["response_required"] = require_response and index < response_limit
-        total = await self.store.one(
-            "SELECT COUNT(*) AS count FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
-        more = max(0, int(total["count"] if total else 0) - len(required))
+        try:
+            total = await self.store.one(
+                "SELECT COUNT(*) AS count FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
+            more = max(0, int(total["count"] if total else 0) - len(threads))
+        except Exception:
+            more = 0
         contract = (
             "本次规划必须先调用 rhythm_update 的 thread_response，逐条回应 response_required=true 的 id；"
             "advance / defer / waiting / no_change + 一句原因。回应不等于必须推进，no_change 合法；"
-            "no_change 也必须写一句依据。未覆盖会返回 thread_response_missing。") if require_response else ""
-        return {"required": require_response, "threads": required, "more": more, "contract": contract}
+            "no_change 也必须写一句依据。未覆盖会返回 thread_response_missing。") if required else ""
+        return {"required": required, "threads": threads, "more": more, "contract": contract}
 
     async def _record_one(self, run_id: str, persona_id: str, thread_id: str,
                           response: str, note: str) -> None:
@@ -607,7 +660,7 @@ class ThreadService:
         except KRDError:
             return None
         row = await self._row(persona_id, identifier)
-        if row is None:
+        if row is None or row.get("status") not in {"open", "paused"}:
             return None
         logs = await self._logs([identifier], limits["execution_logs"])
         row["logs"] = logs.get(identifier, [])

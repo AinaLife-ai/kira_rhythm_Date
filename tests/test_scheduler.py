@@ -97,3 +97,51 @@ async def test_recovery_marks_ambiguous_run_interrupted(runtime):
     await runtime.scheduler.recover()
     receipt = await runtime.store.one("SELECT status FROM runs WHERE id=?", (run["id"],))
     assert receipt["status"] == "interrupted"
+
+@pytest.mark.asyncio
+async def test_must_message_with_silent_text_and_tool_call_is_delivery_unmet(runtime):
+    plan = await create_due_plan(runtime, interaction="must_message", count=1)
+    item = plan["blocks"][0]["items"][0]
+    run = await runtime.scheduler.claim_item(item["id"])
+    event = metadata_event(runtime, plan, run)
+    response = SimpleNamespace(text_response="<msg/>", tool_calls=[{}], status="success")
+    await runtime.scheduler.on_response(event, response)
+    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
+    stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
+    assert receipt["error"] == "delivery_unmet"
+    assert stored["state"] == "triggered"
+
+
+@pytest.mark.asyncio
+async def test_force_touch_is_enforced_even_when_auto_touch_is_enabled(runtime, monkeypatch):
+    thread = await runtime.threads.add("persona-a", {"kind": "goal", "title": "关联目标"})
+    plan = await create_due_plan(runtime, count=1)
+    item = plan["blocks"][0]["items"][0]
+    await runtime.store.execute("UPDATE items SET thread_id=? WHERE id=?", (thread["id"], item["id"]))
+    await runtime.store.update_config(
+        "persona-a", {"threads": {"force_touch": True, "auto_touch": True}}, 0)
+    run = await runtime.scheduler.claim_item(item["id"])
+    event = metadata_event(runtime, plan, run)
+
+    async def no_touch(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(runtime.threads, "auto_touch", no_touch)
+    await runtime.scheduler.on_response(
+        event, SimpleNamespace(text_response="做了一点", tool_calls=[], status="success"))
+    await runtime.scheduler.on_final(event)
+    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
+    assert "thread_untouched" in (receipt["error"] or "")
+
+@pytest.mark.asyncio
+async def test_finalize_does_not_touch_old_persona_run(runtime):
+    plan = await create_due_plan(runtime, count=1)
+    item = plan["blocks"][0]["items"][0]
+    run = await runtime.scheduler.claim_item(item["id"])
+    event = metadata_event(runtime, plan, run)
+    await runtime.store.execute(
+        "UPDATE runs SET status='responded',responded_at=? WHERE id=?", (time.time(), run["id"]))
+    runtime.ctx.persona_mgr.active = "persona-b"
+    await runtime.scheduler.on_final(event)
+    row = await runtime.store.one("SELECT status FROM runs WHERE id=?", (run["id"],))
+    assert row["status"] == "responded"

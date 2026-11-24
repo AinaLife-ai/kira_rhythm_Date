@@ -443,10 +443,23 @@ class Scheduler:
             else:
                 await self.store.execute("UPDATE planning_runs SET status='running' WHERE id=? AND status IN ('prepared','queued')", (metadata["run_id"],))
 
+    @staticmethod
+    def has_real_user(event) -> bool:
+        return any(
+            not (getattr(message, "extra", None) or {}).get("krd") and not getattr(message, "is_notice", False)
+            for message in getattr(event, "messages", []) or [])
+
+    async def _thread_active(self, thread_id: str) -> bool:
+        if not thread_id:
+            return False
+        row = await self.store.one("SELECT status FROM threads WHERE id=?", (thread_id,))
+        return bool(row and row.get("status") in {"open", "paused"})
+
     async def on_response(self, event, response) -> None:
         text = str(getattr(response, "text_response", "") or "")
         has_tool_calls = bool(getattr(response, "tool_calls", None))
-        silent = self.is_silent(text) and not has_tool_calls
+        text_silent = self.is_silent(text)
+        silent = text_silent and not has_tool_calls
         status = getattr(response, "status", "success")
         active_persona = await self.runtime.active_persona_id()
         for metadata in ContextBuilder.metadata(event):
@@ -468,15 +481,28 @@ class Scheduler:
                     state = "failed"
                 else:
                     config = await self.store.get_config(run["persona_id"])
+                    effective = config
+                    plan_row = await self.store.one(
+                        "SELECT date,day_type_id FROM plans WHERE id=?", (item["plan_id"],))
+                    if plan_row:
+                        try:
+                            effective = await self.plans.effective_config(
+                                run["persona_id"], plan_row.get("day_type_id", ""))
+                        except Exception:
+                            effective = config
                     quiet_now = in_active_windows(
-                        config["quiet_delivery_windows"], time.time(), self.policy.timezone_name(config))
-                    silence_requested = item["interaction"] == "silent" or quiet_now
+                        effective["quiet_delivery_windows"], time.time(), self.policy.timezone_name(effective))
+                    # In a mixed batch a visible answer to the real user is
+                    # mandatory; the item's silence only constrains its own
+                    # share of the reply.
+                    silence_requested = (item["interaction"] == "silent" or
+                                         (quiet_now and item["interaction"] == "auto")) and not self.has_real_user(event)
                     # Never rewrite model output. Record what actually happened and
                     # expose prompt non-compliance as diagnostics instead of hiding it.
                     state = "triggered_silent" if silent else "triggered"
-                    if silence_requested and not silent:
+                    if silence_requested and not text_silent:
                         error = "silence_unmet"
-                    elif item["interaction"] == "must_message" and silent:
+                    elif item["interaction"] == "must_message" and text_silent:
                         error = "delivery_unmet"
                     else:
                         error = ""
@@ -485,9 +511,9 @@ class Scheduler:
                         (now(), text[:20000], getattr(response, "input_tokens", None), getattr(response, "output_tokens", None), error, run_id))
                     await self.store.execute("UPDATE items SET state=?,updated_at=? WHERE id=?", (state, now(), item["id"]))
                     threads_service = getattr(self.runtime, "threads", None)
-                    if threads_service is not None and item.get("thread_id"):
+                    if threads_service is not None and item.get("thread_id") and config.get("threads", {}).get("enabled", True):
                         settings = config.get("threads", {})
-                        if settings.get("auto_touch", False):
+                        if settings.get("auto_touch", False) and await self._thread_active(item["thread_id"]):
                             already = await threads_service.item_was_touched(
                                 item["thread_id"], item["id"], float(run.get("claimed_at") or 0))
                             if not already:
@@ -511,18 +537,22 @@ class Scheduler:
                         self.runtime.log("warning", "thread_response_finalize_failed", error=repr(exc))
 
     async def on_final(self, event) -> None:
+        active = await self.runtime.active_persona_id()
         for metadata in ContextBuilder.metadata(event):
+            if metadata.get("persona_id") != active:
+                continue
             if metadata["kind"] != "item":
                 continue
             run_id = metadata["run_id"]
             run = await self.store.one("SELECT * FROM runs WHERE id=?", (run_id,))
             item = await self.store.one("SELECT * FROM items WHERE id=?", (run["item_id"],)) if run else None
-            if run and item and item.get("thread_id"):
+            if run and item and item.get("thread_id") and run.get("status") in {"responded", "finalized"}:
                 config = await self.store.get_config(run["persona_id"])
                 settings = config.get("threads", {})
                 threads_service = getattr(self.runtime, "threads", None)
-                if threads_service is not None and settings.get("force_touch", False) and \
-                        not settings.get("auto_touch", False):
+                if (threads_service is not None and settings.get("enabled", True)
+                        and settings.get("force_touch", False)
+                        and await self._thread_active(item["thread_id"])):
                     touched = await threads_service.item_was_touched(
                         item["thread_id"], item["id"], float(run.get("claimed_at") or 0))
                     if not touched:

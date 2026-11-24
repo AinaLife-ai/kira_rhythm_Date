@@ -554,8 +554,10 @@ const app = Vue.createApp({
       state.threadEditor = { thread: null }
     },
     async openThread(thread) {
+      const persona = state.selectedPersona
       try {
-        const detail = await get(`/threads/${encodeURIComponent(thread.id)}?persona=${encodeURIComponent(state.selectedPersona)}`)
+        const detail = await get(`/threads/${encodeURIComponent(thread.id)}?persona=${encodeURIComponent(persona)}`)
+        if (persona !== state.selectedPersona) return
         state.threadEditor = { thread: detail }
       } catch (error) { notify(error.message, 'error') }
     },

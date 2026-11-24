@@ -247,7 +247,12 @@ class PlanService:
                     raise KRDError("probability_below_minimum", "Probability is outside the permitted range")
                 thread_id = str(raw_item.get("thread_id", "") or "").strip()[:128]
                 if thread_id and self.threads is not None:
-                    thread_id = await self.threads.resolve_link(persona_id, thread_id)
+                    # Existing items may legitimately keep a link to a thread
+                    # that has since been completed/dropped. Only a *new* link
+                    # requires an open thread; otherwise an unrelated plan edit
+                    # would be blocked forever by the closed thread.
+                    if not (previous and previous.get("thread_id") == thread_id):
+                        thread_id = await self.threads.resolve_link(persona_id, thread_id)
                 interaction = raw_item.get("interaction", "auto")
                 if interaction not in {"auto", "must_message", "silent"}:
                     raise KRDError("invalid_interaction", "Unknown interaction mode")

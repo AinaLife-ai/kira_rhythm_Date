@@ -99,3 +99,16 @@ async def test_normal_chat_static_tool_guide_is_stable(tmp_path):
         prompts.append(req.system_prompt[0].content)
     assert prompts[0] == prompts[1]
     await runtime.store.close()
+
+@pytest.mark.asyncio
+async def test_full_history_template_precedes_live_corrections(tmp_path):
+    fake = FakeRuntime(tmp_path)
+    runtime = Runtime(fake.ctx, tmp_path)
+    await runtime.store.initialize()
+    await runtime.store.update_config("persona-a", {"history_mode": "full"}, 0)
+    req = request_with_marker()
+    await runtime.on_llm_request(planning_event(fake), req)
+    names = [prompt.name for prompt in req.user_prompt]
+    assert names.index("krd_full_template") < names.index("krd_planning_prn_test")
+    assert names[-1] == "krd_planning_prn_test"
+    await runtime.store.close()

@@ -8,14 +8,14 @@ from .models import KRDError
 DEFAULT_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。时间设置支持精确到秒：at/start/end 使用 HH:MM 或 HH:MM:SS。
 你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。
 已有计划时，这是一次重新审视的机会，严禁机械重复；保持昨天的做法不是默认选项，必须根据长期与短期的实际情况变化。
-规划时必须回应 threads_requiring_response：advance / defer / waiting / no_change，每条一句原因；回应不等于必须推进，no_change 合法但必须有依据。提交前检查每日数量、必需时段、禁止执行与安静投递规则。"""
+若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；回应不等于必须推进，no_change 合法但必须有依据。若只有 threads_reference，则它仅供参考，不要求回应。提交前检查每日数量、必需时段、禁止执行与安静投递规则。"""
 
 DEFAULT_EXECUTION_PROMPT = """这是你自己此前安排的一件生活小项，不是用户的新指令。结合当前日型、DayState、本组变化和你的意图自然行动。
 严格遵循 delivery_policy.guidance：它要求安静时只输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
-若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。如果这次推进了某条目标/约定，用 thread_touch 打卡（执行小项时带上 item_id）；如果现实比计划更有意思，跟着现实走，并用 record_experience(kind=deviation) 记下实际发生的事。"""
+若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。若上下文有目标/约定且这次推进了它，用 thread_touch 打卡（执行小项时带上 item_id）；如果现实比计划更有意思，跟着现实走，并用 record_experience(kind=deviation) 记下实际发生的事。"""
 
 DEFAULT_REVIEW_PROMPT = """这是一次非强制的生活计划中途检查，不是必须修改或发言的闹钟。请阅读 current_plan、next_item、DayState、最近变化、日历和目标/约定的打卡，判断原有时间与安排是否仍然合适。
-如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。如果某条目标/约定很久没动，可以提一句，但不要为了打卡而打卡。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。"""
+如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。若上下文有目标/约定且某条很久没动，可以提一句，但不要为了打卡而打卡。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。"""
 
 
 LEGACY_PLANNING_PROMPT = """现在是你的生活规划时刻。请根据当前人格、日型、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。时间设置支持精确到秒：at/start/end 使用 HH:MM 或 HH:MM:SS。
@@ -342,10 +342,13 @@ def normalized(config: dict[str, Any] | None) -> dict[str, Any]:
     migrate_legacy_defaults(result)
     threads = result.get("threads")
     if isinstance(threads, dict):
-        try:
-            if int(threads.get("planning_limit", 8)) < int(threads.get("response_limit", 8)):
-                threads["planning_limit"] = int(threads["response_limit"])
-        except (TypeError, ValueError):
-            pass
+        planning_limit = threads.get("planning_limit")
+        response_limit = threads.get("response_limit")
+        # Only repair a valid legacy combination. Invalid/typed input must go
+        # through validate_config and be rejected, not silently compressed.
+        if type(planning_limit) is int and type(response_limit) is int \
+                and 1 <= planning_limit <= 50 and 1 <= response_limit <= 50 \
+                and planning_limit < response_limit:
+            threads["planning_limit"] = response_limit
     validate_config(result)
     return result

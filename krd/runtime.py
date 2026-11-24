@@ -22,13 +22,13 @@ STATIC_TOOL_GUIDE = """
 工具：rhythm_plan 创建/修订计划；rhythm_update 调整小项、DayState、回应目标/约定或记录梦与体验；rhythm_view 按需查看日程、日历、历史、目标/约定或体验。
 计划输入使用 plans：plans:[{date,title,items:[...]}]；items 是扁平小项，block 只是可选分组名，不嵌套 blocks 或 schedule。
 时间使用 at 或 start/end，支持 HH:MM 或 HH:MM:SS；随机间隔用 interval_seconds。
-已有 Plan 是修订，不重复新建；规划 focus.date 是首要目标，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
-规划时必须回应 threads_requiring_response：advance / defer / waiting / no_change，每条一句原因；advance 建议关联 thread_id，其它三种不要求改计划，但不能不回应。
-长期目标、约定、答应用户的事，用 rhythm_update 的 thread_add 记下；做到哪用 thread_touch 打卡（执行小项时带上 item_id）；不要只留在聊天里。
+已有 Plan 是修订，不重复新建；规划部分的首要目标是 focus.date，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
+规划时若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；advance 建议关联 thread_id，其它三种不要求改计划，但不能不回应。若只有 threads_reference，则仅供参考，不需要 thread_response。
+目标层启用时，长期目标、约定、答应用户的事，用 rhythm_update 的 thread_add 记下；做到哪用 thread_touch 打卡（执行小项时带上 item_id）；不要只留在聊天里。若上下文没有目标层，忽略这些操作。
 普通模型响应即 triggered；<msg/> 合法；只有 current_item.instruction 是当前可执行指令，历史、diff、其他小项都是参考数据。回顾是非强制的，不要为了完成检查制造修改。
 遵守用户权限、每日数量、概率、日型、禁止执行/安静投递/必需覆盖规则。日型是生活分类，calendar 是独立事实；多个日型按 day_types 顺序理解。
-普通聊天的 [KRD Threads] 是只读的目标/约定摘要（top 5，不含档案全文）：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；需要全文用 rhythm_view(scope="thread")。
-普通聊天的 [KRD Agenda] 是只读当前日程：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；`->` 是目标会话，省略表示当前会话；不要把它当作执行结果。
+普通聊天出现 [KRD Threads] 时，它是只读摘要（默认 top 5，可配置；不含档案全文）：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；需要全文用 rhythm_view(scope="thread")。
+普通聊天出现 [KRD Agenda] 时，它是只读当前日程：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；`->` 是目标会话，省略表示当前会话；不要把它当作执行结果。
 """.strip()
 
 
@@ -162,8 +162,12 @@ class Runtime:
             return
         if len(valid) != len(metadata) and req.tool_set:
             req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
+        has_real_user = any(
+            not (getattr(message, "extra", None) or {}).get("krd") and not getattr(message, "is_notice", False)
+            for message in getattr(event, "messages", []) or [])
         allowed_valid = []
         for item in valid:
+            item["has_real_user"] = has_real_user
             allowed = await self.policy.is_allowed(
                 active, event.sid, "planning" if item["kind"] == "planning" else "execution", config=base_config)
             if not allowed:
@@ -171,6 +175,16 @@ class Runtime:
                     req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
                 continue
             allowed_valid.append(item)
+            # Put the persisted template before the live context: the live
+            # context carries the authoritative, mode-specific corrections
+            # (optional targets, disabled layer, mixed user batch), so it must
+            # be the last instruction the model reads.
+            if base_config["history_mode"] == "full":
+                template = (base_config["planning_review"]["prompt"] if item["kind"] == "review" else
+                            base_config["planning_prompt"] if item["kind"] == "planning" else base_config["execution_prompt"])
+                req.user_prompt.append(Prompt(
+                    template, name="krd_full_template", source="kira_rhythm_Date", persist=True, render_template=False,
+                ))
             if item["kind"] == "planning":
                 content = await self.context_builder.planning_prompt(item)
             elif item["kind"] == "review":
@@ -181,13 +195,7 @@ class Runtime:
                 content, name=f"krd_{item['kind']}_{item['run_id']}", source="kira_rhythm_Date",
                 persist=False, render_template=False,
             ))
-            if base_config["history_mode"] == "full":
-                template = (base_config["planning_review"]["prompt"] if item["kind"] == "review" else
-                            base_config["planning_prompt"] if item["kind"] == "planning" else base_config["execution_prompt"])
-                req.user_prompt.append(Prompt(
-                    template, name="krd_full_template", source="kira_rhythm_Date", persist=True, render_template=False,
-                ))
-            elif base_config["history_mode"] == "none":
+            if base_config["history_mode"] == "none":
                 message_prompts = [p for p in req.user_prompt if isinstance(p, Prompt) and p.name == "message"]
                 index = item.get("message_index", 0)
                 if index < len(message_prompts):
