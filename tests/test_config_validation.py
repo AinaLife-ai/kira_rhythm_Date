@@ -43,6 +43,9 @@ async def store(tmp_path):
     {"threads": {"planning_limit": None}},
     {"threads": {"planning_limit": 0}},
     {"threads": {"planning_limit": 100}},
+    {"threads": {"empty_mode": "unknown"}},
+    {"threads": {"empty_min": 0}},
+    {"threads": {"empty_min": 4, "empty_max": 3}},
 ])
 @pytest.mark.asyncio
 async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):
@@ -97,6 +100,8 @@ def test_legacy_default_prompts_upgrade_without_touching_custom_text():
     assert migrated["history_char_budget"] == 16000
     assert migrated["threads"]["chat_limit"] == 5
     assert migrated["threads"]["full_dossier_in_planning"] == 5
+    assert migrated["threads"]["empty_mode"] == "nudge"
+    assert migrated["threads"]["empty_min"] == 1 and migrated["threads"]["empty_max"] == 3
     clamped = normalized({"threads": {"planning_limit": 5, "response_limit": 8}})
     assert clamped["threads"]["planning_limit"] == 8
 

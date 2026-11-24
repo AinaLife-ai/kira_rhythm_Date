@@ -321,3 +321,52 @@ async def test_finished_thread_stays_as_history_in_item_prompt(runtime):
     assert "已完成" in body["thread"]["dossier"] or body["thread"]["dossier"]
     assert "目标已结束" in body["instruction"]
     assert "不要用 thread_touch" in body["instruction"]
+
+@pytest.mark.asyncio
+async def test_empty_thread_layer_defaults_to_nudge_only_in_planning(runtime):
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "目标层当前活动目标为空" in body["instruction"]
+    assert "thread_add" in body["instruction"]
+    assert "threads_requiring_response" not in body
+
+
+@pytest.mark.asyncio
+async def test_empty_thread_layer_allow_has_no_nudge(runtime):
+    await runtime.store.update_config("persona-a", {"threads": {"empty_mode": "allow"}}, 0)
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "目标层当前活动目标为空" not in body["instruction"]
+
+
+@pytest.mark.asyncio
+async def test_empty_thread_layer_require_blocks_until_thread_add(runtime):
+    await runtime.store.update_config(
+        "persona-a", {"threads": {"empty_mode": "require", "empty_min": 2, "empty_max": 3}}, 0)
+    run_id = "prn_seed"
+    await runtime.store.execute(
+        "INSERT INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,"
+        "required_thread_ids_json,response_status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (run_id, "seed", "persona-a", "daily", day(2), "qq:dm:10001", "prepared",
+         dumps([]), "not_required", "test", time.time()))
+    ev = event(runtime, run_id)
+    plan = {"date": day(2), "title": "测试", "items": [
+        {"title": "A", "at": "09:00", "target": "qq:dm:10001"},
+        {"title": "B", "at": "10:00", "target": "qq:dm:10001"},
+    ]}
+    rejected = json.loads(await tools.rhythm_plan(ev, plans=[plan]))
+    assert rejected["error"]["code"] == "thread_seed_required"
+    added = json.loads(await tools.rhythm_update(ev, operations=[
+        {"type": "thread_add", "kind": "goal", "title": "真实目标 1", "dossier": "长期跟进"},
+    ]))
+    assert added["ok"]
+    still_short = json.loads(await tools.rhythm_plan(ev, plans=[plan]))
+    assert still_short["error"]["code"] == "thread_seed_required"
+    added_again = json.loads(await tools.rhythm_update(ev, operations=[
+        {"type": "thread_add", "kind": "goal", "title": "真实目标 2", "dossier": "继续跟进"},
+    ]))
+    assert added_again["ok"]
+    accepted = json.loads(await tools.rhythm_plan(ev, plans=[plan]))
+    assert accepted["ok"]

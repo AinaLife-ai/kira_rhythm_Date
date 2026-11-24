@@ -34,6 +34,19 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
         planning_meta = next((item for item in metadata if item.get("kind") == "planning"), None)
         warnings = []
         if planning_meta and runtime.threads is not None:
+            settings = cfg.get("threads", {})
+            if settings.get("enabled", True) and settings.get("empty_mode") == "require":
+                try:
+                    active_threads = await runtime.threads.active_count(persona_id)
+                except Exception:
+                    active_threads = 1
+                empty_min = int(settings.get("empty_min", 1))
+                if active_threads < empty_min:
+                    raise KRDError(
+                        "thread_seed_required",
+                        f"目标层活动目标不足；本次规划要求至少 {empty_min} 条",
+                        hint="先用 rhythm_update 的 thread_add 建立真实目标，再提交 rhythm_plan。")
+        if planning_meta and runtime.threads is not None:
             try:
                 missing = await runtime.threads.missing_for_run(planning_meta["run_id"])
             except Exception:

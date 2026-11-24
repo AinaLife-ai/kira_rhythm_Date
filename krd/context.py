@@ -194,10 +194,12 @@ class ContextBuilder:
     def _agenda_text(self, plan: dict[str, Any] | None, day: str, tz_name: str,
                      current_sid: str | None = None) -> str:
         if not plan:
-            return "[KRD Agenda]\nno plan"
+            return ""
         items = self._plan_items(plan)
         cross_day = any(self._item_date(item, day, tz_name) not in {None, day} or self._item_crosses_day(item) for item in items)
         active_items = [item for item in items if item.get("state") not in {"cancelled", "deleted"}]
+        if not active_items:
+            return ""
         done = sum(1 for item in active_items if item.get("state") in {"triggered", "triggered_silent"})
         lines = ["[KRD Agenda]"]
         if cross_day:
@@ -386,11 +388,29 @@ class ContextBuilder:
         except Exception:
             unanswered = []
         instruction = base_config["planning_prompt"]
+        thread_settings = base_config.get("threads", {})
+        empty_mode = str(thread_settings.get("empty_mode", "nudge"))
+        empty_min = int(thread_settings.get("empty_min", 1))
+        empty_max = int(thread_settings.get("empty_max", 3))
+        active_threads = None
+        threads_below_min = False
+        if threads_enabled and empty_mode in {"nudge", "require"} and self.threads:
+            try:
+                active_threads = await self.threads.active_count(persona_id)
+                threads_below_min = active_threads < empty_min
+            except Exception:
+                threads_below_min = False
         if not thread_payload.get("required"):
             if not threads_enabled:
                 instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略 threads_requiring_response / threads_reference 与 thread_* 操作。"
             else:
                 instruction += "\n[KRD 目标层] 本次没有必须回应的目标；若上下文出现 threads_reference，仅作参考，不需要 thread_response。"
+        if threads_enabled and threads_below_min:
+            active_label = "空" if active_threads == 0 else f"{active_threads} 条"
+            if empty_mode == "nudge":
+                instruction += f"\n[KRD 目标层] 目标层当前活动目标为{active_label}，少于期望的 {empty_min} 条。若你确实有跨天的目标、承诺、项目或习惯，可以先用 rhythm_update 的 thread_add 建立到 {empty_min}–{empty_max} 条真实目标；如果确实没有，就保持现状，不要为了填满而编造。"
+            elif empty_mode == "require":
+                instruction += f"\n[KRD 目标层] 本次规划要求至少 {empty_min} 条活动目标，当前为{active_label}（建议至多 {empty_max} 条）。请先用 rhythm_update 的 thread_add 建立真实目标，再调用 rhythm_plan；不要为了通过检查而编造目标。"
         pattern = await self._recent_pattern(persona_id, target_date, max(1, full_days or digest_days or 3))
         payload = {
             "instruction": instruction + (("\n" + self._weather_rule()) if weather else ""),

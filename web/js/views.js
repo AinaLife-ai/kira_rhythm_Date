@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.1.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.1'
+import { fmt } from './store.js?v=1.3.1.2'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.2'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -593,6 +593,21 @@ export const SettingsView = {
             <label class="switch-row"><span>自动打卡<small>小项触发后自动写一条“执行了 X”。默认关：信息量低，让 bot 自己写“做到哪”更有用。</small></span><input type="checkbox" v-model="$root.draft.threads.auto_touch"></label>
           </div>
           <label class="full-field"><span>缺回应时的处理</span><small>“拒绝”会让 bot 补回应后再规划；“只提醒”会通过但标记缺失，下次再提。</small><select v-model="$root.draft.threads.response_mode"><option value="reject">拒绝并让 bot 补回应（推荐）</option><option value="warn">通过但标记缺失</option></select></label>
+        </div>
+        <div class="settings-subsection">
+          <h3>空目标层</h3>
+          <label class="full-field"><span>目标层为空时</span><small>只在规划触发时生效；普通聊天为空时不会显示空的 [KRD Threads] 标题。</small>
+            <select v-model="$root.draft.threads.empty_mode">
+              <option value="allow">允许为空</option>
+              <option value="nudge">提醒 bot 尝试建立（推荐，默认）</option>
+              <option value="require">要求至少建立一条（严格）</option>
+            </select>
+          </label>
+          <div class="form-grid">
+            <label><span>空层至少</span><small>活动目标少于此数时触发提示/要求；默认 1 条。</small><input type="number" min="1" max="10" v-model.number="$root.draft.threads.empty_min"></label>
+            <label><span>空层至多</span><small>提示 bot 建立时建议不要超过此数；不会强迫删除已有目标。默认 3 条。</small><input type="number" min="1" max="10" v-model.number="$root.draft.threads.empty_max"></label>
+          </div>
+          <p class="field-hint">“提醒”只给 bot 一个真实目标的邀请，不阻断规划；“要求”会在活动目标少于“至少”时暂缓 rhythm_plan，直到 thread_add 补足。至多只是建立建议，不会强迫删除已有目标；严格模式可能产生伪目标，默认不启用。</p>
         </div>
         <div class="settings-subsection">
           <h3>规划时展示多少</h3>

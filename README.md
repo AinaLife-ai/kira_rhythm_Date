@@ -22,6 +22,7 @@
 - `rhythm_update` 调整小项、DayState，或保存梦与体验。
 - `rhythm_view` 按需读取历史、当前组、diff、配额、目标/约定与体验。
 - 目标与约定（Threads）：`goal / promise / project / habit / open_loop / mystery`，带档案、下一步、可选截止、优先级和打卡流水；bot 可在规划/聊天/执行中自行新建、修改、打卡、完成或放弃。
+- 空目标层策略 `threads.empty_mode`：`allow` 允许为空、`nudge` 规划时提示 bot 尝试建立真实目标（默认，不阻断）、`require` 规划时要求活动目标达到 `empty_min`（严格，可能产生伪目标）；`empty_max` 只作为建立建议，不强迫删除已有目标。`[KRD Threads]` 空层不显示标题。
 - 开启“规划时强制回应”且上下文包含 `threads_requiring_response` 时，规划回合必须逐条回应目标/约定：`advance / defer / waiting / no_change`，每条一句依据；只有 `threads_reference` 时不要求回应。只要求表态，不强制推进。
 - 普通聊天默认显示 `[KRD Threads]` top 5 摘要（不含档案全文）；执行上下文只显示当前小项关联的那条。
 - 规划上下文默认给最近 3 天完整计划、更早 4 天摘要、最近结果、未完成和未来安排；Threads 前 5 条给档案全文，其余给摘要；历史规划回合会压缩成一行摘要，避免完整计划 JSON 反复进入会话记忆。
@@ -133,7 +134,7 @@ KiraAI/
 
 这与主动唤醒 v2.5.0 和 QQ增强 v1.4.6 的边界一致：系统来源标记正常保存，附加动态上下文使用尾部非持久 Prompt。静态工具说明进入 `tools` system 区。
 
-页面 HTML 和前端 API GET 请求使用 no-store；内置 CSS/JS、主题和桌宠资源带 `?v=1.3.1.1` 版本键；上传资源使用内容哈希和 immutable 缓存。这样既不会拿旧静态文件，也不会让动态 API 被中间缓存污染。
+页面 HTML 和前端 API GET 请求使用 no-store；内置 CSS/JS、主题和桌宠资源带 `?v=1.3.1.2` 版本键；上传资源使用内容哈希和 immutable 缓存。这样既不会拿旧静态文件，也不会让动态 API 被中间缓存污染。
 
 ## 权限与安全
 

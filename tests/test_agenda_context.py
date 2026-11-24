@@ -76,5 +76,5 @@ async def test_agenda_can_be_disabled_for_normal_chat(tmp_path):
     assert "[KRD Agenda]" not in text
     config, _ = await rt.store.update_config("persona-a", {"inject_agenda": True, "agenda_max_chars": 800}, revision)
     text = await rt.context_builder.compact_state("persona-a", config=config, current_sid="qq:dm:10001")
-    assert "[KRD Agenda]" in text
+    assert "[KRD Agenda]" not in text
     await rt.close()

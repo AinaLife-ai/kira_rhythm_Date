@@ -99,6 +99,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "threads": {
         "enabled": True,
         "chat_enabled": True,
+        "empty_mode": "nudge",
+        "empty_min": 1,
+        "empty_max": 3,
         "planning_limit": 8,
         "chat_limit": 5,
         "chat_chars": 600,
@@ -243,6 +246,12 @@ def validate_config(config: dict[str, Any]) -> None:
         _typed(threads, key, bool)
     if threads.get("response_mode") not in {"reject", "warn"}:
         raise KRDError("invalid_config", "Unknown thread response_mode")
+    if threads.get("empty_mode") not in {"allow", "nudge", "require"}:
+        raise KRDError("invalid_config", "Unknown thread empty_mode")
+    empty_min = threads.get("empty_min")
+    empty_max = threads.get("empty_max")
+    if type(empty_min) is not int or type(empty_max) is not int or not 1 <= empty_min <= empty_max <= 10:
+        raise KRDError("invalid_config", "threads.empty_min/empty_max must satisfy 1 <= min <= max <= 10")
     for key, minimum, maximum in (("planning_limit", 1, 50), ("chat_limit", 1, 8), ("chat_chars", 100, 2000),
                                   ("full_dossier_in_planning", 0, 20), ("dossier_chars", 100, 8000),
                                   ("excerpt_chars", 50, 2000), ("next_step_chars", 20, 1000),

@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.1.1'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.1.1'
-import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.1.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.1'
-import { PetCompanion } from './pet.js?v=1.3.1.1'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.1.2'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.1.2'
+import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.1.2'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.2'
+import { PetCompanion } from './pet.js?v=1.3.1.2'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.3.1.1'
+const ASSET_VERSION = '1.3.1.2'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -1168,7 +1168,7 @@ const app = Vue.createApp({
         execution_pool: { sessions: [], strategy: 'pure_random' },
         planning_review: {},
         weather: { mode: 'off', provider: 'open_meteo', chat_current: true, chat_forecast: false, locations: {}, virtual: {} },
-        threads: { enabled: true, chat_enabled: true, planning_limit: 8, chat_limit: 5, full_dossier_in_planning: 5,
+        threads: { enabled: true, chat_enabled: true, empty_mode: 'nudge', empty_min: 1, empty_max: 3, planning_limit: 8, chat_limit: 5, full_dossier_in_planning: 5,
           dossier_chars: 2000, excerpt_chars: 300, next_step_chars: 200, log_chars: 500, logs_in_planning: 3,
           execution_excerpt_chars: 300, execution_logs: 2, require_response: true, response_mode: 'reject',
           response_limit: 8, force_touch: false, auto_touch: false, stale_days: 5, chat_chars: 600 },
@@ -1330,7 +1330,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.3.1.1'
+import { del as requestDelete } from './api.js?v=1.3.1.2'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

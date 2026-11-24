@@ -52,3 +52,7 @@ def test_bottom_nav_uses_six_columns_without_wrapping():
     css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
     assert ".main-nav { display:grid; grid-template-columns:repeat(6,minmax(0,1fr));" in css
     assert ".main-nav button:last-child" not in css
+    views = (ROOT / "web" / "js" / "views.js").read_text(encoding="utf-8")
+    assert "$root.draft.threads.empty_mode" in views
+    assert "$root.draft.threads.empty_min" in views
+    assert "$root.draft.threads.empty_max" in views
