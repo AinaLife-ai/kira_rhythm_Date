@@ -78,3 +78,15 @@ async def test_agenda_can_be_disabled_for_normal_chat(tmp_path):
     text = await rt.context_builder.compact_state("persona-a", config=config, current_sid="qq:dm:10001")
     assert "[KRD Agenda]" not in text
     await rt.close()
+
+@pytest.mark.asyncio
+async def test_empty_krd_blocks_are_omitted_except_day_state(tmp_path):
+    rt = FakeRuntime(tmp_path)
+    await rt.store.initialize()
+    text = await rt.context_builder.compact_state(
+        "persona-a", config=await rt.store.get_config("persona-a"), current_sid="qq:dm:10001")
+    assert "[KRD DayState]" in text
+    assert "[KRD Threads]" not in text
+    assert "[KRD Agenda]" not in text
+    assert "[KRD Weather]" not in text
+    await rt.close()
