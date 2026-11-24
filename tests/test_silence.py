@@ -29,6 +29,7 @@ async def test_silent_output_is_prompt_only_and_visible_text_is_diagnosed(runtim
     prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
     assert '"effective_interaction":"silent"' in prompt
     assert '"enforcement":"prompt_only"' in prompt
+    assert "可调用工具但仅输出 <msg/>" in prompt
     assert "不得为了本日程删除或改写给用户的回答" not in prompt
     response = SimpleNamespace(text_response="<msg><text>模型自己泄漏的文字</text></msg>", tool_calls=[], status="success")
     await runtime.on_llm_response(event, response)
@@ -90,3 +91,16 @@ async def test_quiet_window_lets_existing_must_message_stay_silent(runtime):
     stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
     assert receipt["error"] == ""
     assert stored["state"] == "triggered_silent"
+
+@pytest.mark.asyncio
+async def test_tool_call_with_msg_does_not_violate_silence(runtime):
+    plan = await create_due_plan(runtime, interaction="silent", count=1)
+    item = plan["blocks"][0]["items"][0]
+    run = await runtime.scheduler.claim_item(item["id"])
+    event = runtime.ctx.event_bus.events[-1]
+    response = SimpleNamespace(text_response="<msg/>", tool_calls=[{}], status="success")
+    await runtime.on_llm_response(event, response)
+    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
+    stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
+    assert receipt["error"] == ""
+    assert stored["state"] in {"triggered", "triggered_silent"}

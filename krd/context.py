@@ -496,8 +496,8 @@ class ContextBuilder:
             "threads": await self._review_threads(persona_id, effective),
             "unanswered_threads": await self._unanswered_threads(persona_id, effective),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
-                                "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
-                                            "只在确有调整价值时自然分享；否则输出 <msg/>。"}
+                                "guidance": "当前为安静时段时仍可调用工具，但最终仅输出 <msg/>，不要附加说明。" if quiet_now else
+                                            "只在确有调整价值时自然分享；否则可调用工具，但最终仅输出 <msg/>。"}
         }
         host_tz = self.host_timezone_name()
         if host_tz is None or host_tz != tz_name:
@@ -526,7 +526,7 @@ class ContextBuilder:
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
         silence_requested = item["interaction"] == "silent" or quiet_now
         if silence_requested:
-            guidance = "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，仅输出 <msg/>，不要附加说明。"
+            guidance = "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，可调用工具但仅输出 <msg/>，不要附加说明。"
         elif item["interaction"] == "must_message":
             guidance = "本次 effective_interaction=must_message。请产生有实际内容的可见回复，不要只输出 <msg/>。"
         else:

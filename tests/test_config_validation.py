@@ -6,7 +6,8 @@ import pytest
 import pytest_asyncio
 
 from krd.config import (DEFAULT_EXECUTION_PROMPT, DEFAULT_PLANNING_PROMPT, DEFAULT_REVIEW_PROMPT,
-                        LEGACY_EXECUTION_PROMPT, LEGACY_PLANNING_PROMPT, LEGACY_REVIEW_PROMPT, normalized)
+                        LEGACY_EXECUTION_PROMPT, LEGACY_PLANNING_PROMPT, LEGACY_REVIEW_PROMPT,
+                        PRIOR_EXECUTION_PROMPT, PRIOR_REVIEW_PROMPT, normalized)
 from krd.models import KRDError
 from krd.store import Store
 
@@ -98,6 +99,13 @@ def test_legacy_default_prompts_upgrade_without_touching_custom_text():
     assert migrated["threads"]["full_dossier_in_planning"] == 5
     clamped = normalized({"threads": {"planning_limit": 5, "response_limit": 8}})
     assert clamped["threads"]["planning_limit"] == 8
+
+    prior = normalized({
+        "execution_prompt": PRIOR_EXECUTION_PROMPT,
+        "planning_review": {"prompt": PRIOR_REVIEW_PROMPT},
+    })
+    assert prior["execution_prompt"] == DEFAULT_EXECUTION_PROMPT
+    assert prior["planning_review"]["prompt"] == DEFAULT_REVIEW_PROMPT
 
     custom = normalized({"planning_prompt": "我的自定义规划提示词。", "history_char_budget": 9000})
     assert custom["planning_prompt"] == "我的自定义规划提示词。"

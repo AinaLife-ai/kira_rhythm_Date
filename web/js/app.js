@@ -1,8 +1,8 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.0.1'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.0.1'
-import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.0.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.0.1'
-import { PetCompanion } from './pet.js?v=1.3.0.1'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.0.2'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.0.2'
+import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.0.2'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.0.2'
+import { PetCompanion } from './pet.js?v=1.3.0.2'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
@@ -1330,7 +1330,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.3.0.1'
+import { del as requestDelete } from './api.js?v=1.3.0.2'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

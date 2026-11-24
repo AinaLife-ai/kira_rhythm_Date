@@ -26,7 +26,7 @@ export const planTemplates = [
       planned_appearance: '舒适的居家服', planned_mood: '平静而困倦',
       blocks: [
         { title: '夜间', items: [
-          { title: '做一个梦', intent: '让想象在安静时自由发生', instruction: '做一场梦，用 rhythm_update 的 record_experience 留下梦境，然后输出 <msg/>。', schedule: { type: 'window', start: '02:00', end: '03:30' }, interaction: 'silent', category: 'dream', target: '' },
+          { title: '做一个梦', intent: '让想象在安静时自由发生', instruction: '做一场梦，用 rhythm_update 的 record_experience 留下梦境，但最终仅输出 <msg/>。', schedule: { type: 'window', start: '02:00', end: '03:30' }, interaction: 'silent', category: 'dream', target: '' },
           { title: '梦后分享', intent: '把有意义的片段带回来', instruction: '读取今天的梦境 Experience，选择值得分享的部分，也可以保留为秘密。', schedule: { type: 'exact', at: '08:40' }, interaction: 'auto', category: 'dream', target: '' },
         ] },
       ],

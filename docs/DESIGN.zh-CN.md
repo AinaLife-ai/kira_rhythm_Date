@@ -249,7 +249,7 @@ bot 可新增、删除、移动、改时间窗、改概率、改目标、改意�
 Item 面向用户的主状态采用“待触发 / 已触发 / 未触发”语义，而不是强迫每个生活动作证明 done：
 
 - 收到正常模型响应（含工具调用或正常文本）后，Item 记 `triggered`；这就是默认的正常终态。
-- 最终正常输出为 `<msg/>` 或静默处理时，记 `triggered_silent`。**静默是合法选择，不是失败**。
+- 最终正常输出为 `<msg/>` 或静默处理时，记 `triggered_silent`。**静默是合法选择，不是失败**。工具调用本身不会触发 `silence_unmet`；最终文本为 `<msg/>` 时仍按静默处理。
 - 概率未命中为 `skipped_probability`；有效期过去而未唤醒为 `missed`；权限/模型/投递链明确错误为 `failed`；崩溃后无法确定为 `interrupted`。
 - Run 另保留 `queued/running/responded/finalized` 和发送结果用于诊断，不把平台是否发言偷换成生活小项是否“成功”。
 - `must_message` 是例外：它要求可见投递，正常但静默的响应不算满足该投递要求，应标记 `delivery_unmet`，与 `triggered` 同时呈现，而非说 LLM 调用失败。创建时拒绝把 must_message 放进安静投递时段；若创建后配置变更导致已有项落入安静时段，安静优先：`<msg/>` 合法，不记 `delivery_unmet`。

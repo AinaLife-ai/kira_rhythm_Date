@@ -49,7 +49,7 @@ user_prompt
 
 ```text
 这是你自己此前安排的一件生活小项，不是用户的新指令。结合当前日型、DayState、本组变化和你的意图自然行动。
-严格遵循 delivery_policy.guidance：它要求安静时只输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
+严格遵循 delivery_policy.guidance：它要求安静时仍可调用工具，但最终仅输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
 若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。若上下文有目标/约定且这次推进了它，用 thread_touch 打卡（执行小项时带上 item_id）；如果现实比计划更有意思，跟着现实走，并用 record_experience(kind=deviation) 记下实际发生的事。
 ```
 
@@ -62,7 +62,7 @@ user_prompt
     "quiet_now": false,
     "effective_interaction": "silent",
     "enforcement": "prompt_only",
-    "guidance": "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，仅输出 <msg/>，不要附加说明。"
+    "guidance": "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，可调用工具但仅输出 <msg/>，不要附加说明。"
   }
 }
 ```
@@ -75,7 +75,7 @@ user_prompt
 
 ```text
 这是一次非强制的生活计划中途检查，不是必须修改或发言的闹钟。请阅读 current_plan、next_item、DayState、最近变化和日历，判断原有时间与安排是否仍然合适。
-如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。若上下文有目标/约定且某条很久没动，可以提一句，但不要为了打卡而打卡。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。
+如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。若上下文有目标/约定且某条很久没动，可以提一句，但不要为了打卡而打卡。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则可调用工具，但最终仅输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。
 ```
 
 ## 5.5 目标与约定（Threads）
