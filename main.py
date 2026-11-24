@@ -86,7 +86,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_update",
-        description="调整日程/DayState/目标/体验。operations[] type: day_state, record_experience, update_item, append_item, delete_item, delete_block, thread_add/touch/update/close/response；delete_day 仅用户，删除仍受数量/必需时段校验。update_item 用 item_id + patch 或平铺字段（title/intent/instruction/schedule/at/start/end/target/interaction/probability 等）；append_item 用 plan_id 或 date、block/block_title、item 或平铺字段（同 update_item）；时间 at 或 start/end（HH:MM[:SS]）。thread_response 仅在上下文有 threads_requiring_response 时逐条回应 advance/defer/waiting/no_change + 依据；threads_reference 不要求。目标层启用时 thread_add 可带 dossier/next_step，thread_update 可改 dossier/next_step/due_at/priority/status；thread_touch 执行小项带 item_id。",
+        description="调整日程/DayState/目标/梦与体验。operations[] type: day_state, record_experience, update_item, append_item, delete_item, delete_block, thread_add/touch/update/close/response；delete_day 仅用户，删除仍受数量/必需时段校验。update_item 用 item_id + patch 或平铺字段（title/intent/instruction/schedule/at/start/end/target/interaction/probability 等）；append_item 用 plan_id 或 date、block/block_title、item 或平铺字段（同 update_item）；时间 at 或 start/end（HH:MM[:SS]）。thread_response 仅在上下文有 threads_requiring_response 时逐条回应 advance/defer/waiting/no_change + 依据；threads_reference 不要求。目标层启用时 thread_add 可带 dossier/next_step，thread_update 可改 dossier/next_step/due_at/priority/status；thread_touch 执行小项带 item_id。",
         params={"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object"}}, "reason": {"type": "string"}}, "required": ["operations"]},
     )
     async def rhythm_update(self, event, **kwargs):
