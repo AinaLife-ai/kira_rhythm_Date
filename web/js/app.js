@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.4'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.4'
-import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PlanBrief } from './views.js?v=1.3.4'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.4'
-import { PetCompanion } from './pet.js?v=1.3.4'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.4.1'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.4.1'
+import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PlanBrief } from './views.js?v=1.3.4.1'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.4.1'
+import { PetCompanion } from './pet.js?v=1.3.4.1'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.3.4'
+const ASSET_VERSION = '1.3.4.1'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -677,15 +677,19 @@ const app = Vue.createApp({
       const weather = await get(`/weather/current?persona=${encodeURIComponent(persona)}`)
       if (persona === state.selectedPersona) this.data.weather = weather
     },
-    sessionLabel(target) {
+    sessionEntry(target) {
       const value = String(target || '').trim()
-      if (!value) return '执行池'
+      if (!value) return null
       const pool = [...(this.data.sessions || []), ...(this.data.planning_sessions || [])]
-      const found = pool.find((entry) => {
+      return pool.find((entry) => {
         const id = typeof entry === 'string' ? entry : entry?.sid || entry?.id
         return id === value
-      })
-      return found?.session_title || found?.title || found?.name || value
+      }) || null
+    },
+    sessionName(target) {
+      const found = this.sessionEntry(target)
+      if (!found || typeof found === 'string') return ''
+      return String(found.session_title || found.title || found.name || '').trim()
     },
     itemTitle(id) {
       const item = (this.data.plan?.blocks || []).flatMap((block) => block.items || []).find((entry) => entry.id === id)
@@ -1399,7 +1403,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.3.4'
+import { del as requestDelete } from './api.js?v=1.3.4.1'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

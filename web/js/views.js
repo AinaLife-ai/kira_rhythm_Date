@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.4'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.4'
+import { fmt } from './store.js?v=1.3.4.1'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.4.1'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -71,6 +71,7 @@ export const ItemCard = {
   emits: ['edit', 'run', 'skip', 'delete'],
   computed: {
     itemStateClass() { return `state-${this.item.state}` },
+    targetName() { return this.$root.sessionName(this.item.target) },
     scheduleText() {
       const schedule = this.item.schedule || {}
       if (schedule.type === 'window') return `${schedule.start}–${schedule.end} · ${fmt.time(this.item.scheduled_at)}`
@@ -97,7 +98,7 @@ export const ItemCard = {
         <span class="meta-icon"><ui-icon name="clock" :size="13" /> {{ scheduleText }}</span>
         <span v-if="item.execution_probability < 1">概率 {{ Math.round(item.execution_probability * 100) }}%</span>
         <span>{{ $root.fmt.interaction(item.interaction) }}</span>
-        <span v-if="item.target" class="meta-icon item-target"><ui-icon name="message" :size="12" /> {{ $root.sessionLabel(item.target) }}</span>
+        <span v-if="item.target" class="meta-icon item-target" :title="targetName ? targetName + ' · ' + item.target : item.target"><ui-icon name="message" :size="12" /><template v-if="targetName"><span class="target-name">{{ targetName }}</span><span class="target-sep">·</span></template><code class="target-id">{{ item.target }}</code></span>
         <span v-if="item.category" class="tag">{{ item.category }}</span>
         <span v-if="item.thread_id" class="tag thread-badge">目标 · {{ $root.threadTitle(item.thread_id) }}</span>
       </div>
@@ -136,6 +137,9 @@ export const Timeline = {
 
 export const TodayView = {
   components: { Timeline, PlanBrief },
+  computed: {
+    nextTargetName() { return this.$root.sessionName(this.$root.nextItem?.target) },
+  },
   template: `
   <div class="nte-today">
     <section class="scene-hero">
@@ -177,7 +181,7 @@ export const TodayView = {
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
         <p v-if="$root.nextItem.instruction" class="mission-instruction">{{ $root.nextItem.instruction }}</p>
-        <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.target" class="mission-target"><ui-icon name="message" :size="11" /> {{ $root.sessionLabel($root.nextItem.target) }}</span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
+        <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.target" class="mission-target" :title="nextTargetName ? nextTargetName + ' · ' + $root.nextItem.target : $root.nextItem.target"><ui-icon name="message" :size="11" /><template v-if="nextTargetName">{{ nextTargetName }} · </template><code class="target-id">{{ $root.nextItem.target }}</code></span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
         <div class="mission-queue" v-if="$root.upcomingItems.length"><span class="queue-label">随后</span><div v-for="item in $root.upcomingItems" :key="item.id"><b>{{ $root.fmt.time(item.scheduled_at) }}</b><span>{{ item.title }}</span></div></div>
         <div class="mission-telemetry">
           <span class="telemetry-label">SYSTEM TELEMETRY / 系统读数</span>

@@ -93,9 +93,23 @@ def test_narrative_preview_and_planning_refresh_contracts():
     css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
     assert "export const PlanBrief" in views
     assert "plan-brief" in views and "item.instruction" in views and "item-target" in views
-    assert "$root.sessionLabel(item.target)" in views
+    assert "this.$root.sessionName(this.item.target)" in views
     assert "$root.planningLabel('立即规划')" in views
-    assert "sessionLabel(target)" in app
+    assert "sessionName(target)" in app
     assert "planningPending" in app and "waitForPlanningUpdate" in app and "startPlanning" in app
     assert ".item-instruction" in css and ".plan-brief" in css
     assert "display:block !important" in css
+
+
+def test_target_badge_shows_session_name_and_raw_id():
+    app = (WEB / "app.js").read_text(encoding="utf-8")
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+    css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
+    fixture = (ROOT / "tests" / "web_fixture.js").read_text(encoding="utf-8")
+
+    assert "sessionEntry(target)" in app and "sessionName(target)" in app
+    assert 'class="target-name"' in views and 'class="target-id"' in views
+    assert "{{ item.target }}" in views
+    assert "nextTargetName" in views and "$root.nextItem.target" in views
+    assert ".item-target .target-name" in css and ".target-id" in css
+    assert "target: 'qq:dm:10001'" in fixture and "target: 'qq:gm:70001'" in fixture

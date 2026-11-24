@@ -15,12 +15,12 @@ const plan = {
   planned_appearance: '雾蓝色针织衫，带一件轻便外套', planned_mood: '安静，也有一点期待',
   blocks: [
     { id: 'b1', title: '早晨与上午', color: '#aa9af8', meta: {}, items: [
-      { id: 'i1', title: '醒来后的第一句话', intent: '让今天有一个连续的起点', schedule: { type: 'window', start: '08:20', end: '09:00' }, scheduled_at: at(8, 42), execution_probability: 1, interaction: 'auto', state: 'triggered', category: '' },
-      { id: 'i2', title: '读一会儿书', intent: '在忙碌之前保留自己的空间', schedule: { type: 'exact', at: '10:00' }, scheduled_at: at(10), execution_probability: 1, interaction: 'silent', state: 'triggered_silent', category: 'reading' },
+      { id: 'i1', title: '醒来后的第一句话', intent: '让今天有一个连续的起点', schedule: { type: 'window', start: '08:20', end: '09:00' }, scheduled_at: at(8, 42), execution_probability: 1, interaction: 'auto', target: 'qq:dm:10001', state: 'triggered', category: '' },
+      { id: 'i2', title: '读一会儿书', intent: '在忙碌之前保留自己的空间', schedule: { type: 'exact', at: '10:00' }, scheduled_at: at(10), execution_probability: 1, interaction: 'silent', target: 'qq:dm:99999', state: 'triggered_silent', category: 'reading' },
     ] },
     { id: 'b2', title: '傍晚与夜里', color: '#77d6b3', meta: {}, items: [
-      { id: 'i3', title: '随意走走', intent: '换一换节奏，看看外面', schedule: { type: 'window', start: '18:00', end: '19:00' }, scheduled_at: at(18, 36), execution_probability: .8, interaction: 'auto', state: 'scheduled', category: '' },
-      { id: 'i4', title: '整理今天', intent: '让今天完整地收尾', instruction: '', schedule: { type: 'exact', at: '22:20' }, scheduled_at: at(22, 20), execution_probability: 1, interaction: 'auto', state: 'scheduled', category: '' },
+      { id: 'i3', title: '随意走走', intent: '换一换节奏，看看外面', schedule: { type: 'window', start: '18:00', end: '19:00' }, scheduled_at: at(18, 36), execution_probability: .8, interaction: 'auto', target: 'qq:gm:70001', state: 'scheduled', category: '' },
+      { id: 'i4', title: '整理今天', intent: '让今天完整地收尾', instruction: '', schedule: { type: 'exact', at: '22:20' }, scheduled_at: at(22, 20), execution_probability: 1, interaction: 'auto', target: 'qq:dm:10001', state: 'scheduled', category: '' },
     ] },
   ],
 }
