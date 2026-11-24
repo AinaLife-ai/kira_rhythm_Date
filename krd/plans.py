@@ -216,12 +216,18 @@ class PlanService:
                     raw_item["schedule"] = schedule
                 if not isinstance(schedule, dict):
                     raise KRDError("invalid_schedule", "schedule must be an object")
+                if not schedule:
+                    raise KRDError("invalid_time", "Item needs at or start+end", field="schedule")
                 supplied_id = str(raw_item.get("id") or "")
                 if len(supplied_id) > 128:
                     raise KRDError("invalid_item", "Item ID is too long")
                 previous = previous_by_id.get(supplied_id)
                 schedule_unchanged = bool(previous and schedule == previous.get("schedule"))
                 kind = schedule.get("type", "exact")
+                if kind == "exact" and not schedule.get("at"):
+                    raise KRDError("invalid_time", "Exact item needs at", field="at")
+                if kind == "window" and not (schedule.get("start") and schedule.get("end")):
+                    raise KRDError("invalid_time", "Window item needs start and end", field="start")
                 if kind == "exact" and not config["allow_exact"] and actor == "bot" and not schedule_unchanged:
                     raise KRDError("exact_disabled", "Exact schedules are disabled")
                 if kind == "window" and not config["allow_window"] and actor == "bot" and not schedule_unchanged:
@@ -345,7 +351,8 @@ class PlanService:
         deleted_existing = bool(existing_any and existing_any["state"] == "deleted")
         base = existing_any if deleted_existing else existing
         if existing and expected_revision != existing["revision"]:
-            raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"])
+            raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"],
+                           hint=f"修订已有计划时传 plans[].expected_revision={existing['revision']}；不要用 revision 字段。")
         if deleted_existing and expected_revision not in {0, existing_any["revision"]}:
             raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing_any["revision"])
         if not existing and not deleted_existing and expected_revision:
@@ -499,9 +506,15 @@ class PlanService:
         # validation or database error rolls back all days instead of leaving a half plan.
         async with self.store.transaction():
             for payload in payloads:
+                if not isinstance(payload, dict):
+                    raise KRDError("invalid_plan", "Each plan must be an object")
+                try:
+                    expected_revision = int(payload.get("expected_revision", payload.get("revision", 0)))
+                except (TypeError, ValueError) as exc:
+                    raise KRDError("invalid_revision", "expected_revision must be an integer") from exc
                 results.append(await self.apply_plan(
                     persona_id, payload, actor=actor, mode=payload.get("mode", mode),
-                    reason=payload.get("reason", reason), expected_revision=int(payload.get("expected_revision", 0))))
+                    reason=payload.get("reason", reason), expected_revision=expected_revision))
         self._changed()
         return results
 

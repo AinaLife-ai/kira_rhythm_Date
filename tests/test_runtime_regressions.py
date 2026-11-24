@@ -293,3 +293,140 @@ async def test_offline_dispatch_returns_failure_and_broadcasts_failed_state(runt
     stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
     assert stored["state"] == "failed"
     assert runtime.notices[-1] == ("item_changed", {"item_id": item["id"], "state": "failed"})
+
+@pytest.mark.asyncio
+async def test_plan_revision_accepts_current_revision_alias(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    payload = copy.deepcopy(first["plan"])
+    payload["revision"] = first["revision"]
+    payload["title"] = "通过 revision 别名修订"
+    revised = await runtime.plans.apply_many("persona-a", [payload], actor="user", mode="revise")
+    assert revised[0]["plan"]["title"] == "通过 revision 别名修订"
+    assert revised[0]["revision"] == first["revision"] + 1
+
+
+@pytest.mark.asyncio
+async def test_plan_revision_conflict_hint_names_expected_revision(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    payload = copy.deepcopy(first["plan"])
+    payload["expected_revision"] = 0
+    with pytest.raises(KRDError) as error:
+        await runtime.plans.apply_many("persona-a", [payload], actor="bot", mode="revise")
+    assert error.value.code == "revision_conflict"
+    assert "expected_revision" in error.value.details.get("hint", "")
+
+@pytest.mark.asyncio
+async def test_append_item_accepts_date_block_and_flat_fields(runtime):
+    day = tomorrow()
+    await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "date": day, "block": "上午",
+        "title": "热身", "intent": "先动起来", "instruction": "伸伸胳膊",
+        "at": "11:00", "target": "qq:dm:10001", "interaction": "auto",
+    }]))
+    assert result["ok"], result
+    plan = result["results"][0]["result"]["plan"]
+    block = next(block for block in plan["blocks"] if block["title"] == "上午")
+    item = next(item for item in block["items"] if item["title"] == "热身")
+    assert item["schedule"]["type"] == "exact" and item["schedule"]["at"] == "11:00"
+
+
+@pytest.mark.asyncio
+async def test_append_item_without_plan_or_date_is_typed_error(runtime):
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "block": "上午", "title": "没有计划",
+    }]))
+    assert result["error"]["code"] == "plan_required"
+
+@pytest.mark.asyncio
+async def test_append_item_accepts_plan_id_block_and_flat_schedule(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "plan_id": first["plan"]["id"], "block": "上午",
+        "title": "听会儿雨", "intent": "留白", "instruction": "听雨",
+        "schedule": {"type": "window", "start": "11:10", "end": "12:20", "window_mode": "single_random"},
+        "target": "qq:dm:10001", "interaction": "silent", "execution_probability": 0.5,
+    }]))
+    assert result["ok"], result
+    plan = result["results"][0]["result"]["plan"]
+    block = next(block for block in plan["blocks"] if block["title"] == "上午")
+    item = next(item for item in block["items"] if item["title"] == "听会儿雨")
+    assert item["schedule"]["type"] == "window" and item["schedule"]["start"] == "11:10"
+
+
+@pytest.mark.asyncio
+async def test_update_item_accepts_flat_time_and_probability(runtime):
+    payload = one_item_payload()
+    payload["blocks"][0]["items"].append({
+        "title": "第二项", "schedule": {"type": "exact", "at": "10:00"},
+        "target": "qq:dm:10001", "interaction": "auto",
+    })
+    first = await runtime.plans.apply_plan("persona-a", payload, actor="user", expected_revision=0)
+    item = first["plan"]["blocks"][0]["items"][0]
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "update_item", "item_id": item["id"],
+        "at": "12:15", "probability": 0.4,
+    }]))
+    assert result["ok"], result
+    changed = result["results"][0]["result"]["plan"]["blocks"][0]["items"][0]
+    assert changed["schedule"] == {"type": "exact", "at": "12:15"}
+    assert changed["execution_probability"] == 0.4
+
+
+@pytest.mark.asyncio
+async def test_update_item_without_id_is_typed_error(runtime):
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "update_item", "title": "缺 id",
+    }]))
+    assert result["error"]["code"] == "item_required"
+
+
+@pytest.mark.asyncio
+async def test_update_item_non_object_patch_is_typed_error(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    item = first["plan"]["blocks"][0]["items"][0]
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "update_item", "item_id": item["id"], "patch": ["bad"],
+    }]))
+    assert result["error"]["code"] == "invalid_patch"
+
+@pytest.mark.asyncio
+async def test_append_item_without_time_is_typed_error(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "plan_id": first["plan"]["id"], "block": "上午", "title": "没有时间",
+    }]))
+    assert result["error"]["code"] == "invalid_time"
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_rejects_non_object_plan_without_internal_error(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_plan(event, plans=["bad"]))
+    assert result["error"]["code"] == "invalid_plan"
+
+@pytest.mark.asyncio
+async def test_append_item_incomplete_window_is_typed_error(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "plan_id": first["plan"]["id"], "block": "上午",
+        "title": "只有开始", "start": "11:00",
+    }]))
+    assert result["error"]["code"] == "invalid_time"
+
+@pytest.mark.asyncio
+async def test_plan_item_without_time_is_typed_error(runtime):
+    payload = {"date": tomorrow(), "title": "无时间", "blocks": [{"title": "组", "items": [{
+        "title": "没有时间", "target": "qq:dm:10001", "interaction": "auto",
+    }]}]}
+    with pytest.raises(KRDError) as error:
+        await runtime.plans.apply_plan("persona-a", payload, actor="user", expected_revision=0)
+    assert error.value.code == "invalid_time"

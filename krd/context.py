@@ -411,6 +411,8 @@ class ContextBuilder:
                 instruction += f"\n[KRD 目标层] 目标层当前活动目标为{active_label}，少于期望的 {empty_min} 条。若你确实有跨天的目标、承诺、项目或习惯，可以先用 rhythm_update 的 thread_add 建立到 {empty_min}–{empty_max} 条真实目标；如果确实没有，就保持现状，不要为了填满而编造。"
             elif empty_mode == "require":
                 instruction += f"\n[KRD 目标层] 本次规划要求至少 {empty_min} 条活动目标，当前为{active_label}（建议至多 {empty_max} 条）。请先用 rhythm_update 的 thread_add 建立真实目标，再调用 rhythm_plan；不要为了通过检查而编造目标。"
+        if current:
+            instruction += f"\n[KRD 修订] current_plan.revision={current['revision']}；修订计划时请在 plans[] 中传 expected_revision={current['revision']}，否则会返回 revision_conflict。"
         pattern = await self._recent_pattern(persona_id, target_date, max(1, full_days or digest_days or 3))
         payload = {
             "instruction": instruction + (("\n" + self._weather_rule()) if weather else ""),
