@@ -535,12 +535,16 @@ const app = Vue.createApp({
     },
     async loadThreads() {
       const persona = state.selectedPersona
-      const status = this.threadFilter === 'all' ? '' : this.threadFilter
+      const filter = this.threadFilter
+      const kind = this.threadKind
+      const status = filter === 'all' ? '' : filter
       const query = new URLSearchParams({ persona, limit: '200' })
       if (status) query.set('status', status)
-      if (this.threadKind) query.set('kind', this.threadKind)
+      if (kind) query.set('kind', kind)
       const threads = await get(`/threads?${query.toString()}`)
-      if (persona === state.selectedPersona) this.threads = threads
+      if (persona === state.selectedPersona && filter === this.threadFilter && kind === this.threadKind) {
+        this.threads = threads
+      }
     },
     setThreadFilter(id) {
       this.threadFilter = id
@@ -630,6 +634,7 @@ const app = Vue.createApp({
     threadDueLabel(thread) {
       if (!thread.due) return '无截止'
       const days = thread.due_in_days
+      if (days == null) return thread.due
       if (thread.overdue) return `已过期 ${Math.abs(days || 0)} 天 · ${thread.due}`
       if (days === 0) return `今天到期 · ${thread.due}`
       return `${days} 天后 · ${thread.due}`

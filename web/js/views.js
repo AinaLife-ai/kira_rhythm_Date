@@ -344,6 +344,9 @@ export const ThreadEditor = {
       const allowed = this.isNew ? ['open', 'paused'] : null
       return this.$root.threadStatuses.filter((entry) => !allowed || allowed.includes(entry.id))
     },
+    maxDossier() { return Number(this.$root.data?.config?.threads?.dossier_chars || 2000) },
+    maxNextStep() { return Number(this.$root.data?.config?.threads?.next_step_chars || 200) },
+    maxLog() { return Number(this.$root.data?.config?.threads?.log_chars || 500) },
   },
   template: `
   <div class="modal-backdrop" @click.self="$root.closeThreadEditor()"><div class="modal-card large thread-editor">
@@ -352,11 +355,11 @@ export const ThreadEditor = {
       <label><span>类型</span><select v-model="form.kind"><option v-for="kind in $root.threadKinds" :key="kind.id" :value="kind.id">{{ kind.label }}</option></select></label>
       <label><span>状态</span><select v-model="form.status"><option v-for="status in statusOptions" :key="status.id" :value="status.id">{{ status.label }}</option></select></label>
       <label class="wide-field"><span>标题</span><input v-model="form.title" maxlength="120" placeholder="例如：给阿岚画头像"></label>
-      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" maxlength="2000" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 5 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
-      <label><span>下一步</span><input v-model="form.next_step" maxlength="200" placeholder="一句话，例如：修线稿"></label>
-      <label><span>截止</span><input v-model="form.due_at" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS"></label>
+      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" :maxlength="maxDossier" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 5 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
+      <label><span>下一步</span><input v-model="form.next_step" :maxlength="maxNextStep" placeholder="一句话，例如：修线稿"></label>
+      <label><span>截止</span><input v-model="form.due_at" maxlength="19" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS"></label>
       <label><span>优先级</span><select v-model.number="form.priority"><option :value="0">0 · 低</option><option :value="1">1 · 普通</option><option :value="2">2 · 重要</option><option :value="3">3 · 很急</option></select></label>
-      <label><span>状态变更备注</span><input v-model="form.note" maxlength="500" placeholder="完成/放弃/暂停时留一句原因"></label>
+      <label><span>状态变更备注</span><input v-model="form.note" :maxlength="maxLog" placeholder="完成/放弃/暂停时留一句原因"></label>
     </div>
     <div v-if="logs.length" class="thread-log-list"><h3>打卡记录</h3><div v-for="log in logs" :key="log.at + log.note" class="thread-log"><time>{{ $root.fmt.date(log.at) }}</time><p>{{ log.note }}</p><span v-if="log.item_id">来自小项</span></div></div>
     <div class="modal-actions">
@@ -373,11 +376,15 @@ export const ThreadTouch = {
   data() {
     return { note: '', next_step: this.touch.thread?.next_step || '' }
   },
+  computed: {
+    maxLog() { return Number(this.$root.data?.config?.threads?.log_chars || 500) },
+    maxNextStep() { return Number(this.$root.data?.config?.threads?.next_step_chars || 200) },
+  },
   template: `
   <div class="modal-backdrop" @click.self="$root.closeThreadTouch()"><div class="modal-card thread-touch">
     <div class="modal-heading"><div><span class="eyebrow">CHECK-IN / 打卡</span><h2>{{ touch.thread?.title }}</h2></div><button class="icon-button" @click="$root.closeThreadTouch()"><ui-icon name="close" :size="16" /></button></div>
-    <label class="full-field"><span>这次做到哪 / 卡在哪</span><textarea rows="4" v-model="note" maxlength="500" placeholder="例如：线稿修完一半，脸的比例还要调"></textarea></label>
-    <label class="full-field"><span>下一步（可留空）</span><input v-model="next_step" maxlength="200" placeholder="例如：调脸的比例"></label>
+    <label class="full-field"><span>这次做到哪 / 卡在哪</span><textarea rows="4" v-model="note" :maxlength="maxLog" placeholder="例如：线稿修完一半，脸的比例还要调"></textarea></label>
+    <label class="full-field"><span>下一步（可留空）</span><input v-model="next_step" :maxlength="maxNextStep" placeholder="例如：调脸的比例"></label>
     <div class="modal-actions"><button class="soft-button" @click="$root.closeThreadTouch()">取消</button><button class="primary" @click="$root.saveThreadTouch({ note, next_step })">保存打卡</button></div>
   </div></div>`,
 }
