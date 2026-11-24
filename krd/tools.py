@@ -194,7 +194,16 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                         raw_item = {key: operation[key] for key in keys if key in operation}
                     if not raw_item:
                         raise KRDError("item_required", "append_item needs item or flat item fields")
-                    if not any(key in raw_item for key in ("schedule", "at", "start", "end")):
+                    schedule = raw_item.get("schedule")
+                    if schedule is not None:
+                        if not isinstance(schedule, dict):
+                            raise KRDError("invalid_schedule", "append_item schedule must be an object")
+                        schedule_type = schedule.get("type", "exact")
+                        if schedule_type == "exact" and not schedule.get("at"):
+                            raise KRDError("invalid_time", "append_item exact schedule needs at", field="at")
+                        if schedule_type == "window" and not (schedule.get("start") and schedule.get("end")):
+                            raise KRDError("invalid_time", "append_item window schedule needs start and end", field="start")
+                    elif not ("at" in raw_item or ("start" in raw_item and "end" in raw_item)):
                         raise KRDError("invalid_time", "append_item needs at or start+end", field="schedule")
                     result = await runtime.plans.append_item(
                         persona_id, plan_id, block_title, raw_item, actor="bot", reason=reason)

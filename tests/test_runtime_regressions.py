@@ -411,3 +411,22 @@ async def test_rhythm_plan_rejects_non_object_plan_without_internal_error(runtim
     event = SimpleNamespace(_krd_runtime=runtime, messages=[])
     result = json.loads(await rhythm_plan(event, plans=["bad"]))
     assert result["error"]["code"] == "invalid_plan"
+
+@pytest.mark.asyncio
+async def test_append_item_incomplete_window_is_typed_error(runtime):
+    first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_update(event, operations=[{
+        "type": "append_item", "plan_id": first["plan"]["id"], "block": "上午",
+        "title": "只有开始", "start": "11:00",
+    }]))
+    assert result["error"]["code"] == "invalid_time"
+
+@pytest.mark.asyncio
+async def test_plan_item_without_time_is_typed_error(runtime):
+    payload = {"date": tomorrow(), "title": "无时间", "blocks": [{"title": "组", "items": [{
+        "title": "没有时间", "target": "qq:dm:10001", "interaction": "auto",
+    }]}]}
+    with pytest.raises(KRDError) as error:
+        await runtime.plans.apply_plan("persona-a", payload, actor="user", expected_revision=0)
+    assert error.value.code == "invalid_time"

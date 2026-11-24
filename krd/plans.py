@@ -216,12 +216,18 @@ class PlanService:
                     raw_item["schedule"] = schedule
                 if not isinstance(schedule, dict):
                     raise KRDError("invalid_schedule", "schedule must be an object")
+                if not schedule:
+                    raise KRDError("invalid_time", "Item needs at or start+end", field="schedule")
                 supplied_id = str(raw_item.get("id") or "")
                 if len(supplied_id) > 128:
                     raise KRDError("invalid_item", "Item ID is too long")
                 previous = previous_by_id.get(supplied_id)
                 schedule_unchanged = bool(previous and schedule == previous.get("schedule"))
                 kind = schedule.get("type", "exact")
+                if kind == "exact" and not schedule.get("at"):
+                    raise KRDError("invalid_time", "Exact item needs at", field="at")
+                if kind == "window" and not (schedule.get("start") and schedule.get("end")):
+                    raise KRDError("invalid_time", "Window item needs start and end", field="start")
                 if kind == "exact" and not config["allow_exact"] and actor == "bot" and not schedule_unchanged:
                     raise KRDError("exact_disabled", "Exact schedules are disabled")
                 if kind == "window" and not config["allow_window"] and actor == "bot" and not schedule_unchanged:
