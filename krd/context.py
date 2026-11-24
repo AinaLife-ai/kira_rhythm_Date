@@ -391,7 +391,7 @@ class ContextBuilder:
         thread_settings = base_config.get("threads", {})
         empty_mode = str(thread_settings.get("empty_mode", "nudge"))
         empty_min = int(thread_settings.get("empty_min", 1))
-        empty_max = int(thread_settings.get("empty_max", 3))
+        empty_max = int(thread_settings.get("empty_max", 5))
         active_threads = None
         threads_below_min = False
         if threads_enabled and empty_mode in {"nudge", "require"} and self.threads:

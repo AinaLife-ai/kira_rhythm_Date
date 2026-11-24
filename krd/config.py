@@ -101,7 +101,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chat_enabled": True,
         "empty_mode": "nudge",
         "empty_min": 1,
-        "empty_max": 3,
+        "empty_max": 5,
         "planning_limit": 8,
         "chat_limit": 5,
         "chat_chars": 600,

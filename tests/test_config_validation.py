@@ -101,7 +101,7 @@ def test_legacy_default_prompts_upgrade_without_touching_custom_text():
     assert migrated["threads"]["chat_limit"] == 5
     assert migrated["threads"]["full_dossier_in_planning"] == 5
     assert migrated["threads"]["empty_mode"] == "nudge"
-    assert migrated["threads"]["empty_min"] == 1 and migrated["threads"]["empty_max"] == 3
+    assert migrated["threads"]["empty_min"] == 1 and migrated["threads"]["empty_max"] == 5
     clamped = normalized({"threads": {"planning_limit": 5, "response_limit": 8}})
     assert clamped["threads"]["planning_limit"] == 8
 

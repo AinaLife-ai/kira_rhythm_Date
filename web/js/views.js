@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.1.2'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.2'
+import { fmt } from './store.js?v=1.3.1.3'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.3'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -605,7 +605,7 @@ export const SettingsView = {
           </label>
           <div class="form-grid">
             <label><span>空层至少</span><small>活动目标少于此数时触发提示/要求；默认 1 条。</small><input type="number" min="1" max="10" v-model.number="$root.draft.threads.empty_min"></label>
-            <label><span>空层至多</span><small>提示 bot 建立时建议不要超过此数；不会强迫删除已有目标。默认 3 条。</small><input type="number" min="1" max="10" v-model.number="$root.draft.threads.empty_max"></label>
+            <label><span>空层至多</span><small>提示 bot 建立时建议不要超过此数；不会强迫删除已有目标。默认 5 条。</small><input type="number" min="1" max="10" v-model.number="$root.draft.threads.empty_max"></label>
           </div>
           <p class="field-hint">“提醒”只给 bot 一个真实目标的邀请，不阻断规划；“要求”会在活动目标少于“至少”时暂缓 rhythm_plan，直到 thread_add 补足。至多只是建立建议，不会强迫删除已有目标；严格模式可能产生伪目标，默认不启用。</p>
         </div>
