@@ -40,7 +40,7 @@ async def test_export_excludes_global_weather_cache_and_import_remaps_ids(runtim
     preview = await import_preview(runtime, "persona-b", data)
     assert preview["plans"] == 1
     result = await import_commit(runtime, "persona-b", data)
-    assert result == {"imported_plans": 1, "skipped_existing": 0}
+    assert result == {"imported_plans": 1, "skipped_existing": 0, "imported_threads": 0}
     source_plan = data["tables"]["plans"][0]
     imported = await runtime.plans.get_plan_by_date("persona-b", source_plan["date"])
     assert imported["id"] != source_plan["id"] and imported["persona_id"] == "persona-b"
@@ -50,7 +50,7 @@ async def test_export_excludes_global_weather_cache_and_import_remaps_ids(runtim
     experiences = await runtime.plans.experiences("persona-b", source_plan["date"])
     assert experiences[0]["item_id"] == imported_item["id"]
     again = await import_commit(runtime, "persona-b", data)
-    assert again == {"imported_plans": 0, "skipped_existing": 1}
+    assert again == {"imported_plans": 0, "skipped_existing": 1, "imported_threads": 0}
 
 
 @pytest.mark.asyncio

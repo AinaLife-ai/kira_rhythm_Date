@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -11,11 +12,12 @@ from .llm_format import prepare_llm_payload
 
 
 class ContextBuilder:
-    def __init__(self, store: Store, plans: PlanService, weather=None, host_timezone=None):
+    def __init__(self, store: Store, plans: PlanService, weather=None, host_timezone=None, threads=None):
         self.store = store
         self.plans = plans
         self.weather = weather
         self.calendar = None
+        self.threads = threads
         self.host_timezone = host_timezone
 
     def host_timezone_name(self):
@@ -309,7 +311,14 @@ class ContextBuilder:
         if base_config.get("inject_agenda", True):
             agenda_limit = int(base_config.get("agenda_max_chars", 2400))
             agenda_text = self._bounded(self._agenda_text(plan, day, tz_name, current_sid), agenda_limit)
-        return self._bounded("\n".join(lines), 1400) + ("\n\n" + weather_text if weather_text else "") + (("\n\n" + agenda_text) if agenda_text else "")
+        try:
+            thread_text = await self.threads.chat_block(persona_id, base_config) if self.threads else ""
+        except Exception:
+            thread_text = ""
+        return (self._bounded("\n".join(lines), 1400)
+                + ("\n\n" + thread_text if thread_text else "")
+                + ("\n\n" + weather_text if weather_text else "")
+                + (("\n\n" + agenda_text) if agenda_text else ""))
 
     async def chat_weather(self, persona_id: str, config: dict[str, Any] | None = None) -> str:
         base_config = config or await self.store.get_config(persona_id)
@@ -329,15 +338,52 @@ class ContextBuilder:
         target_date = metadata.get("date") or await self.plans.current_date(persona_id)
         current = await self.plans.get_plan_by_date(persona_id, target_date)
         tz_name = self.plans.policy.timezone_name(base_config)
-        history = []
-        start = (datetime.fromisoformat(target_date) - timedelta(days=base_config["history_days"])).date().isoformat()
-        end = (datetime.fromisoformat(target_date) - timedelta(days=1)).date().isoformat()
-        for plan in await self.plans.list_plans(persona_id, start, end):
-            history.append(self._plan_data(plan, include_instruction=False, tz_name=tz_name))
+        full_days = max(0, int(base_config.get("history_days", 3)))
+        digest_days = max(0, int(base_config.get("history_digest_days", 4)))
+        full_start = (datetime.fromisoformat(target_date) - timedelta(days=full_days)).date().isoformat()
+        full_end = (datetime.fromisoformat(target_date) - timedelta(days=1)).date().isoformat()
+        digest_start = (datetime.fromisoformat(full_start) - timedelta(days=digest_days)).date().isoformat()
+        digest_end = (datetime.fromisoformat(full_start) - timedelta(days=1)).date().isoformat()
+        full_plans = await self.plans.list_plans(persona_id, full_start, full_end) if full_days else []
+        digest_plans = await self.plans.list_plans(persona_id, digest_start, digest_end) if digest_days else []
+        recent_full = [
+            self._plan_data(plan, include_instruction=bool(base_config.get("history_include_instruction", True)),
+                            tz_name=tz_name,
+                            instruction_chars=int(base_config.get("history_instruction_chars", 200)))
+            for plan in full_plans
+        ]
+        recent_digest = [self._plan_digest(plan) for plan in digest_plans]
         matches = await self._active_day_types(persona_id, target_date)
         effective = await self.plans.effective_config(persona_id, matches[0]["id"] if matches else "")
         calendar = self._calendar_context(await self._calendar_day(target_date), base_config)
         weather = await self._weather(persona_id, target_date, "plan")
+        outcomes_days = max(0, int(base_config.get("recent_outcomes_days", 2)))
+        unfinished_days = max(0, int(base_config.get("unfinished_days", 3)))
+        future_days = max(0, int(base_config.get("future_plan_days", 2)))
+        recent_outcomes = await self._recent_outcomes(persona_id, target_date, outcomes_days, tz_name)
+        unfinished = await self._unfinished(persona_id, target_date, unfinished_days)
+        future_plans = await self.plans.list_plans(
+            persona_id, (datetime.fromisoformat(target_date) + timedelta(days=1)).date().isoformat(),
+            (datetime.fromisoformat(target_date) + timedelta(days=future_days)).date().isoformat()
+        ) if future_days else []
+        future_payload = [
+            {"date": plan["date"], "title": plan["title"],
+             "items": [item.get("title", "") for block in plan.get("blocks", [])
+                       for item in block.get("items", []) if item.get("state") not in {"deleted", "cancelled"}]}
+            for plan in future_plans
+        ]
+        threads_enabled = bool(base_config.get("threads", {}).get("enabled", True))
+        try:
+            thread_payload = (await self.threads.planning_payload(persona_id)
+                              if self.threads and threads_enabled else
+                              {"required": False, "threads": [], "more": 0, "contract": ""})
+        except Exception:
+            thread_payload = {"required": False, "threads": [], "more": 0, "contract": ""}
+        try:
+            unanswered = await self.threads.unanswered(persona_id) if self.threads and threads_enabled else []
+        except Exception:
+            unanswered = []
+        pattern = await self._recent_pattern(persona_id, target_date, max(1, full_days or digest_days or 3))
         payload = {
             "instruction": base_config["planning_prompt"] + (("\n" + self._weather_rule()) if weather else ""),
             "focus": {"date": target_date,
@@ -351,15 +397,40 @@ class ContextBuilder:
                 "allow_exact", "allow_window", "allow_probability", "min_probability",
                 "blocked_execution_windows", "quiet_delivery_windows", "required_coverage_windows")},
             "current_plan": self._plan_data(current, tz_name=tz_name) if current else None,
-            "previous_plans": history,
-            "recent_changes": self._compact_changes(await self.plans.recent_changes(persona_id, target_date, 2, meaningful_only=True)),
+            "recent_plans": {"full": recent_full, "digest": recent_digest},
+            "recent_outcomes": recent_outcomes,
+            "unfinished": unfinished,
+            "future_plans": future_payload,
+            "recent_changes": self._compact_changes(
+                await self.plans.recent_changes(persona_id, target_date, 2, meaningful_only=True)),
+            "recent_pattern": pattern,
             "weather": weather
         }
+        if thread_payload.get("required"):
+            payload["threads_requiring_response"] = thread_payload["threads"]
+            if thread_payload.get("more"):
+                payload["threads_more"] = thread_payload["more"]
+            payload["response_contract"] = thread_payload.get("contract", "")
+        if unanswered:
+            payload["unanswered_threads"] = unanswered
+        try:
+            untouched = await self.threads.untouched(
+                persona_id, max(1, int(base_config.get("unfinished_days", 3)))) \
+                if self.threads and threads_enabled else []
+        except Exception:
+            untouched = []
+        if untouched:
+            payload["thread_untouched"] = untouched
+        today = await self.plans.current_date(persona_id)
+        if today != target_date:
+            payload["today_changes"] = self._compact_changes(
+                await self.plans.recent_changes(persona_id, today, 2, meaningful_only=True))
         host_tz = self.host_timezone_name()
         if host_tz is None or host_tz != tz_name:
             payload["timezone"] = tz_name
         payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
-        return "[KRD planning context · request only]\n" + self._bounded(payload, base_config["history_char_budget"])
+        return "[KRD planning context · request only]\n" + self._fit_payload(
+            payload, int(base_config.get("history_char_budget", 16000)))
 
     async def review_prompt(self, metadata: dict[str, Any]) -> str:
         persona_id = metadata["persona_id"]
@@ -400,6 +471,8 @@ class ContextBuilder:
             "weather": weather,
             "recent_diff": await self.plans.revisions(plan["id"], effective["diff_revisions"], persona_id),
             "recent_changes": self._compact_changes(recent_changes),
+            "threads": await self._review_threads(persona_id, effective),
+            "unanswered_threads": await self._unanswered_threads(persona_id, effective),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
                                 "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
                                             "只在确有调整价值时自然分享；否则输出 <msg/>。"}
@@ -408,7 +481,7 @@ class ContextBuilder:
         if host_tz is None or host_tz != tz_name:
             payload["timezone"] = tz_name
         payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
-        return "[KRD review context · request only]\n" + self._bounded(payload, effective["history_char_budget"])
+        return "[KRD review context · request only]\n" + self._fit_payload(payload, int(effective["history_char_budget"]))
 
     async def item_prompt(self, metadata: dict[str, Any]) -> str:
         persona_id = metadata["persona_id"]
@@ -451,10 +524,12 @@ class ContextBuilder:
             "calendar": self._calendar_context(await self._calendar_day(plan["date"]), base_config),
             "daily_limits": self._limits(effective, plan),
             "day_state": state, "weather": await self._weather(persona_id, plan["date"], "item"),
+            "day_so_far": await self._day_so_far(persona_id, plan),
+            "thread": await self._item_thread(persona_id, item.get("thread_id", ""), effective),
             "plan": {key: plan[key] for key in ("date", "title", "overview", "planned_appearance", "planned_mood", "revision")},
             "current_item": {
                 **{key: item[key] for key in ("title", "intent", "instruction", "target", "interaction",
-                                              "execution_probability", "state", "schedule") if key in item},
+                                              "execution_probability", "state", "schedule", "thread_id") if key in item},
                 "id": self._short_item_id(item["id"]),
                 **self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name),
             },
@@ -470,7 +545,7 @@ class ContextBuilder:
         if host_tz is None or host_tz != tz_name:
             payload["timezone"] = tz_name
         payload = prepare_llm_payload(payload, tz_name, host_tz, drop=("source",))
-        return "[KRD item context · request only]\n" + self._bounded(payload, 10000)
+        return "[KRD item context · request only]\n" + self._fit_payload(payload, 10000)
 
     @staticmethod
     def _compact_changes(changes: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -499,8 +574,43 @@ class ContextBuilder:
             })
         return result
 
+    async def _review_threads(self, persona_id: str, config: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.threads or not config.get("threads", {}).get("enabled", True):
+            return []
+        try:
+            return await self.threads.review_payload(persona_id, config)
+        except Exception:
+            return []
+
+    async def _unanswered_threads(self, persona_id: str, config: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.threads or not config.get("threads", {}).get("enabled", True):
+            return []
+        try:
+            return await self.threads.unanswered(persona_id)
+        except Exception:
+            return []
+
+    async def _item_thread(self, persona_id: str, thread_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
+        if not self.threads or not thread_id or not config.get("threads", {}).get("enabled", True):
+            return None
+        try:
+            return await self.threads.execution_payload(persona_id, thread_id, config)
+        except Exception:
+            return None
+
+    async def _day_so_far(self, persona_id: str, plan: dict[str, Any]) -> dict[str, Any]:
+        done = [item.get("title", "") for block in plan.get("blocks", []) for item in block.get("items", [])
+                if item.get("state") in {"triggered", "triggered_silent"}]
+        experiences = await self.store.all(
+            "SELECT content,kind FROM experiences WHERE persona_id=? AND date=? "
+            "ORDER BY created_at DESC LIMIT 2", (persona_id, plan.get("date", "")))
+        return {
+            "done": done[-6:],
+            "experiences": [" ".join(str(row.get("content") or "").split())[:80] for row in experiences],
+        }
+
     def _plan_data(self, plan: dict[str, Any] | None, include_instruction: bool = True,
-                   tz_name: str = "Asia/Shanghai") -> dict[str, Any] | None:
+                   tz_name: str = "Asia/Shanghai", instruction_chars: int = 200) -> dict[str, Any] | None:
         if plan is None:
             return None
         result = {key: plan[key] for key in (
@@ -511,12 +621,199 @@ class ContextBuilder:
                 continue
             items = []
             for item in block["items"]:
-                view = {"id": self._short_item_id(item.get("id", "")), **{key: item[key] for key in (
-                    "title", "intent", "instruction" if include_instruction else "title",
-                    "schedule", "target", "interaction", "category", "execution_probability", "state") if key in item}}
+                if item.get("state") == "deleted":
+                    continue
+                view = {key: item[key] for key in (
+                    "title", "intent", "schedule", "target", "interaction", "category",
+                    "execution_probability", "state") if key in item}
+                if include_instruction:
+                    view["instruction"] = str(item.get("instruction") or "")[:instruction_chars]
+                if item.get("thread_id"):
+                    view["thread_id"] = item["thread_id"]
                 if item.get("reason"):
                     view["reason"] = item["reason"]
+                view["id"] = self._short_item_id(item.get("id", ""))
                 view.update(self._clock_fields(item.get("scheduled_at"), plan["date"], tz_name))
                 items.append(view)
             result["blocks"].append({"title": block["title"], "items": items})
         return result
+
+    @staticmethod
+    def _plan_digest(plan: dict[str, Any]) -> dict[str, Any]:
+        items = [item for block in plan.get("blocks", []) for item in block.get("items", [])
+                 if item.get("state") not in {"deleted", "cancelled"}]
+        states = [item.get("state", "scheduled") for block in plan.get("blocks", [])
+                  for item in block.get("items", [])]
+        return {
+            "date": plan.get("date"),
+            "title": plan.get("title", ""),
+            "items": len(items),
+            "done": sum(1 for state in states if state in {"triggered", "triggered_silent"}),
+            "missed": sum(1 for state in states if state == "missed"),
+            "cancelled": sum(1 for state in states if state == "cancelled"),
+            "threads": sum(1 for item in items if item.get("thread_id")),
+            "note": str(plan.get("overview") or "")[:80],
+        }
+
+    async def _recent_outcomes(self, persona_id: str, target_date: str, days: int,
+                               tz_name: str) -> list[dict[str, Any]]:
+        if days <= 0:
+            return []
+        end = (datetime.fromisoformat(target_date) - timedelta(days=1)).date().isoformat()
+        start = (datetime.fromisoformat(end) - timedelta(days=days - 1)).date().isoformat()
+        plans = await self.plans.list_plans(persona_id, start, end)
+        by_date: dict[str, dict[str, Any]] = {}
+        for plan in plans:
+            digest = self._plan_digest(plan)
+            by_date[plan["date"]] = {**digest, "notes": []}
+        experiences = await self.store.all(
+            "SELECT date,content,kind FROM experiences WHERE persona_id=? AND date BETWEEN ? AND ? "
+            "ORDER BY created_at DESC", (persona_id, start, end))
+        for row in experiences:
+            bucket = by_date.setdefault(row["date"], {"date": row["date"], "notes": []})
+            note = " ".join(str(row.get("content") or "").split())[:80]
+            if note and note not in bucket["notes"] and len(bucket["notes"]) < 3:
+                bucket["notes"].append(note)
+        runs = await self.store.all(
+            "SELECT p.date AS date,i.title AS title,r.raw_output AS text FROM runs r "
+            "JOIN items i ON i.id=r.item_id JOIN plans p ON p.id=i.plan_id "
+            "WHERE p.persona_id=? AND p.date BETWEEN ? AND ? AND r.responded_at IS NOT NULL "
+            "ORDER BY r.responded_at DESC LIMIT 100", (persona_id, start, end))
+        for row in runs:
+            bucket = by_date.setdefault(row["date"], {"date": row["date"], "notes": []})
+            text = re.sub(r"<[^>]+>", " ", str(row.get("text") or ""))
+            note = " ".join(text.split())[:60]
+            if note and note not in bucket["notes"] and len(bucket["notes"]) < 3:
+                bucket["notes"].append(note)
+        return [by_date[key] for key in sorted(by_date, reverse=True)]
+
+    async def _unfinished(self, persona_id: str, target_date: str, days: int) -> list[dict[str, Any]]:
+        if days <= 0:
+            return []
+        end = (datetime.fromisoformat(target_date) - timedelta(days=1)).date().isoformat()
+        start = (datetime.fromisoformat(end) - timedelta(days=days - 1)).date().isoformat()
+        result = []
+        for plan in await self.plans.list_plans(persona_id, start, end):
+            for block in plan.get("blocks", []):
+                for item in block.get("items", []):
+                    if item.get("state") in {"missed", "cancelled"}:
+                        result.append({"date": plan["date"], "title": item.get("title", ""),
+                                       "reason": item.get("reason", ""), "state": item.get("state")})
+        return result[-20:]
+
+    async def _recent_pattern(self, persona_id: str, target_date: str, days: int) -> dict[str, Any]:
+        end = (datetime.fromisoformat(target_date) - timedelta(days=1)).date().isoformat()
+        start = (datetime.fromisoformat(end) - timedelta(days=max(0, days - 1))).date().isoformat()
+        plans = await self.plans.list_plans(persona_id, start, end) if days > 0 else []
+        counts = []
+        title_days: dict[str, set[str]] = {}
+        for plan in plans:
+            items = [item for block in plan.get("blocks", []) for item in block.get("items", [])
+                     if item.get("state") not in {"cancelled", "deleted"}]
+            counts.append(len(items))
+            for item in items:
+                title = re.sub(r"[\s，。！？、,.!?·…—\-]", "", str(item.get("title") or ""))
+                if title:
+                    title_days.setdefault(title, set()).add(plan["date"])
+        repeated = [title for title, dates in sorted(title_days.items(), key=lambda pair: (-len(pair[1]), pair[0]))
+                    if len(dates) >= 2][:5]
+        if not plans:
+            note = "还没有足够的历史。"
+        elif repeated or (counts and len(set(counts)) == 1):
+            note = f"最近 {len(plans)} 天结构接近；如果今天仍然这样，请在 overview 里说明原因。"
+        else:
+            note = f"最近 {len(plans)} 天有变化；继续保持依据现场。"
+        return {"days": len(plans), "counts": counts, "repeated_titles": repeated, "note": note}
+
+    @staticmethod
+    def _fit_payload(payload: dict[str, Any], limit: int) -> str:
+        """Shrink structured context without ever cutting JSON mid-string."""
+        def text() -> str:
+            return dumps(payload)
+
+        if len(text()) <= limit:
+            return text()
+
+        def trim_full() -> bool:
+            plans = (payload.get("recent_plans") or {}).get("full")
+            if isinstance(plans, list) and plans:
+                plans.pop(0)
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_threads() -> bool:
+            threads = payload.get("threads_requiring_response")
+            if not isinstance(threads, list) or not threads:
+                return False
+            for thread in reversed(threads):
+                dossier = str(thread.get("dossier") or "")
+                if len(dossier) > 301:
+                    thread["dossier"] = dossier[:300] + "…"
+                    payload["truncated"] = True
+                    return True
+            for thread in reversed(threads):
+                logs = thread.get("logs")
+                if isinstance(logs, list) and len(logs) > 1:
+                    logs.pop()
+                    payload["truncated"] = True
+                    return True
+            if len(threads) > 3:
+                payload["threads_more"] = int(payload.get("threads_more", 0)) + 1
+                payload["threads_requiring_response"] = threads[:-1]
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_outcomes() -> bool:
+            outcomes = payload.get("recent_outcomes")
+            if isinstance(outcomes, list) and outcomes:
+                outcomes.pop()
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_unfinished() -> bool:
+            unfinished = payload.get("unfinished")
+            if isinstance(unfinished, list) and unfinished:
+                unfinished.pop()
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_future() -> bool:
+            future = payload.get("future_plans")
+            if isinstance(future, list) and future:
+                future.pop()
+                payload["truncated"] = True
+                return True
+            return False
+
+        def trim_digest() -> bool:
+            plans = (payload.get("recent_plans") or {}).get("digest")
+            if isinstance(plans, list) and plans:
+                plans.pop(0)
+                payload["truncated"] = True
+                return True
+            return False
+
+        reducers = [trim_digest, trim_outcomes, trim_unfinished, trim_future, trim_full, trim_threads]
+        for reducer in reducers:
+            while reducer():
+                if len(text()) <= limit:
+                    return text()
+        for key in ("recent_pattern", "weather", "recent_changes", "today_changes", "future_plans",
+                    "unfinished", "recent_outcomes", "threads_more", "response_contract",
+                    "thread_untouched", "unanswered_threads"):
+            if key in payload:
+                payload.pop(key, None)
+                payload["truncated"] = True
+                if len(text()) <= limit:
+                    return text()
+        minimal = {
+            "instruction": payload.get("instruction", ""),
+            "focus": payload.get("focus", {}),
+            "truncated": True,
+            "note": "上下文超出预算；请用 rhythm_view 查看完整计划、目标或历史。",
+        }
+        return dumps(minimal)

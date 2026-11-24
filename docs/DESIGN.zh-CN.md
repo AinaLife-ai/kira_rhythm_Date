@@ -1044,3 +1044,43 @@ kira_rhythm_Date/
 ---
 
 **一句话验收**：用户看到的不是“bot 到点执行了任务”，而是“它记得自己为何这样安排，经历过什么，知道计划哪里变了，并能以自己的理由继续安排接下来的生活”。
+
+---
+
+## 20. 目标与约定层（v1.3.0）
+
+### 20.1 定位
+
+目标与约定不是计划小项，也不是普通聊天记忆。它保存“我打算做什么、答应过什么、做到哪一步”：`goal / promise / project / habit / open_loop / mystery`。计划负责某一天，Threads 负责跨天的方向。
+
+### 20.2 数据
+
+- `threads`：`kind/title/dossier/status/priority/next_step/due_at/last_touched/source/created_by/updated_by`
+- `thread_logs`：每次打卡的 `at/note/item_id/kind/actor`
+- `thread_responses`：某次规划回合对某条 Threads 的表态，`UNIQUE(run_id, thread_id)`
+
+`dossier` 是档案正文（默认 ≤2000 字），`next_step` 是日常展示用的一句话，`due_at` 可空或 `YYYY-MM-DD[ HH:MM]`。Thread 不绑定会话；和谁/在哪写在档案里，执行会话仍由具体 item 的 `target` 决定。
+
+### 20.3 规划时强制回应
+
+规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。
+
+### 20.4 展示粒度
+
+- 规划：top 3 档案全文，其余 300 字摘要 + 最近 3 条打卡；
+- 执行：只显示当前小项关联的 1 条，档案摘要 300 字 + 最近 2 条打卡；
+- 普通聊天：`[KRD Threads]` top 3，一行一条，不含档案；
+- `rhythm_view(scope="thread")`：完整档案 + 全部打卡；
+- `[KRD Agenda]` 不变。
+
+### 20.5 记忆卫生
+
+KiraAI 会话记忆会把 assistant 的 `tool_calls`（含完整 plans JSON）写回 `session.content`，默认最多 10 个回合。KRD 在规划前把历史规划回合的工具调用原文替换为一行摘要，计划本体仍保存在 SQLite，并由 `recent_plans`（最近 3 天完整 + 更早 4 天摘要）提供。`memory_hygiene=off` 可关闭；仅影响 LLM 会话记忆，不影响消息归档。
+
+### 20.6 上下文预算
+
+规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。默认 `history_char_budget=16000`。
+
+### 20.7 迁移
+
+`PRAGMA user_version=2`：仅新增 `items.thread_id`、`planning_runs.required_thread_ids_json/response_status` 和 threads 三张表；旧计划、旧运行、旧配置不改写。导出格式 v2，导入兼容 v1/v2。

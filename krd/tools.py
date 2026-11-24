@@ -29,15 +29,57 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
     try:
         runtime = runtime_from_event(event)
         persona_id = await runtime.active_persona_id()
+        cfg = await runtime.store.get_config(persona_id)
+        metadata = runtime.context_builder.metadata(event)
+        planning_meta = next((item for item in metadata if item.get("kind") == "planning"), None)
+        warnings = []
+        if planning_meta and runtime.threads is not None:
+            try:
+                missing = await runtime.threads.missing_for_run(planning_meta["run_id"])
+            except Exception:
+                missing = []
+            if missing:
+                settings = cfg.get("threads", {})
+                if settings.get("require_response", True):
+                    if settings.get("response_mode", "reject") == "reject":
+                        raise KRDError(
+                            "thread_response_required",
+                            "本次规划还没有回应目标/约定",
+                            missing=missing,
+                            hint="先调用 rhythm_update 的 thread_response；no_change 也合法。")
+                    warnings.append({"code": "thread_response_missing", "missing": missing})
         payloads = plans or ([plan] if plan else [])
         results = await runtime.plans.apply_many(persona_id, payloads, actor="bot", mode=mode, reason=reason)
-        for metadata in runtime.context_builder.metadata(event):
-            if metadata["kind"] in {"planning", "review"}:
-                await runtime.store.execute("UPDATE planning_runs SET status='completed',finished_at=? WHERE id=?", (__import__('time').time(), metadata["run_id"]))
+        if planning_meta and runtime.threads is not None:
+            try:
+                advances = await runtime.store.all(
+                    "SELECT thread_id FROM thread_responses WHERE run_id=? AND response='advance'",
+                    (planning_meta["run_id"],))
+                linked = {item.get("thread_id") for result in results
+                          for block in result["plan"].get("blocks", [])
+                          for item in block.get("items", [])}
+                for row in advances:
+                    if row["thread_id"] not in linked:
+                        warnings.append({"code": "advance_without_item",
+                                         "thread_id": row["thread_id"],
+                                         "hint": "回应为 advance，但计划里没有关联该 thread_id 的小项。"})
+            except Exception:
+                pass
+        for meta in metadata:
+            if meta["kind"] in {"planning", "review"}:
+                await runtime.store.execute(
+                    "UPDATE planning_runs SET status='completed',finished_at=? WHERE id=?",
+                    (__import__('time').time(), meta["run_id"]))
+                if runtime.threads is not None:
+                    try:
+                        await runtime.threads.finalize_run(meta["run_id"])
+                    except Exception:
+                        pass
         await runtime.broadcast("plan_changed", {"persona_id": persona_id, "days": [r["plan"]["date"] for r in results]})
         payload = {"ok": True, "days": [{"plan_id": r["plan"]["id"], "date": r["plan"]["date"], "revision": r["revision"],
                                           "diff": r["diff"], "change_units": r["change_units"]} for r in results]}
-        cfg = await runtime.store.get_config(persona_id)
+        if warnings:
+            payload["warnings"] = warnings
         tz_name = runtime.plans.policy.timezone_name(cfg)
         host = host_tz(runtime)
         if host != tz_name:
@@ -46,14 +88,17 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
     except Exception as exc:
         return error_result(exc)
 
-
 async def rhythm_update(event, operations: list[dict], reason: str = "", **kwargs) -> str:
     try:
         runtime = runtime_from_event(event)
         persona_id = await runtime.active_persona_id()
         if not isinstance(operations, list) or not operations or len(operations) > 50:
             raise KRDError("invalid_operations", "Provide 1–50 operations")
+        metadata = runtime.context_builder.metadata(event)
+        planning_meta = next((item for item in metadata if item.get("kind") == "planning"), None)
+        run_id = planning_meta["run_id"] if planning_meta else ""
         results = []
+        thread_responses = []
         changed_plan_ids = set()
         deleted_plan_ids = set()
         async with runtime.store.transaction():
@@ -61,6 +106,9 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                 if not isinstance(operation, dict):
                     raise KRDError("invalid_operation", "Each operation must be an object")
                 kind = operation.get("type")
+                if kind in {"thread_add", "thread_touch", "thread_update", "thread_close",
+                            "thread_response", "thread_delete"} and runtime.threads is None:
+                    raise KRDError("runtime_unavailable", "Thread service is unavailable")
                 if kind == "day_state":
                     day = operation.get("date") or await runtime.plans.current_date(persona_id)
                     patch = operation.get("patch") or {key: value for key, value in operation.items()
@@ -85,11 +133,40 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                 elif kind == "delete_block":
                     result = await runtime.plans.delete_block(persona_id, operation["block_id"], actor="bot", reason=reason)
                     deleted_plan_ids.add(result["plan"]["id"])
+                elif kind == "thread_add":
+                    result = await runtime.threads.add(persona_id, operation, actor="bot")
+                elif kind == "thread_touch":
+                    result = await runtime.threads.touch(
+                        persona_id, operation["thread_id"], str(operation.get("note", "")),
+                        next_step=operation.get("next_step"), item_id=operation.get("item_id", ""), actor="bot")
+                elif kind == "thread_update":
+                    patch = operation.get("patch") or {
+                        key: value for key, value in operation.items() if key not in {"type", "thread_id", "note"}}
+                    result = await runtime.threads.update(
+                        persona_id, operation["thread_id"], patch, actor="bot", note=str(operation.get("note", "")))
+                elif kind == "thread_close":
+                    result = await runtime.threads.close(
+                        persona_id, operation["thread_id"], str(operation.get("status", "done")),
+                        str(operation.get("note", "")), actor="bot", run_id=run_id)
+                elif kind == "thread_response":
+                    thread_responses.append(operation)
+                    continue
+                elif kind == "thread_delete":
+                    raise KRDError("permission_denied", "Threads can only be deleted by the user")
                 elif kind == "delete_day":
                     raise KRDError("permission_denied", "Whole-day deletion is a user-only action")
                 else:
                     raise KRDError("invalid_operation", f"Unknown operation type: {kind}")
                 results.append({"type": kind, "result": result})
+            if thread_responses:
+                if runtime.threads is None:
+                    raise KRDError("runtime_unavailable", "Thread service is unavailable")
+                if not run_id:
+                    raise KRDError("thread_response_outside_planning",
+                                   "thread_response is only available during a planning run")
+                response_result = await runtime.threads.record_responses(
+                    persona_id, run_id, thread_responses, actor="bot")
+                results.append({"type": "thread_response", "result": response_result})
         for plan_id in changed_plan_ids - deleted_plan_ids:
             await runtime.scheduler.check_all_triggered(plan_id)
         runtime.scheduler.wake()
@@ -104,9 +181,9 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
     except Exception as exc:
         return error_result(exc)
 
-
 async def rhythm_view(event, scope: str = "current", date: str = "", start: str = "", end: str = "",
-                      plan_id: str = "", item_id: str = "", limit: int = 20, **kwargs) -> str:
+                      plan_id: str = "", item_id: str = "", thread_id: str = "", status: str = "",
+                      kind: str = "", limit: int = 20, **kwargs) -> str:
     try:
         runtime = runtime_from_event(event)
         persona_id = await runtime.active_persona_id()
@@ -154,6 +231,20 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
             result = {"used": row["used"], "limit": config["max_change_units"], "window_seconds": config["modify_window_seconds"]}
         elif scope == "experiences":
             result = await plans_service.experiences(persona_id, date or None, item_id, limit)
+        elif scope == "threads":
+            if runtime.threads is None:
+                raise KRDError("runtime_unavailable", "Thread service is unavailable")
+            result = await runtime.threads.list(
+                persona_id, status=status, kind=kind, limit=limit,
+                include_deleted=status == "deleted")
+        elif scope == "thread":
+            if runtime.threads is None:
+                raise KRDError("runtime_unavailable", "Thread service is unavailable")
+            if not thread_id:
+                raise KRDError("thread_required", "thread_id is required for thread view")
+            result = await runtime.threads.get(persona_id, thread_id)
+            if result is None:
+                raise KRDError("thread_not_found", "Thread not found")
         else:
             raise KRDError("invalid_scope", f"Unknown view scope: {scope}")
         cfg = await runtime.store.get_config(persona_id)

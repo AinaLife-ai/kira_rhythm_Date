@@ -29,7 +29,7 @@ const config = {
   min_items: 2, max_items: 12, max_horizon_days: 14, allow_exact: true, allow_window: true, allow_probability: true,
   default_probability: 1, min_probability: .2, session_access: { mode: 'deny_list', sessions: [] },
   planning_pool: { sessions: [], strategy: 'pure_random' }, execution_pool: { sessions: [], strategy: 'pure_random' },
-  modify_window_seconds: 86400, max_change_units: 0, history_days: 3, history_char_budget: 12000, diff_revisions: 2,
+  modify_window_seconds: 86400, max_change_units: 0, history_days: 3, history_char_budget: 16000, diff_revisions: 2,
   recovery_grace_seconds: 600, history_mode: 'notice', inject_day_state: true, inject_agenda: true, agenda_max_chars: 2400, approval_required: false, timezone: 'system',
   blocked_execution_windows: [], quiet_delivery_windows: [{ start: '23:30', end: '07:00' }], required_coverage_windows: [],
   planning_prompt: '根据日型、天气与最近生活规划接下来的一天。', execution_prompt: '自然行动，也可保持安静。',

@@ -13,7 +13,7 @@ from .context import ContextBuilder
 from .models import KRDError, new_id, now
 from .policy import SessionPolicy
 from .plans import PlanService
-from .store import Store
+from .store import Store, dumps
 from .timeutils import in_active_windows, next_daily, timezone, to_utc
 
 
@@ -298,12 +298,31 @@ class Scheduler:
                 "INSERT OR IGNORE INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,reason,created_at,finished_at,error) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (run["id"], trigger_id, persona_id, kind, target_date, "", "failed", reason, now(), now(), exc.message))
             return await self.store.one("SELECT * FROM planning_runs WHERE trigger_id=?", (trigger_id,))
+        required_ids: list[str] = []
+        threads_service = getattr(self.runtime, "threads", None)
+        if kind != "review" and config.get("threads", {}).get("enabled", True) and \
+                config.get("threads", {}).get("require_response", True) and threads_service is not None:
+            try:
+                required = await threads_service.required(
+                    persona_id, config.get("threads", {}).get("response_limit", 8))
+                required_ids = [row["id"] for row in required]
+            except Exception as exc:
+                self.runtime.log("warning", "thread_required_failed", error=repr(exc))
+        # Keep the planning room clean before this run is recorded, so the summary
+        # describes the previous planning turn rather than the empty current one.
+        hygiene = getattr(self.runtime, "hygiene", None)
+        if hygiene is not None:
+            await hygiene.prepare(target, persona_id)
         run = {"id": new_id("prn"), "trigger_id": trigger_id, "persona_id": persona_id, "kind": kind,
-               "target_date": target_date, "session_id": target, "status": "prepared", "reason": reason}
+               "target_date": target_date, "session_id": target, "status": "prepared", "reason": reason,
+               "required_thread_ids_json": dumps(required_ids),
+               "response_status": "pending" if required_ids else "not_required"}
         async with self.store.transaction() as db:
             cursor = await db.execute(
-                "INSERT OR IGNORE INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                (run["id"], trigger_id, persona_id, kind, target_date, target, "prepared", reason, now()))
+                "INSERT OR IGNORE INTO planning_runs(id,trigger_id,persona_id,kind,target_date,session_id,status,"
+                "required_thread_ids_json,response_status,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (run["id"], trigger_id, persona_id, kind, target_date, target, "prepared",
+                 run["required_thread_ids_json"], run["response_status"], reason, now()))
             if cursor.rowcount != 1:
                 return await self.store.one("SELECT * FROM planning_runs WHERE trigger_id=?", (trigger_id,))
         if not await self.publish_run(run):
@@ -465,6 +484,17 @@ class Scheduler:
                         "UPDATE runs SET status='responded',responded_at=?,raw_output=?,input_tokens=?,output_tokens=?,error=? WHERE id=?",
                         (now(), text[:20000], getattr(response, "input_tokens", None), getattr(response, "output_tokens", None), error, run_id))
                     await self.store.execute("UPDATE items SET state=?,updated_at=? WHERE id=?", (state, now(), item["id"]))
+                    threads_service = getattr(self.runtime, "threads", None)
+                    if threads_service is not None and item.get("thread_id"):
+                        settings = config.get("threads", {})
+                        if settings.get("auto_touch", False):
+                            already = await threads_service.item_was_touched(
+                                item["thread_id"], item["id"], float(run.get("claimed_at") or 0))
+                            if not already:
+                                await threads_service.auto_touch(
+                                    run["persona_id"], item["thread_id"],
+                                    f"执行了「{item['title']}」", item_id=item["id"])
+
                 await self.runtime.broadcast("item_changed", {"item_id": item["id"], "state": state})
                 if run["status"] not in {"responded", "finalized", "failed"}:
                     await self.check_all_triggered(item["plan_id"])
@@ -473,11 +503,36 @@ class Scheduler:
                 if current and current["status"] not in {"completed", "failed"}:
                     next_status = "failed" if status == "error" else "no_change"
                     await self.store.execute("UPDATE planning_runs SET status=?,finished_at=? WHERE id=?", (next_status, now(), run_id))
+                threads_service = getattr(self.runtime, "threads", None)
+                if threads_service is not None:
+                    try:
+                        await threads_service.finalize_run(run_id)
+                    except Exception as exc:
+                        self.runtime.log("warning", "thread_response_finalize_failed", error=repr(exc))
 
     async def on_final(self, event) -> None:
         for metadata in ContextBuilder.metadata(event):
-            if metadata["kind"] == "item":
-                await self.store.execute("UPDATE runs SET status='finalized',finalized_at=? WHERE id=? AND responded_at IS NOT NULL", (now(), metadata["run_id"]))
+            if metadata["kind"] != "item":
+                continue
+            run_id = metadata["run_id"]
+            run = await self.store.one("SELECT * FROM runs WHERE id=?", (run_id,))
+            item = await self.store.one("SELECT * FROM items WHERE id=?", (run["item_id"],)) if run else None
+            if run and item and item.get("thread_id"):
+                config = await self.store.get_config(run["persona_id"])
+                settings = config.get("threads", {})
+                threads_service = getattr(self.runtime, "threads", None)
+                if threads_service is not None and settings.get("force_touch", False) and \
+                        not settings.get("auto_touch", False):
+                    touched = await threads_service.item_was_touched(
+                        item["thread_id"], item["id"], float(run.get("claimed_at") or 0))
+                    if not touched:
+                        await self.store.execute(
+                            "UPDATE runs SET error=CASE WHEN error='' THEN 'thread_untouched' "
+                            "WHEN error LIKE '%thread_untouched%' THEN error ELSE error || ',thread_untouched' END "
+                            "WHERE id=?", (run_id,))
+            await self.store.execute(
+                "UPDATE runs SET status='finalized',finalized_at=? WHERE id=? AND responded_at IS NOT NULL",
+                (now(), run_id))
 
     @staticmethod
     def is_silent(text: str) -> bool:

@@ -1,5 +1,17 @@
 # 更新日志
 
+## 1.3.0 · 2026-11-24
+
+- 新增独立的目标与约定层（Threads）：`goal / promise / project / habit / open_loop / mystery`，带档案正文、下一步、可选截止、优先级和打卡流水；bot 可通过 `rhythm_update` 自行新建、修改、打卡、完成或放弃，用户可在新「目标」页管理。
+- 规划回合必须回应 `threads_requiring_response`（最多 8 条，按到期/停滞/优先级排序）：`advance / defer / waiting / no_change`，每条一句依据；只要求表态，不强制推进。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，缺部分返回 `thread_response_missing`。
+- 规划上下文改为「最近 3 天完整计划 + 更早 4 天摘要 + 最近结果 + 未完成 + 未来安排 + 最近模式提示」；完整计划默认包含 instruction（单项 200 字）。
+- 普通聊天新增默认开启的 `[KRD Threads]` top 3 摘要；执行上下文新增 `day_so_far` 和关联目标摘要；`[KRD Agenda]` 保持不变。
+- 新增规划记忆卫生：在规划前把历史规划回合的工具调用原文压成一行摘要，避免 KiraAI 会话记忆反复带入 10 份完整计划 JSON；计划详情仍由 KRD 上下文提供。可配置 `memory_hygiene=summary|off`。
+- 新增长期上下文预算：超出上限时结构化降级（摘要/条目/档案），不再切断 JSON；默认 `history_char_budget=16000`。
+- 新增可选执行打卡：`thread_touch` 可带 `item_id`；`force_touch`/`auto_touch` 默认关闭，前端有详细说明。
+- 新增 Threads API、前端「目标」页、设置页「目标与约定」与「给 bot 的上下文」说明；计划页显示关联目标徽标。
+- 数据库增量迁移到 v2：仅新增 `items.thread_id`、`planning_runs` 回应的字段和 threads 表；旧计划数据不改写。导出格式升级为 v2，导入兼容 v1/v2。
+
 ## 1.2.18 · 2026-11-17
 
 - 普通聊天、规划和小项上下文里的天气块新增 `location` 行；设置桂林市后会显示 `location: 桂林市`，再显示当前/今日天气。
