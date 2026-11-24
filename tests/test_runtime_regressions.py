@@ -413,6 +413,86 @@ async def test_rhythm_plan_rejects_non_object_plan_without_internal_error(runtim
     assert result["error"]["code"] == "invalid_plan"
 
 @pytest.mark.asyncio
+async def test_rhythm_plan_merges_top_level_single_day_meta(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_plan(
+        event, mode="create_missing", reason="减量，只留傍晚认真说话",
+        title="不排满的一天", overview="不排满了。只留一个认真说话的时段，其余看心情。",
+        planned_appearance="深紫修女服照旧", planned_mood="偏冷，但不拒人",
+        plans=[{
+            "date": tomorrow(),
+            "items": [
+                {"title": "开机不赶时间", "at": "09:50", "target": "qq:dm:10001", "interaction": "auto"},
+                {"title": "问主人一句", "at": "18:40", "target": "qq:dm:10001", "interaction": "must_message"},
+            ],
+        }]))
+    assert result["ok"], result
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    assert plan["title"] == "不排满的一天"
+    assert plan["overview"] == "不排满了。只留一个认真说话的时段，其余看心情。"
+    assert plan["planned_appearance"] == "深紫修女服照旧"
+    assert plan["planned_mood"] == "偏冷，但不拒人"
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_plan_level_meta_wins_over_top_level(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_plan(
+        event, overview="外层概述", planned_mood="外层心情",
+        plans=[{
+            "date": tomorrow(), "title": "内层标题", "overview": "内层概述", "planned_mood": "内层心情",
+            "items": [
+                {"title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+                {"title": "B", "at": "10:00", "target": "qq:dm:10001", "interaction": "auto"},
+            ],
+        }]))
+    assert result["ok"], result
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    assert plan["title"] == "内层标题"
+    assert plan["overview"] == "内层概述"
+    assert plan["planned_mood"] == "内层心情"
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_warns_when_top_level_meta_cannot_apply_to_batch(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    second = (datetime.now().date() + timedelta(days=2)).isoformat()
+    batch = {"date": tomorrow(), "items": [
+        {"title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+        {"title": "B", "at": "10:00", "target": "qq:dm:10001", "interaction": "auto"},
+    ]}
+    later = {"date": second, "items": [
+        {"title": "C", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+        {"title": "D", "at": "10:00", "target": "qq:dm:10001", "interaction": "auto"},
+    ]}
+    result = json.loads(await rhythm_plan(event, overview="不应该丢失但不该猜测", plans=[batch, later]))
+    assert result["ok"], result
+    assert any(item.get("code") == "ignored_plan_meta" for item in result.get("warnings", []))
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    assert plan["overview"] == ""
+
+@pytest.mark.asyncio
+async def test_webapi_attaches_latest_revision_reason(runtime):
+    from krd.webapi import attach_revision_info
+    payload = one_item_payload()
+    payload["blocks"][0]["items"].append({
+        "title": "第二个小项", "schedule": {"type": "exact", "at": "18:00"},
+        "target": "qq:dm:10001", "interaction": "auto"})
+    created = await runtime.plans.apply_plan(
+        "persona-a", payload, actor="bot", reason="先把一天排出来", expected_revision=0)
+    await runtime.plans.apply_plan(
+        "persona-a", payload, actor="bot", reason="下午减量，留白", expected_revision=created["revision"])
+    await runtime.plans.apply_plan(
+        "persona-a", payload, actor="user", reason="WebUI edit", expected_revision=created["revision"] + 1)
+    plans = await runtime.plans.list_plans("persona-a", tomorrow(), tomorrow())
+    enriched = await attach_revision_info(runtime, plans)
+    assert enriched[0]["revision_actor"] == "user"
+    assert enriched[0]["revision_reason"] == "WebUI edit"
+    assert enriched[0]["planning_reason"] == "下午减量，留白"
+    assert enriched[0]["overview"] == plans[0]["overview"]
+
+@pytest.mark.asyncio
 async def test_append_item_incomplete_window_is_typed_error(runtime):
     first = await runtime.plans.apply_plan("persona-a", one_item_payload(), actor="user", expected_revision=0)
     event = SimpleNamespace(_krd_runtime=runtime, messages=[])

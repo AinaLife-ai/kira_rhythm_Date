@@ -26,6 +26,13 @@ class ApiMixin:
             raise KRDError("runtime_unavailable", "KRD is not initialized")
         return await self.runtime.active_persona_id() if not persona else persona
 
+    async def _plan_result(self, result):
+        """Keep mutation responses consistent with GET /plans for the UI."""
+        plan = result.get("plan") if isinstance(result, dict) else None
+        if isinstance(plan, dict) and plan.get("id"):
+            result = {**result, "plan": (await webapi.attach_revision_info(self.runtime, [plan]))[0]}
+        return result
+
     async def _notify(self, event_type: str, persona_id: str, **payload):
         await self.runtime.broadcast(event_type, {"persona_id": persona_id, **payload})
 
@@ -59,7 +66,10 @@ class ApiMixin:
     @register.api(method="GET", path="/v1/plans")
     async def api_plans(self, start: str, end: str, persona: str = ""):
         persona_id = await self._persona(persona)
-        return await self._call(self.runtime.plans.list_plans, persona_id, start, end)
+        async def load():
+            plans = await self.runtime.plans.list_plans(persona_id, start, end)
+            return await webapi.attach_revision_info(self.runtime, plans)
+        return await self._call(load)
 
     @register.api(method="GET", path="/v1/plans/{plan_id}")
     async def api_plan(self, plan_id: str, persona: str = ""):
@@ -68,7 +78,7 @@ class ApiMixin:
             plan = await self.runtime.plans.get_plan(plan_id, persona_id)
             if not plan:
                 raise KRDError("not_found", "Plan not found")
-            return plan
+            return (await webapi.attach_revision_info(self.runtime, [plan]))[0]
         return await self._call(load)
 
     @register.api(method="POST", path="/v1/plans")
@@ -79,7 +89,7 @@ class ApiMixin:
                 persona_id, payload, actor="user", mode=payload.get("mode", "revise"),
                 reason=payload.get("reason", "WebUI edit"), expected_revision=int(payload.get("expected_revision", 0)))
             await self._notify("plan_changed", persona_id, days=[result["plan"]["date"]])
-            return result
+            return await self._plan_result(result)
         return await self._call(save)
 
     @register.api(method="GET", path="/v1/plans/{plan_id}/diff")
@@ -101,7 +111,7 @@ class ApiMixin:
             result = await self.runtime.plans.update_item(
                 persona_id, item_id, payload, actor="user", reason=payload.get("reason", "WebUI edit"))
             await self._notify("plan_changed", persona_id, items=[item_id])
-            return result
+            return await self._plan_result(result)
         return await self._call(update)
 
     @register.api(method="POST", path="/v1/items/{item_id}/run")
@@ -118,7 +128,7 @@ class ApiMixin:
                 persona_id, item_id, {"action": "skip", "reason": reason}, actor="user", reason=reason)
             await self.runtime.scheduler.check_all_triggered(result["plan"]["id"])
             await self._notify("plan_changed", persona_id, items=[item_id])
-            return result
+            return await self._plan_result(result)
         return await self._call(skip)
 
     @register.api(method="POST", path="/v1/items/{item_id}/delete")
@@ -128,7 +138,7 @@ class ApiMixin:
             reason = (payload or {}).get("reason", "Deleted by user")
             result = await self.runtime.plans.delete_item(persona_id, item_id, actor="user", reason=reason)
             await self._notify("plan_changed", persona_id, items=[item_id])
-            return result
+            return await self._plan_result(result)
         return await self._call(delete)
 
     @register.api(method="POST", path="/v1/blocks/{block_id}/delete")
@@ -138,7 +148,7 @@ class ApiMixin:
             reason = (payload or {}).get("reason", "Deleted by user")
             result = await self.runtime.plans.delete_block(persona_id, block_id, actor="user", reason=reason)
             await self._notify("plan_changed", persona_id, days=[result["plan"]["date"]])
-            return result
+            return await self._plan_result(result)
         return await self._call(delete)
 
     @register.api(method="POST", path="/v1/plans/{day}/delete")

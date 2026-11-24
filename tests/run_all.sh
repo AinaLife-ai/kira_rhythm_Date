@@ -3,7 +3,12 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 FW_312=${FW_312:-/var/minis/shared/kira312}
 FW_320=${FW_320:-/var/minis/shared/kira320}
-for FW in "$FW_312" "$FW_320"; do
+FW_330=${FW_330:-/var/minis/shared/kira330}
+for FW in "$FW_312" "$FW_320" "$FW_330"; do
+  if [ ! -d "$FW" ]; then
+    echo "=== KRD $FW (skipped: framework not found) ==="
+    continue
+  fi
   echo "=== KRD $FW ==="
   cd "$FW"
   PYTHONPATH="$FW:$ROOT" python3 -m pytest -q "$ROOT/tests"

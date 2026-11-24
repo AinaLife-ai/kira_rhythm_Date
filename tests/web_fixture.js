@@ -13,6 +13,8 @@ const plan = {
   id: 'pln_demo', date: iso, day_type_id: 'weekday', title: '从容而有留白的一天', revision: 4, state: 'active',
   overview: '上午专注于喜欢的事，傍晚出去走一走，夜里给自己安静收尾。',
   planned_appearance: '雾蓝色针织衫，带一件轻便外套', planned_mood: '安静，也有一点期待',
+  revision_actor: 'bot', revision_reason: '11-25 已经排得够满，这天减量，把唯一认真说话的时段放在傍晚。',
+  planning_reason: '11-25 已经排得够满，这天减量，把唯一认真说话的时段放在傍晚。',
   blocks: [
     { id: 'b1', title: '早晨与上午', color: '#aa9af8', meta: {}, items: [
       { id: 'i1', title: '醒来后的第一句话', intent: '让今天有一个连续的起点', schedule: { type: 'window', start: '08:20', end: '09:00' }, scheduled_at: at(8, 42), execution_probability: 1, interaction: 'auto', target: 'qq:dm:10001', state: 'triggered', category: '' },

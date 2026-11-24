@@ -113,3 +113,15 @@ def test_target_badge_shows_session_name_and_raw_id():
     assert "nextTargetName" in views and "$root.nextItem.target" in views
     assert ".item-target .target-name" in css and ".target-id" in css
     assert "target: 'qq:dm:10001'" in fixture and "target: 'qq:gm:70001'" in fixture
+
+
+def test_plan_brief_shows_revision_reason():
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+    css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
+    fixture = (ROOT / "tests" / "web_fixture.js").read_text(encoding="utf-8")
+    assert "revision_reason" in views and "planning_reason" in views
+    assert "revisionReasonLabel" in views
+    assert "规划理由" in views and "调整理由" in views and "上次规划" in views
+    assert "plan-brief-reason" in views and ".plan-brief-reason" in css
+    assert '<plan-brief v-if="$root.selectedPlan"' in views
+    assert "revision_reason" in fixture and "revision_actor" in fixture and "planning_reason" in fixture
