@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.3.5 · 2026-11-25
+### 修复
+- `rhythm_plan` 兼容把 `title` / `overview` / `planned_appearance` / `planned_mood` 写在 `plans` 同级的单日调用：自动并入唯一计划；多日计划会忽略并返回 `ignored_plan_meta` 警告，不再静默丢字段。
+- WebUI 计划接口附带最新修订的 `revision_actor` / `revision_reason`；此刻与日历的计划卡新增「规划理由 / 调整理由」，会过滤 WebUI 技术性默认理由，与概述重复时不重复显示。
+- 前端静态资源缓存键升至 `v=1.3.5`。
+
 ## 1.3.4 · 2026-11-25
 ### 界面
 - 此刻与日历共用富信息卡片：显示 `intent`、`instruction`、`target` 会话名 + 原始会话 ID、调整原因、概率、互动、分类和目标徽标；移动端不再隐藏 `intent`。找不到对应会话时只显示原始 ID，不会丢失信息。

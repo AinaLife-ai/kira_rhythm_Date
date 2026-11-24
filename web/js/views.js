@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.4.1'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.4.1'
+import { fmt } from './store.js?v=1.3.5'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.5'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -50,6 +50,22 @@ export const PlanBrief = {
       return (this.plan?.blocks || []).reduce((sum, block) => sum +
         (block.items || []).filter((item) => !['deleted', 'cancelled'].includes(item.state)).length, 0)
     },
+    revisionReason() {
+      return this.cleanReason(this.plan?.revision_reason) || this.cleanReason(this.plan?.planning_reason)
+    },
+    revisionReasonLabel() {
+      const current = this.cleanReason(this.plan?.revision_reason)
+      return current && this.plan?.revision_actor !== 'bot' ? '调整理由' : '规划理由'
+    },
+  },
+  methods: {
+    cleanReason(value) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+      // Technical defaults from WebUI edits would drown out the actual rationale.
+      if (/^(webui|skipped by user|deleted by user|manual planning from webui)/i.test(text)) return ''
+      return text === String(this.plan?.overview || '').trim() ? '' : text
+    },
   },
   template: `
   <article v-if="plan" class="plan-brief">
@@ -58,6 +74,7 @@ export const PlanBrief = {
       <span class="plan-brief-rev">REV {{ plan.revision || 0 }}</span>
     </div>
     <p class="plan-brief-overview">{{ plan.overview || '没有写概述，留给现场。' }}</p>
+    <p v-if="revisionReason" class="plan-brief-reason"><span class="plan-brief-reason-label">{{ revisionReasonLabel }}</span>{{ revisionReason }}</p>
     <div class="plan-brief-tags">
       <span v-if="plan.planned_appearance">服装 · {{ plan.planned_appearance }}</span>
       <span v-if="plan.planned_mood">心情 · {{ plan.planned_mood }}</span>

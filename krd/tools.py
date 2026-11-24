@@ -55,7 +55,9 @@ def _item_patch(operation: dict) -> dict:
 
 
 async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None = None,
-                      mode: str = "revise", reason: str = "", **kwargs) -> str:
+                      mode: str = "revise", reason: str = "",
+                      title: str = "", overview: str = "", planned_appearance: str = "",
+                      planned_mood: str = "", **kwargs) -> str:
     try:
         runtime = runtime_from_event(event)
         persona_id = await runtime.active_persona_id()
@@ -93,6 +95,25 @@ async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None 
                         hint="先调用 rhythm_update 的 thread_response；no_change 也合法。")
                 warnings.append({"code": "thread_response_missing", "missing": missing})
         payloads = plans or ([plan] if plan else [])
+        top_level = {"title": title, "overview": overview,
+                     "planned_appearance": planned_appearance, "planned_mood": planned_mood}
+        top_level = {key: str(value).strip() for key, value in top_level.items() if str(value or "").strip()}
+        if top_level and isinstance(payloads, list) and all(isinstance(entry, dict) for entry in payloads):
+            # Models often put the single-day narrative next to `plans` instead of
+            # inside the plan entry. A top-level value has unambiguous ownership
+            # only when one day is planned; per-plan values keep priority.
+            if len(payloads) == 1:
+                entry = dict(payloads[0])
+                for key, value in top_level.items():
+                    if not str(entry.get(key, "") or "").strip():
+                        entry[key] = value
+                payloads = [entry]
+            else:
+                warnings.append({
+                    "code": "ignored_plan_meta",
+                    "hint": "顶层 title/overview/planned_appearance/planned_mood 仅适用于单日计划；"
+                            "多日计划请写进各自的 plans[] 条目。",
+                })
         results = await runtime.plans.apply_many(persona_id, payloads, actor="bot", mode=mode, reason=reason)
         if planning_meta and runtime.threads is not None:
             try:

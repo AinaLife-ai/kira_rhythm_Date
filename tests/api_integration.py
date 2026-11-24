@@ -84,6 +84,8 @@ def run(framework: Path, plugin_root: Path):
             item_id = result["plan"]["blocks"][0]["items"][0]["id"]
             plans = await client.get(f"{base}/plans?start={tomorrow}&end={tomorrow}")
             assert plans.status_code == 200 and len(plans.json()) == 1
+            listed = plans.json()[0]
+            assert listed["revision_reason"] == "WebUI edit" and listed["revision_actor"] == "user"
             diff = await client.get(f"{base}/plans/{result['plan']['id']}/diff?persona=other")
             assert diff.status_code == 200 and diff.json() == []
             run = await client.post(f"{base}/items/{item_id}/run")

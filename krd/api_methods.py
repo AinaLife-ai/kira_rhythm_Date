@@ -59,7 +59,10 @@ class ApiMixin:
     @register.api(method="GET", path="/v1/plans")
     async def api_plans(self, start: str, end: str, persona: str = ""):
         persona_id = await self._persona(persona)
-        return await self._call(self.runtime.plans.list_plans, persona_id, start, end)
+        async def load():
+            plans = await self.runtime.plans.list_plans(persona_id, start, end)
+            return await webapi.attach_revision_info(self.runtime, plans)
+        return await self._call(load)
 
     @register.api(method="GET", path="/v1/plans/{plan_id}")
     async def api_plan(self, plan_id: str, persona: str = ""):
@@ -68,7 +71,7 @@ class ApiMixin:
             plan = await self.runtime.plans.get_plan(plan_id, persona_id)
             if not plan:
                 raise KRDError("not_found", "Plan not found")
-            return plan
+            return (await webapi.attach_revision_info(self.runtime, [plan]))[0]
         return await self._call(load)
 
     @register.api(method="POST", path="/v1/plans")

@@ -10,6 +10,42 @@ from .timeutils import parse_date
 from .store import dumps, loads
 
 
+async def attach_revision_info(runtime, plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the latest revision actor/reason for WebUI plan cards.
+
+    Kept in the HTTP layer so UI-only fields never leak into the LLM context,
+    which assembles plan dicts through PlanService directly.
+    """
+    if not plans:
+        return plans
+    ids = [str(plan.get("id")) for plan in plans if plan.get("id")]
+    meta: dict[str, dict[str, Any]] = {}
+    planning: dict[str, str] = {}
+    for offset in range(0, len(ids), 400):
+        chunk = ids[offset:offset + 400]
+        placeholders = ",".join("?" for _ in chunk)
+        rows = await runtime.store.all(
+            "SELECT r.plan_id, r.actor, r.reason FROM plan_revisions r "
+            "JOIN (SELECT plan_id, MAX(revision) AS revision FROM plan_revisions "
+            f"WHERE plan_id IN ({placeholders}) GROUP BY plan_id) latest "
+            "ON latest.plan_id=r.plan_id AND latest.revision=r.revision",
+            tuple(chunk))
+        meta.update({row["plan_id"]: row for row in rows})
+        rows = await runtime.store.all(
+            "SELECT r.plan_id, r.reason FROM plan_revisions r "
+            "JOIN (SELECT plan_id, MAX(revision) AS revision FROM plan_revisions "
+            "WHERE actor='bot' AND reason<>'' AND "
+            f"plan_id IN ({placeholders}) GROUP BY plan_id) latest "
+            "ON latest.plan_id=r.plan_id AND latest.revision=r.revision",
+            tuple(chunk))
+        planning.update({row["plan_id"]: row["reason"] for row in rows})
+    return [{**plan,
+             "revision_actor": meta.get(str(plan.get("id")), {}).get("actor", ""),
+             "revision_reason": meta.get(str(plan.get("id")), {}).get("reason", ""),
+             "planning_reason": planning.get(str(plan.get("id")), "")}
+            for plan in plans]
+
+
 async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
     active = await runtime.active_persona_id()
     persona_id = persona_id or active
@@ -17,6 +53,8 @@ async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
         return {"ready": False, "reason": "Create and activate a KiraAI persona first"}
     day = await runtime.plans.current_date(persona_id)
     plan = await runtime.plans.get_plan_by_date(persona_id, day)
+    if plan:
+        plan = (await attach_revision_info(runtime, [plan]))[0]
     config = await runtime.store.get_config(persona_id)
     banner = None
     banner_id = config["appearance"].get("banner_asset_id")
