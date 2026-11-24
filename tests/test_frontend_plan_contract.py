@@ -86,3 +86,16 @@ def test_tool_prompts_are_compact_and_keep_contract_tokens():
                   "threads_reference", "current_item.instruction", "<msg/>",
                   "[KRD Threads]", "[KRD Agenda]"):
         assert token in guide, token
+
+def test_narrative_preview_and_planning_refresh_contracts():
+    app = (WEB / "app.js").read_text(encoding="utf-8")
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+    css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
+    assert "export const PlanBrief" in views
+    assert "plan-brief" in views and "item.instruction" in views and "item-target" in views
+    assert "$root.sessionLabel(item.target)" in views
+    assert "$root.planningLabel('立即规划')" in views
+    assert "sessionLabel(target)" in app
+    assert "planningPending" in app and "waitForPlanningUpdate" in app and "startPlanning" in app
+    assert ".item-instruction" in css and ".plan-brief" in css
+    assert "display:block !important" in css

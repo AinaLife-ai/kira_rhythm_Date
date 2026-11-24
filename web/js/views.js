@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.2'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.2'
+import { fmt } from './store.js?v=1.3.4'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.4'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -24,6 +24,7 @@ const ICON_PATHS = {
   flower: ['M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z', 'M12 9C9 8 8 4 12 4s3 4 0 5ZM15 12c1-3 5-3 5 0s-4 3-5 0ZM12 15c3 1 4 5 0 5s-3-4 0-5ZM9 12c-1 3-5 3-5 0s4-3 5 0Z'],
   sparkle: ['M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z', 'M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z'],
   pin: ['M12 21s6-6.2 6-11a6 6 0 1 0-12 0c0 4.8 6 11 6 11Z', 'M12 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z'],
+  message: ['M4 5h16v12H8l-4 4V5Z', 'M8 9h8M8 13h5'],
   stats: ['M5 19V9M12 19V5M19 19v-7'],
   check: ['M5 12.5 9.5 17 19 6.5'],
   alert: ['M12 3 2.8 20h18.4L12 3Z', 'M12 9v5M12 17v.2'],
@@ -40,6 +41,29 @@ export const UiIcon = {
     paths() { return ICON_PATHS[this.name] || ICON_PATHS.sparkle },
   },
   template: `<svg class="ui-icon" :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path v-for="(d, index) in paths" :key="index" :d="d" /></svg>`,
+}
+
+export const PlanBrief = {
+  props: ['plan'],
+  computed: {
+    itemCount() {
+      return (this.plan?.blocks || []).reduce((sum, block) => sum +
+        (block.items || []).filter((item) => !['deleted', 'cancelled'].includes(item.state)).length, 0)
+    },
+  },
+  template: `
+  <article v-if="plan" class="plan-brief">
+    <div class="plan-brief-head">
+      <div><span class="plan-brief-kicker">PLAN / 一天的总叙事</span><h3>{{ plan.title || '未命名的一天' }}</h3></div>
+      <span class="plan-brief-rev">REV {{ plan.revision || 0 }}</span>
+    </div>
+    <p class="plan-brief-overview">{{ plan.overview || '没有写概述，留给现场。' }}</p>
+    <div class="plan-brief-tags">
+      <span v-if="plan.planned_appearance">服装 · {{ plan.planned_appearance }}</span>
+      <span v-if="plan.planned_mood">心情 · {{ plan.planned_mood }}</span>
+      <span>{{ itemCount }} 项</span>
+    </div>
+  </article>`,
 }
 
 export const ItemCard = {
@@ -60,14 +84,20 @@ export const ItemCard = {
       <div class="item-top">
         <div>
           <h4>{{ item.title }}</h4>
-          <p v-if="item.intent" class="item-intent">{{ item.intent }}</p>
+          <p v-if="item.intent" class="item-intent"><span class="item-label">意图</span>{{ item.intent }}</p>
         </div>
         <span class="state-pill">{{ $root.fmt.state(item.state) }}</span>
       </div>
+      <div v-if="item.instruction" class="item-instruction">
+        <span class="item-label">行动</span>
+        <p>{{ item.instruction }}</p>
+      </div>
+      <p v-if="item.reason" class="item-reason"><span class="item-label">调整</span>{{ item.reason }}</p>
       <div class="item-meta">
         <span class="meta-icon"><ui-icon name="clock" :size="13" /> {{ scheduleText }}</span>
         <span v-if="item.execution_probability < 1">概率 {{ Math.round(item.execution_probability * 100) }}%</span>
         <span>{{ $root.fmt.interaction(item.interaction) }}</span>
+        <span v-if="item.target" class="meta-icon item-target"><ui-icon name="message" :size="12" /> {{ $root.sessionLabel(item.target) }}</span>
         <span v-if="item.category" class="tag">{{ item.category }}</span>
         <span v-if="item.thread_id" class="tag thread-badge">目标 · {{ $root.threadTitle(item.thread_id) }}</span>
       </div>
@@ -100,12 +130,12 @@ export const Timeline = {
   <div v-else class="empty-state">
     <span class="empty-orbit"><ui-icon name="sparkle" :size="27" /></span><h3>今天还没有安排</h3>
     <p>给生活留一点空白，或者让 bot 规划接下来的节奏。</p>
-    <button class="primary" :class="{ 'is-cooling': $root.planningCooldownRemaining }" @click="$root.runPlanning()">{{ $root.planningCooldownRemaining ? '防抖 ' + $root.planningCooldownRemaining + 's' : '现在规划' }}</button>
+    <button class="primary" :class="{ 'is-cooling': $root.planningPending || $root.planningCooldownRemaining }" :disabled="$root.planningPending" @click="$root.runPlanning()">{{ $root.planningLabel('现在规划') }}</button>
   </div>`,
 }
 
 export const TodayView = {
-  components: { Timeline },
+  components: { Timeline, PlanBrief },
   template: `
   <div class="nte-today">
     <section class="scene-hero">
@@ -146,7 +176,8 @@ export const TodayView = {
         <div class="mission-clock"><strong>{{ $root.fmt.time($root.nextItem.scheduled_at) }}</strong><span>{{ $root.fmt.countdown($root.nextItem.scheduled_at, $root.clockNow) }}</span></div>
         <h2>{{ $root.nextItem.title }}</h2>
         <p>{{ $root.nextItem.intent || '按照自己的想法继续今天。' }}</p>
-        <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
+        <p v-if="$root.nextItem.instruction" class="mission-instruction">{{ $root.nextItem.instruction }}</p>
+        <div class="mission-meta"><span>{{ $root.fmt.interaction($root.nextItem.interaction) }}</span><span v-if="$root.nextItem.target" class="mission-target"><ui-icon name="message" :size="11" /> {{ $root.sessionLabel($root.nextItem.target) }}</span><span v-if="$root.nextItem.execution_probability < 1">概率 {{ Math.round($root.nextItem.execution_probability * 100) }}%</span></div>
         <div class="mission-queue" v-if="$root.upcomingItems.length"><span class="queue-label">随后</span><div v-for="item in $root.upcomingItems" :key="item.id"><b>{{ $root.fmt.time(item.scheduled_at) }}</b><span>{{ item.title }}</span></div></div>
         <div class="mission-telemetry">
           <span class="telemetry-label">SYSTEM TELEMETRY / 系统读数</span>
@@ -159,7 +190,7 @@ export const TodayView = {
       <div class="mission-main empty" v-else>
         <div class="mission-kicker"><i></i> SIGNAL EMPTY <span>暂无下一项</span></div>
         <h2>让 bot 写下一段生活</h2><p>今天可以留白，也可以现在给 bot 一次规划机会。</p>
-        <button class="mission-run" :class="{ 'is-cooling': $root.planningCooldownRemaining }" @click="$root.runPlanning()"><span>{{ $root.planningCooldownRemaining ? '防抖 ' + $root.planningCooldownRemaining + 's' : '开始规划' }}</span><ui-icon name="sparkle" :size="14" /></button>
+        <button class="mission-run" :class="{ 'is-cooling': $root.planningPending || $root.planningCooldownRemaining }" :disabled="$root.planningPending" @click="$root.runPlanning()"><span>{{ $root.planningLabel('开始规划') }}</span><ui-icon name="sparkle" :size="14" /></button>
       </div>
       <div class="mission-stats">
         <div><strong>{{ String($root.planStats.done).padStart(2, '0') }}</strong><span>已触发</span></div>
@@ -175,6 +206,7 @@ export const TodayView = {
 
     <section class="timeline-console">
       <div class="console-heading"><div><span class="kicker">SCHEDULE / 行为序列</span><h2>今天的生活轨迹</h2></div><div class="console-actions"><span class="console-count">{{ $root.planStats.total }} ENTRIES</span><button v-if="$root.data.plan" class="text-button danger" @click="$root.deleteDay($root.data.date)">删除整天</button></div></div>
+      <plan-brief v-if="$root.data.plan" :plan="$root.data.plan" />
       <timeline :plan="$root.data.plan" :server-time="$root.data.server_time" @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" @delete="$root.deleteItem($event)" @delete-block="$root.deleteBlock($event)" />
     </section>
 
@@ -206,7 +238,7 @@ export const TodayView = {
 }
 
 export const CalendarView = {
-  components: { Timeline },
+  components: { Timeline, PlanBrief },
   template: `
   <div class="calendar-layout">
     <section class="calendar-card glass">
@@ -232,14 +264,14 @@ export const CalendarView = {
     </section>
     <section class="day-detail glass">
       <div class="section-heading"><div><span class="eyebrow">{{ $root.selectedDate }}</span><h2>{{ $root.selectedPlan?.title || '未安排的一天' }}</h2></div>
-        <div class="console-actions"><button v-if="$root.selectedPlan" class="text-button danger" @click="$root.deleteDay($root.selectedDate)">删除整天</button><button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div></div>
+        <div class="console-actions"><button v-if="$root.selectedPlan" class="text-button danger" @click="$root.deleteDay($root.selectedDate)">删除整天</button><button class="soft-button" :class="{ 'is-cooling': $root.planningPending || $root.planningCooldownRemaining }" :disabled="$root.planningPending" @click="$root.runPlanning()"><ui-icon name="sparkle" :size="14" /> {{ $root.planningLabel('立即规划') }}</button><button class="soft-button" @click="$root.newItem()"><ui-icon name="plus" :size="15" /> 小项</button></div></div>
       <div v-if="$root.selectedCalendar" class="calendar-facts"><strong v-if="$root.calendarFlags.lunar_date">{{ $root.selectedCalendar.lunar?.text }}</strong><span v-if="$root.calendarFlags.solar_terms && $root.selectedCalendar.solar_term">{{ $root.selectedCalendar.solar_term }}</span><span v-if="($root.calendarFlags.holiday && $root.selectedCalendar.holiday?.is_off_day) || ($root.calendarFlags.adjusted_workday && $root.selectedCalendar.holiday && !$root.selectedCalendar.holiday.is_off_day)">{{ $root.selectedCalendar.holiday.name }} · {{ $root.selectedCalendar.holiday.is_off_day ? '放假' : '调班' }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.solar_festivals" :key="'s-'+name">{{ name }}</span><span v-if="$root.calendarFlags.festivals" v-for="name in $root.selectedCalendar.lunar_festivals" :key="'l-'+name">{{ name }}</span></div>
       <div v-if="$root.selectedForecast" class="calendar-weather-detail">
         <strong>预报</strong>
         <span>{{ $root.forecastDetailText($root.selectedForecast) }}</span>
       </div>
       <p v-if="$root.selectedDayTypes.length" class="day-types-line">日型：{{ $root.selectedDayTypes.join(' / ') }}</p>
-      <p v-if="$root.selectedPlan" class="plan-overview">{{ $root.selectedPlan.overview }}</p>
+      <plan-brief v-if="$root.selectedPlan" :plan="$root.selectedPlan" />
       <timeline :plan="$root.selectedPlan" :server-time="$root.data.server_time"
         @edit="$root.openItem($event)" @run="$root.runItem($event)" @skip="$root.skipItem($event)" @delete="$root.deleteItem($event)" @delete-block="$root.deleteBlock($event)" />
     </section>
