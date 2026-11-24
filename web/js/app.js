@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.2'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.2'
-import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.2'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.2'
-import { PetCompanion } from './pet.js?v=1.3.2'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.4.1'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.4.1'
+import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PlanBrief } from './views.js?v=1.3.4.1'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.4.1'
+import { PetCompanion } from './pet.js?v=1.3.4.1'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.3.2'
+const ASSET_VERSION = '1.3.4.1'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -16,7 +16,7 @@ const dateShift = (date, days) => {
 }
 
 const app = Vue.createApp({
-  components: { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PetCompanion },
+  components: { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PlanBrief, PetCompanion },
   data() {
     return {
       state,
@@ -109,6 +109,7 @@ const app = Vue.createApp({
       confirmDialog: null,
       confirmResolver: null,
       planningCooldownUntil: 0,
+      planningPending: false,
       runCooldownUntil: 0,
     }
   },
@@ -399,6 +400,12 @@ const app = Vue.createApp({
       state.view = view
       const epoch = ++this.viewEpoch
       try {
+        if (view === 'today') {
+          state.selectedDate = this.data.date
+          state.selectedPlan = this.data.plan
+          this.diffPlanId = this.data.plan?.id || ''
+          await this.loadDiff()
+        }
         if (view === 'changes') await Promise.all([this.loadRecentPlans(), this.loadRuns(), this.loadDiff()])
         if (view === 'threads') await this.loadThreads()
         if (view === 'settings') this.prepareSettings()
@@ -670,6 +677,20 @@ const app = Vue.createApp({
       const weather = await get(`/weather/current?persona=${encodeURIComponent(persona)}`)
       if (persona === state.selectedPersona) this.data.weather = weather
     },
+    sessionEntry(target) {
+      const value = String(target || '').trim()
+      if (!value) return null
+      const pool = [...(this.data.sessions || []), ...(this.data.planning_sessions || [])]
+      return pool.find((entry) => {
+        const id = typeof entry === 'string' ? entry : entry?.sid || entry?.id
+        return id === value
+      }) || null
+    },
+    sessionName(target) {
+      const found = this.sessionEntry(target)
+      if (!found || typeof found === 'string') return ''
+      return String(found.session_title || found.title || found.name || '').trim()
+    },
     itemTitle(id) {
       const item = (this.data.plan?.blocks || []).flatMap((block) => block.items || []).find((entry) => entry.id === id)
       return item?.title || '已移除的小项'
@@ -682,19 +703,77 @@ const app = Vue.createApp({
       const text = typeof value === 'object' ? JSON.stringify(value) : String(value)
       return text.length > 42 ? `${text.slice(0, 42)}…` : text
     },
-    async runPlanning() {
+    planningLabel(text) {
+      if (this.planningPending) return '等待规划…'
+      const wait = this.planningCooldownRemaining
+      return wait > 0 ? `防抖 ${wait}s` : text
+    },
+    async fetchPlanForDate(date, persona = state.selectedPersona) {
+      const plans = await get(`/plans?start=${encodeURIComponent(date)}&end=${encodeURIComponent(date)}&persona=${encodeURIComponent(persona)}`)
+      return (plans || []).find((plan) => plan.date === date) || null
+    },
+    async applyPlanningUpdate(date, persona, plan) {
+      if (persona !== state.selectedPersona) return
+      if (date === this.data.date) this.data.plan = plan
+      if (state.selectedDate === date) state.selectedPlan = plan
+      this.diffPlanId = plan.id
+      await Promise.all([
+        this.loadMonth().catch(() => {}),
+        this.loadDiff().catch(() => {}),
+        this.loadThreads().catch(() => {}),
+      ])
+    },
+    async waitForPlanningUpdate(date, persona, baselineRevision) {
+      const deadline = Date.now() + 60000
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        if (persona !== state.selectedPersona) return false
+        try {
+          const plan = await this.fetchPlanForDate(date, persona)
+          if (plan && (plan.revision || 0) > baselineRevision) {
+            await this.applyPlanningUpdate(date, persona, plan)
+            return true
+          }
+        } catch (_) {
+          // Keep polling through transient API errors until the deadline.
+        }
+      }
+      return false
+    },
+    async startPlanning(date, reason) {
+      if (this.planningPending) { notify('规划正在进行中', 'error'); return }
       const wait = this.planningCooldownRemaining
       if (wait > 0) { notify(`操作防抖中，${wait} 秒后可再次规划`, 'error'); return }
       this.planningCooldownUntil = Date.now() + 5000
+      this.planningPending = true
+      const persona = state.selectedPersona
+      let baselineRevision = 0
       try {
-        const date = state.selectedDate || this.data.date
-        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, {
+        const current = await this.fetchPlanForDate(date, persona)
+        baselineRevision = current?.revision || 0
+      } catch (_) { /* planning can still proceed */ }
+      try {
+        await post(`/planning/run?persona=${encodeURIComponent(persona)}`, {
           date,
-          reason: `WebUI 手动请求优先规划 ${date}；先处理这一天，同时仍可在配置允许的日期范围内调整其他日期。`,
+          reason,
           focus_date: date,
         })
         notify(`已把 ${date} 的规划机会交给 bot`)
-      } catch (error) { notify(error.message, 'error') }
+        const updated = await this.waitForPlanningUpdate(date, persona, baselineRevision)
+        if (updated) notify(`${date} 的规划已更新`)
+        else notify(`规划仍在进行；${date} 暂未出现新版本，可稍后刷新`)
+      } catch (error) {
+        notify(error.message, 'error')
+      } finally {
+        this.planningPending = false
+      }
+    },
+    async runPlanning() {
+      const date = state.selectedDate || this.data.date
+      await this.startPlanning(
+        date,
+        `WebUI 手动请求优先规划 ${date}；先处理这一天，同时仍可在配置允许的日期范围内调整其他日期。`,
+      )
     },
     newItem() {
       state.editor = { item: null, block: null }
@@ -983,16 +1062,10 @@ const app = Vue.createApp({
       state.templateEditor = { template: { name: state.selectedPlan.title || '我的生活模板', description: '', plan, planning_prompt: '', execution_prompt: '', icon: 'sparkle' } }
     },
     async planWithTemplate(template) {
-      const wait = this.planningCooldownRemaining
-      if (wait > 0) { notify(`操作防抖中，${wait} 秒后可再次规划`, 'error'); return }
-      this.planningCooldownUntil = Date.now() + 5000
-      try {
-        const date = state.selectedDate || this.data.date
-        const guidance = String(template.planning_prompt || template.prompt || template.description || '').trim()
-        const reason = `按模板「${template.name}」优先规划 ${date}。${guidance ? `\n模板引导：${guidance}` : ''}`
-        await post(`/planning/run?persona=${encodeURIComponent(state.selectedPersona)}`, { date, reason, focus_date: date })
-        notify(`已把 ${date} 的模板规划机会交给 bot`)
-      } catch (error) { notify(error.message, 'error') }
+      const date = state.selectedDate || this.data.date
+      const guidance = String(template.planning_prompt || template.prompt || template.description || '').trim()
+      const reason = `按模板「${template.name}」优先规划 ${date}。${guidance ? `\n模板引导：${guidance}` : ''}`
+      await this.startPlanning(date, reason)
     },
     async saveTemplate(form) {
       try {
@@ -1330,7 +1403,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.3.2'
+import { del as requestDelete } from './api.js?v=1.3.4.1'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }
