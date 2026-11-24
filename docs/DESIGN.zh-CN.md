@@ -252,7 +252,7 @@ Item 面向用户的主状态采用“待触发 / 已触发 / 未触发”语义
 - 最终正常输出为 `<msg/>` 或静默处理时，记 `triggered_silent`。**静默是合法选择，不是失败**。
 - 概率未命中为 `skipped_probability`；有效期过去而未唤醒为 `missed`；权限/模型/投递链明确错误为 `failed`；崩溃后无法确定为 `interrupted`。
 - Run 另保留 `queued/running/responded/finalized` 和发送结果用于诊断，不把平台是否发言偷换成生活小项是否“成功”。
-- `must_message` 是例外：它要求可见投递，正常但静默的响应不算满足该投递要求，应标记 `delivery_unmet`，与 `triggered` 同时呈现，而非说 LLM 调用失败。
+- `must_message` 是例外：它要求可见投递，正常但静默的响应不算满足该投递要求，应标记 `delivery_unmet`，与 `triggered` 同时呈现，而非说 LLM 调用失败。创建时拒绝把 must_message 放进安静投递时段；若创建后配置变更导致已有项落入安静时段，安静优先：`<msg/>` 合法，不记 `delivery_unmet`。
 
 ---
 
@@ -757,7 +757,7 @@ Plan 的 `overview/planned_appearance/planned_mood` 是**预计**；DayState 是
 ### 17.2 `auto / must_message / silent` 与梦
 
 - `auto`：默认。可回应、可用工具，也可 `<msg/>`；安静投递时段内自动按 silent 处理。
-- `must_message`：要求可见互动；若处于安静投递时段，创建时拒绝或要求改期，正常但空输出记 `delivery_unmet`。
+- `must_message`：要求可见互动；创建时若处于安静投递时段则拒绝或要求改期。创建后因配置变更落入安静时段的已有项按安静优先：`<msg/>` 合法，不记 `delivery_unmet`；安静时段外空输出仍记 `delivery_unmet`。
 - `silent`：允许内在生活，不向 IM 发消息；`<msg/>` 是合法的 `triggered_silent`。
 
 梦的典型安排是：凌晨 `silent` 的“做梦”→ 私有 Experience 保存梦境 → 早晨另一项“梦后分享”按 `auto/must_message` 读取相关 Experience。普通 silent 不要求保存体验，不增加工具轮。
@@ -769,7 +769,7 @@ Plan 的 `overview/planned_appearance/planned_mood` 是**预计**；DayState 是
 这三类策略独立，按人格/日型配置并支持跨午夜：
 
 1. **禁止执行时段 `blocked_execution_windows`**：任何 Item 都不得在此期间唤醒。随机窗口先扣除这些区间；精确项落在这里则校验失败。可给用户明确批准的类别白名单，但默认无例外。
-2. **安静投递时段 `quiet_delivery_windows`**：允许 silent/auto 内在活动，不允许可见消息。must_message 不允许落入，auto 在该时段静默。它不等同于禁止执行，所以夜间做梦可以保留。
+2. **安静投递时段 `quiet_delivery_windows`**：允许 silent/auto 内在活动，不允许可见消息。创建时 must_message 不允许落入（已有项被配置变更移入时按 17.2 的安静优先处理），auto 在该时段静默。它不等同于禁止执行，所以夜间做梦可以保留。
 3. **必需覆盖时段 `required_coverage_windows`**：例如 07:00–09:00 至少 1 项、18:00–22:00 至少 2 项；每项有 `min_items/max_items`，可选 category、互动方式或日型过滤。
 
 每日 `min_items/max_items` 控制全日总量，必需时段控制结构，禁止/安静时段控制可执行与可打扰性。每次 create/revise/update 都校验整个结果；窗口随机序列在扣除禁用区间后再验证容量。用户手工可突破软配额，但禁止执行硬边界默认仍需显式覆盖并留审计。
@@ -1063,7 +1063,7 @@ kira_rhythm_Date/
 
 ### 20.3 规划时强制回应
 
-规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。
+规划触发时先把本次 required ids 持久化到 `planning_runs.required_thread_ids_json`，之后上下文和缺回应检查都以该集合为准，不在触发后重算。规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。若 `planning_limit > response_limit`，额外条目放 `threads_reference`，只作参考、不要求回应。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。关闭目标层或 `require_response` 时只给 `threads_reference` 或不注入，不伪装成必回应。
 
 ### 20.4 展示粒度
 
@@ -1079,7 +1079,7 @@ KiraAI 会话记忆会把 assistant 的 `tool_calls`（含完整 plans JSON）�
 
 ### 20.6 上下文预算
 
-规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。默认 `history_char_budget=16000`。
+规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。最小对象仍保留 `threads_requiring_response`/`response_contract`，item 回合还保留 `current_item`/`delivery_policy`；其余用 `rhythm_view` 取。默认 `history_char_budget=16000`。
 
 ### 20.7 迁移
 
