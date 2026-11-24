@@ -404,11 +404,6 @@ class ThreadService:
             "SELECT * FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
         if not rows:
             return []
-        logs = await self._logs([row["id"] for row in rows], limits["logs_in_planning"])
-        for row in rows:
-            row["logs"] = logs.get(row["id"], [])
-            row["last_note"] = (row["logs"] or [{}])[0].get("note", "")
-            row["log_count"] = len(row["logs"])
         def sort_key(row: dict[str, Any]) -> tuple:
             info = self._due_info(str(row.get("due_at") or ""), config)
             due_days = info.get("due_in_days", 10**6)
@@ -417,8 +412,14 @@ class ThreadService:
                     float(row.get("last_touched") or 0))
 
         rows.sort(key=sort_key)
+        selected = rows[:limit]
+        logs = await self._logs([row["id"] for row in selected], limits["logs_in_planning"])
+        for row in selected:
+            row["logs"] = logs.get(row["id"], [])
+            row["last_note"] = (row["logs"] or [{}])[0].get("note", "")
+            row["log_count"] = len(row["logs"])
         result = []
-        for index, row in enumerate(rows[:limit]):
+        for index, row in enumerate(selected):
             padded = self._public(
                 row, config, dossier_mode="full" if index < limits["full_dossier_in_planning"] else "excerpt",
                 excerpt_chars=limits["excerpt_chars"], log_limit=limits["logs_in_planning"],
@@ -431,17 +432,24 @@ class ThreadService:
         config = await self.store.get_config(persona_id)
         if not config.get("threads", {}).get("enabled", True):
             return {"required": False, "threads": [], "more": 0, "contract": ""}
-        required = await self.required(persona_id)
+        limits = self._limits(config)
+        settings = config.get("threads", {})
+        response_limit = int(settings.get("response_limit", limits["planning_limit"]))
+        require_response = bool(settings.get("require_response", True))
+        requested = max(limits["planning_limit"], response_limit)
+        required = await self.required(persona_id, requested)
         if not required:
             return {"required": False, "threads": [], "more": 0, "contract": ""}
+        for index, row in enumerate(required):
+            row["response_required"] = require_response and index < response_limit
         total = await self.store.one(
             "SELECT COUNT(*) AS count FROM threads WHERE persona_id=? AND status='open'", (persona_id,))
         more = max(0, int(total["count"] if total else 0) - len(required))
         contract = (
-            "本次规划必须先调用 rhythm_update 的 thread_response，逐条回应下列 id；"
+            "本次规划必须先调用 rhythm_update 的 thread_response，逐条回应 response_required=true 的 id；"
             "advance / defer / waiting / no_change + 一句原因。回应不等于必须推进，no_change 合法；"
-            "no_change 也必须写一句依据。未覆盖会返回 thread_response_missing。")
-        return {"required": True, "threads": required, "more": more, "contract": contract}
+            "no_change 也必须写一句依据。未覆盖会返回 thread_response_missing。") if require_response else ""
+        return {"required": require_response, "threads": required, "more": more, "contract": contract}
 
     async def _record_one(self, run_id: str, persona_id: str, thread_id: str,
                           response: str, note: str) -> None:

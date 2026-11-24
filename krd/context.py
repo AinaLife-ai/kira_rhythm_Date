@@ -406,12 +406,18 @@ class ContextBuilder:
             "recent_pattern": pattern,
             "weather": weather
         }
-        if thread_payload.get("required"):
-            payload["threads_requiring_response"] = thread_payload["threads"]
-            if thread_payload.get("more"):
-                payload["threads_more"] = thread_payload["more"]
-            payload["response_contract"] = thread_payload.get("contract", "")
-        if unanswered:
+        if thread_payload.get("threads"):
+            if thread_payload.get("required"):
+                payload["threads_requiring_response"] = thread_payload["threads"]
+                if thread_payload.get("more"):
+                    payload["threads_more"] = thread_payload["more"]
+                payload["response_contract"] = thread_payload.get("contract", "")
+            else:
+                payload["threads_reference"] = thread_payload["threads"]
+                if thread_payload.get("more"):
+                    payload["threads_more"] = thread_payload["more"]
+                payload["threads_note"] = "目标/约定仅供参考；可按需推进或打卡，未回应不会阻断本次规划。"
+        if unanswered and thread_payload.get("required"):
             payload["unanswered_threads"] = unanswered
         try:
             untouched = await self.threads.untouched(
@@ -743,7 +749,7 @@ class ContextBuilder:
             return False
 
         def trim_threads() -> bool:
-            threads = payload.get("threads_requiring_response")
+            threads = payload.get("threads_requiring_response") or payload.get("threads_reference")
             if not isinstance(threads, list) or not threads:
                 return False
             for thread in reversed(threads):

@@ -5,7 +5,7 @@ from typing import Any
 from .assets import AssetService
 from .config import DEFAULT_CONFIG
 from .models import ACTIVE_ITEM_STATES, KRDError, TERMINAL_ITEM_STATES, new_id, now
-from .threads import THREAD_KINDS, THREAD_STATUSES
+from .threads import THREAD_KINDS, THREAD_STATUSES, ThreadService
 from .timeutils import parse_date
 from .store import dumps, loads
 
@@ -157,13 +157,20 @@ async def import_commit(runtime, persona_id: str, data: dict[str, Any]) -> dict[
             status = str(row.get("status", "open"))
             if kind not in THREAD_KINDS or status not in THREAD_STATUSES:
                 raise KRDError("invalid_import", "Imported thread kind or status is invalid")
+            try:
+                priority = int(row.get("priority", 1))
+            except (TypeError, ValueError) as exc:
+                raise KRDError("invalid_import", "Imported thread priority is invalid") from exc
+            if not 0 <= priority <= 3:
+                raise KRDError("invalid_import", "Imported thread priority is outside 0..3")
+            due_at = ThreadService._parse_due(row.get("due_at", ""))
             await db.execute(
                 "INSERT INTO threads(id,persona_id,kind,title,dossier,status,priority,next_step,due_at,"
                 "last_touched,created_at,updated_at,source,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (identifier, persona_id, kind, str(row.get("title", ""))[:120],
                  str(row.get("dossier", ""))[:2000], status,
-                 int(row.get("priority", 1)), str(row.get("next_step", ""))[:200],
-                 str(row.get("due_at", ""))[:19], float(row.get("last_touched", timestamp)),
+                 priority, str(row.get("next_step", ""))[:200],
+                 due_at, float(row.get("last_touched", timestamp)),
                  float(row.get("created_at", timestamp)), float(row.get("updated_at", timestamp)),
                  str(row.get("source", "import"))[:40], "import", "import"))
             imported_threads += 1

@@ -245,6 +245,8 @@ def validate_config(config: dict[str, Any]) -> None:
         value = _typed(threads, key, int)
         if not minimum <= value <= maximum:
             raise KRDError("invalid_config", f"threads.{key} is outside its permitted range")
+    if threads["planning_limit"] < threads["response_limit"]:
+        raise KRDError("invalid_config", "threads.planning_limit must be >= threads.response_limit")
     for key in ("enabled", "auto_plan", "startup_plan", "plan_on_all_triggered", "all_terminal_include_failed",
                 "allow_exact", "allow_window", "allow_probability", "inject_day_state", "inject_agenda", "approval_required"):
         _typed(config, key, bool)
@@ -338,5 +340,12 @@ def validate_config(config: dict[str, Any]) -> None:
 def normalized(config: dict[str, Any] | None) -> dict[str, Any]:
     result = deep_merge(DEFAULT_CONFIG, config or {})
     migrate_legacy_defaults(result)
+    threads = result.get("threads")
+    if isinstance(threads, dict):
+        try:
+            if int(threads.get("planning_limit", 8)) < int(threads.get("response_limit", 8)):
+                threads["planning_limit"] = int(threads["response_limit"])
+        except (TypeError, ValueError):
+            pass
     validate_config(result)
     return result

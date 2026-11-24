@@ -599,7 +599,7 @@ export const SettingsView = {
           <p class="field-hint">前几条给档案全文，其余给摘要；执行时只显示当前小项关联的那条；聊天只显示 top 5。完整档案始终可以用 rhythm_view(scope="thread") 查。</p>
           <div class="form-grid">
             <label><span>规划最多回应几条</span><small>按到期、停滞、优先级排序；默认 8 条。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.response_limit"></label>
-            <label><span>规划展示条数</span><small>默认 8 条；超出的只计数，不强制回应。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.planning_limit"></label>
+            <label><span>规划展示条数</span><small>默认 8 条；至少等于“规划最多回应几条”。低于时按回应条数展示。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.planning_limit"></label>
             <label><span>其中档案全文条数</span><small>默认 5 条；其余给摘要。</small><input type="number" min="0" max="20" v-model.number="$root.draft.threads.full_dossier_in_planning"></label>
             <label><span>档案摘要字数</span><small>没有全文的条目给多少字；默认 300。</small><input type="number" min="50" max="2000" step="50" v-model.number="$root.draft.threads.excerpt_chars"></label>
             <label><span>规划时展示打卡条数</span><small>每条目标最近几次打卡；默认 3 条。</small><input type="number" min="0" max="10" v-model.number="$root.draft.threads.logs_in_planning"></label>

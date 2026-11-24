@@ -39,6 +39,7 @@ async def store(tmp_path):
     {"appearance": {"avatar_adapter_order": {}}},
     {"inject_agenda": "yes"},
     {"agenda_max_chars": 200},
+    {"threads": {"planning_limit": None}},
 ])
 @pytest.mark.asyncio
 async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):
@@ -93,6 +94,8 @@ def test_legacy_default_prompts_upgrade_without_touching_custom_text():
     assert migrated["history_char_budget"] == 16000
     assert migrated["threads"]["chat_limit"] == 5
     assert migrated["threads"]["full_dossier_in_planning"] == 5
+    clamped = normalized({"threads": {"planning_limit": 5, "response_limit": 8}})
+    assert clamped["threads"]["planning_limit"] == 8
 
     custom = normalized({"planning_prompt": "我的自定义规划提示词。", "history_char_budget": 9000})
     assert custom["planning_prompt"] == "我的自定义规划提示词。"

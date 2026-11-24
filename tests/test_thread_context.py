@@ -89,6 +89,19 @@ async def test_compact_state_injects_threads_block(runtime):
 
 
 @pytest.mark.asyncio
+async def test_planning_thread_response_can_be_optional(runtime):
+    await runtime.threads.add("persona-a", {"kind": "goal", "title": "参考目标", "dossier": "档案"})
+    await runtime.store.update_config("persona-a", {"threads": {"require_response": False}}, 0)
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "x"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "threads_requiring_response" not in body
+    assert body["threads_reference"][0]["title"] == "参考目标"
+    assert body["threads_reference"][0]["response_required"] is False
+    assert "response_contract" not in body
+
+
+@pytest.mark.asyncio
 async def test_chat_block_default_on_and_can_be_disabled(runtime):
     await runtime.threads.add("persona-a", {"kind": "promise", "title": "给阿岚画头像",
                                             "dossier": "档案全文", "next_step": "修线稿"})

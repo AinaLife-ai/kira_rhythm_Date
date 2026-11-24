@@ -157,6 +157,24 @@ async def test_chat_block_defaults_to_top_five(runtime):
 
 
 @pytest.mark.asyncio
+async def test_planning_payload_covers_all_required_threads(runtime):
+    for index in range(12):
+        await runtime.threads.add("persona-a", {"kind": "goal", "title": f"目标 {index}",
+                                                "dossier": f"档案 {index}"})
+    payload = await runtime.threads.planning_payload("persona-a")
+    assert len(payload["threads"]) == 8
+    assert payload["more"] == 4
+    assert all(row["response_required"] for row in payload["threads"])
+
+    await runtime.store.update_config(
+        "persona-a", {"threads": {"planning_limit": 10, "response_limit": 8}}, 0)
+    wider = await runtime.threads.planning_payload("persona-a")
+    assert len(wider["threads"]) == 10
+    assert sum(1 for row in wider["threads"] if row["response_required"]) == 8
+    assert wider["threads"][8]["response_required"] is False
+
+
+@pytest.mark.asyncio
 async def test_thread_checkin_helpers(runtime):
     thread = await runtime.threads.add("persona-a", {"kind": "project", "title": "修相机"})
     await runtime.threads.auto_touch("persona-a", thread["id"], "执行了「拆底盖」", item_id="itm_test")
