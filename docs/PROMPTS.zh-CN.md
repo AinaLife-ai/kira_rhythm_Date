@@ -91,6 +91,8 @@ user_prompt
 
 回应只要求表态，不要求推进；`no_change` 也必须写一句依据。未覆盖会返回 `thread_response_missing`，`rhythm_plan` 在 reject 模式下返回 `thread_response_required`，warn 模式只警告。
 
+空目标层策略：`nudge`（默认）在活动目标少于 `empty_min` 时提示“若确实有跨天目标，可用 `thread_add` 建立到 `empty_min`–`empty_max` 条；没有就保持现状”；`require` 会在活动目标少于 `empty_min` 时让 `rhythm_plan` 返回 `thread_seed_required`；`empty_max` 只是建议，不强迫删除。空层不会输出 `[KRD Threads]` 标题，`[KRD Agenda]` 无计划/无活动项时也不会输出空标题。
+
 普通聊天会以紧凑块显示 top 5：
 
 ```text

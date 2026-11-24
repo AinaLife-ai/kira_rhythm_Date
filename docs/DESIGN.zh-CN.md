@@ -1063,15 +1063,16 @@ kira_rhythm_Date/
 
 ### 20.3 规划时强制回应
 
-规划触发时先把本次 required ids 持久化到 `planning_runs.required_thread_ids_json`，之后上下文和缺回应检查都以该集合为准，不在触发后重算。规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。若 `planning_limit > response_limit`，额外条目放 `threads_reference`，只作参考、不要求回应。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。关闭目标层或 `require_response` 时只给 `threads_reference` 或不注入，不伪装成必回应。
+规划触发时先把本次 required ids 持久化到 `planning_runs.required_thread_ids_json`，之后上下文和缺回应检查都以该集合为准，不在触发后重算。规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。若 `planning_limit > response_limit`，额外条目放 `threads_reference`，只作参考、不要求回应。
+空目标层策略 `threads.empty_mode`：`allow` 允许为空；`nudge`（默认）在活动目标少于 `empty_min` 时提示 bot 尝试建立到 `empty_min`–`empty_max` 条真实目标，不阻断；`require` 在规划时要求活动目标达到 `empty_min`，否则 `rhythm_plan` 返回 `thread_seed_required`，先 `thread_add` 再重试；`empty_max` 只是建立建议，不强迫删除已有目标。活动目标只统计 `open/paused`，`done/dropped/deleted` 不算。普通聊天 `[KRD Threads]` 为空时不输出标题。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。关闭目标层或 `require_response` 时只给 `threads_reference` 或不注入，不伪装成必回应。
 
 ### 20.4 展示粒度
 
 - 规划：top 5 档案全文，其余 300 字摘要 + 最近 3 条打卡；
 - 执行：只显示当前小项关联的 1 条，档案摘要 300 字 + 最近 2 条打卡；
-- 普通聊天：`[KRD Threads]` top 5，一行一条，不含档案；
+- 普通聊天：`[KRD Threads]` top 5，一行一条，不含档案；空层不输出标题；
 - `rhythm_view(scope="thread")`：完整档案 + 全部打卡；
-- `[KRD Agenda]` 不变。
+- `[KRD Agenda]` 无计划或无活动小项时不输出标题；`[KRD Weather]` 无天气时不输出；`[KRD DayState]` 仍包含日型/限额/下一项等核心状态。
 
 ### 20.5 记忆卫生
 

@@ -47,3 +47,13 @@ def test_settings_draft_normalizes_preview_and_partial_config():
     assert "普通聊天附带待办清单" in views
     assert "待办清单最多字符数" in views
     assert "calendar_context" in fixture
+
+def test_bottom_nav_uses_six_columns_without_wrapping():
+    css = (ROOT / "web" / "css" / "nte.css").read_text(encoding="utf-8")
+    assert ".main-nav { display:grid; grid-template-columns:repeat(6,minmax(0,1fr));" in css
+    assert ".main-nav button:last-child" not in css
+    views = (ROOT / "web" / "js" / "views.js").read_text(encoding="utf-8")
+    assert "$root.draft.threads.empty_mode" in views
+    assert "$root.draft.threads.empty_min" in views
+    assert "$root.draft.threads.empty_max" in views
+    assert "要求至少 {{ $root.draft.threads.empty_min }} 条（严格）" in views

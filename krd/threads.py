@@ -710,6 +710,12 @@ class ThreadService:
         return [{"date": row["date"], "title": row["title"], "thread": row.get("thread_title", "")}
                 for row in rows]
 
+    async def active_count(self, persona_id: str) -> int:
+        row = await self.store.one(
+            "SELECT COUNT(*) AS count FROM threads WHERE persona_id=? AND status IN ('open','paused')",
+            (persona_id,))
+        return int(row["count"] if row else 0)
+
     async def counts(self, persona_id: str) -> dict[str, int]:
         rows = await self.store.all(
             "SELECT status,COUNT(*) AS count FROM threads WHERE persona_id=? GROUP BY status", (persona_id,))
