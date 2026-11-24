@@ -1,4 +1,4 @@
-import { get, put } from './api.js?v=1.2.18'
+import { get, put } from './api.js?v=1.3.0.2'
 
 export const state = Vue.reactive({
   loading: true,
@@ -12,6 +12,9 @@ export const state = Vue.reactive({
   diagnostics: null,
   notices: [],
   editor: null,
+  threadEditor: null,
+  threadTouch: null,
+  threads: [],
   dayStateEditor: false,
   dayTypeEditor: null,
   templateEditor: null,

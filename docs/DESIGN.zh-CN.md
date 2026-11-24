@@ -249,10 +249,10 @@ bot 可新增、删除、移动、改时间窗、改概率、改目标、改意�
 Item 面向用户的主状态采用“待触发 / 已触发 / 未触发”语义，而不是强迫每个生活动作证明 done：
 
 - 收到正常模型响应（含工具调用或正常文本）后，Item 记 `triggered`；这就是默认的正常终态。
-- 最终正常输出为 `<msg/>` 或静默处理时，记 `triggered_silent`。**静默是合法选择，不是失败**。
+- 最终正常输出为 `<msg/>` 或静默处理时，记 `triggered_silent`。**静默是合法选择，不是失败**。工具调用本身不会触发 `silence_unmet`；最终文本为 `<msg/>` 时仍按静默处理。
 - 概率未命中为 `skipped_probability`；有效期过去而未唤醒为 `missed`；权限/模型/投递链明确错误为 `failed`；崩溃后无法确定为 `interrupted`。
 - Run 另保留 `queued/running/responded/finalized` 和发送结果用于诊断，不把平台是否发言偷换成生活小项是否“成功”。
-- `must_message` 是例外：它要求可见投递，正常但静默的响应不算满足该投递要求，应标记 `delivery_unmet`，与 `triggered` 同时呈现，而非说 LLM 调用失败。
+- `must_message` 是例外：它要求可见投递，正常但静默的响应不算满足该投递要求，应标记 `delivery_unmet`，与 `triggered` 同时呈现，而非说 LLM 调用失败。创建时拒绝把 must_message 放进安静投递时段；若创建后配置变更导致已有项落入安静时段，安静优先：`<msg/>` 合法，不记 `delivery_unmet`。
 
 ---
 
@@ -757,7 +757,7 @@ Plan 的 `overview/planned_appearance/planned_mood` 是**预计**；DayState 是
 ### 17.2 `auto / must_message / silent` 与梦
 
 - `auto`：默认。可回应、可用工具，也可 `<msg/>`；安静投递时段内自动按 silent 处理。
-- `must_message`：要求可见互动；若处于安静投递时段，创建时拒绝或要求改期，正常但空输出记 `delivery_unmet`。
+- `must_message`：要求可见互动；创建时若处于安静投递时段则拒绝或要求改期。创建后因配置变更落入安静时段的已有项按安静优先：`<msg/>` 合法，不记 `delivery_unmet`；安静时段外空输出仍记 `delivery_unmet`。
 - `silent`：允许内在生活，不向 IM 发消息；`<msg/>` 是合法的 `triggered_silent`。
 
 梦的典型安排是：凌晨 `silent` 的“做梦”→ 私有 Experience 保存梦境 → 早晨另一项“梦后分享”按 `auto/must_message` 读取相关 Experience。普通 silent 不要求保存体验，不增加工具轮。
@@ -769,7 +769,7 @@ Plan 的 `overview/planned_appearance/planned_mood` 是**预计**；DayState 是
 这三类策略独立，按人格/日型配置并支持跨午夜：
 
 1. **禁止执行时段 `blocked_execution_windows`**：任何 Item 都不得在此期间唤醒。随机窗口先扣除这些区间；精确项落在这里则校验失败。可给用户明确批准的类别白名单，但默认无例外。
-2. **安静投递时段 `quiet_delivery_windows`**：允许 silent/auto 内在活动，不允许可见消息。must_message 不允许落入，auto 在该时段静默。它不等同于禁止执行，所以夜间做梦可以保留。
+2. **安静投递时段 `quiet_delivery_windows`**：允许 silent/auto 内在活动，不允许可见消息。创建时 must_message 不允许落入（已有项被配置变更移入时按 17.2 的安静优先处理），auto 在该时段静默。它不等同于禁止执行，所以夜间做梦可以保留。
 3. **必需覆盖时段 `required_coverage_windows`**：例如 07:00–09:00 至少 1 项、18:00–22:00 至少 2 项；每项有 `min_items/max_items`，可选 category、互动方式或日型过滤。
 
 每日 `min_items/max_items` 控制全日总量，必需时段控制结构，禁止/安静时段控制可执行与可打扰性。每次 create/revise/update 都校验整个结果；窗口随机序列在扣除禁用区间后再验证容量。用户手工可突破软配额，但禁止执行硬边界默认仍需显式覆盖并留审计。
@@ -1044,3 +1044,43 @@ kira_rhythm_Date/
 ---
 
 **一句话验收**：用户看到的不是“bot 到点执行了任务”，而是“它记得自己为何这样安排，经历过什么，知道计划哪里变了，并能以自己的理由继续安排接下来的生活”。
+
+---
+
+## 20. 目标与约定层（v1.3.0）
+
+### 20.1 定位
+
+目标与约定不是计划小项，也不是普通聊天记忆。它保存“我打算做什么、答应过什么、做到哪一步”：`goal / promise / project / habit / open_loop / mystery`。计划负责某一天，Threads 负责跨天的方向。
+
+### 20.2 数据
+
+- `threads`：`kind/title/dossier/status/priority/next_step/due_at/last_touched/source/created_by/updated_by`
+- `thread_logs`：每次打卡的 `at/note/item_id/kind/actor`
+- `thread_responses`：某次规划回合对某条 Threads 的表态，`UNIQUE(run_id, thread_id)`
+
+`dossier` 是档案正文（默认 ≤2000 字），`next_step` 是日常展示用的一句话，`due_at` 可空或 `YYYY-MM-DD[ HH:MM[:SS]]`。Thread 不绑定会话；和谁/在哪写在档案里，执行会话仍由具体 item 的 `target` 决定。
+
+### 20.3 规划时强制回应
+
+规划触发时先把本次 required ids 持久化到 `planning_runs.required_thread_ids_json`，之后上下文和缺回应检查都以该集合为准，不在触发后重算。规划上下文提供 `threads_requiring_response`（默认 top 8，按到期、停滞、优先级排序）和 `response_contract`。若 `planning_limit > response_limit`，额外条目放 `threads_reference`，只作参考、不要求回应。模型必须先调用 `rhythm_update` 的 `thread_response` 逐条表态：`advance / defer / waiting / no_change`，每条一句原因。回应只要求“看见并表态”，不强制推进；`no_change` 合法但必须有依据。未覆盖时 `rhythm_plan` 返回 `thread_response_required`，部分覆盖返回 `thread_response_missing`。规划回合完全未调用工具时，`on_llm_response` 标记 `thread_response_missing`，下一次上下文出现 `unanswered_threads`。关闭目标层或 `require_response` 时只给 `threads_reference` 或不注入，不伪装成必回应。
+
+### 20.4 展示粒度
+
+- 规划：top 5 档案全文，其余 300 字摘要 + 最近 3 条打卡；
+- 执行：只显示当前小项关联的 1 条，档案摘要 300 字 + 最近 2 条打卡；
+- 普通聊天：`[KRD Threads]` top 5，一行一条，不含档案；
+- `rhythm_view(scope="thread")`：完整档案 + 全部打卡；
+- `[KRD Agenda]` 不变。
+
+### 20.5 记忆卫生
+
+KiraAI 会话记忆会把 assistant 的 `tool_calls`（含完整 plans JSON）写回 `session.content`，默认最多 10 个回合。KRD 在规划前把历史规划回合的工具调用原文替换为一行摘要，计划本体仍保存在 SQLite，并由 `recent_plans`（最近 3 天完整 + 更早 4 天摘要）提供。`memory_hygiene=off` 可关闭；仅影响 LLM 会话记忆，不影响消息归档。
+
+### 20.6 上下文预算
+
+规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。最小对象仍保留 `threads_requiring_response`/`response_contract`，以及 `current_item`/`current_plan`/`next_item`/`delivery_policy`/`plan`/`daily_limits`/`constraints`/`calendar`/`thread`/`day_so_far` 等关键字段；其余用 `rhythm_view` 取。默认 `history_char_budget=16000`。
+
+### 20.7 迁移
+
+`PRAGMA user_version=2`：仅新增 `items.thread_id`、`planning_runs.required_thread_ids_json/response_status` 和 threads 三张表；旧计划、旧运行、旧配置不改写。导出格式 v2，导入兼容 v1/v2。

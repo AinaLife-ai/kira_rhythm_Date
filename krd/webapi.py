@@ -5,6 +5,7 @@ from typing import Any
 from .assets import AssetService
 from .config import DEFAULT_CONFIG
 from .models import ACTIVE_ITEM_STATES, KRDError, TERMINAL_ITEM_STATES, new_id, now
+from .threads import THREAD_KINDS, THREAD_STATUSES, ThreadService
 from .timeutils import parse_date
 from .store import dumps, loads
 
@@ -51,6 +52,10 @@ async def bootstrap(runtime, persona_id: str = "") -> dict[str, Any]:
         "weather": await runtime.weather.summary(persona_id, allow_network=False),
         "avatar": await runtime.avatars.current(persona_id), "banner": banner, "background": background,
         "scheduler": {"running": runtime.scheduler.running, "next_due": await runtime.scheduler.next_due()},
+        "threads": await runtime.threads.list(persona_id, status="open", limit=3)
+        if getattr(runtime, "threads", None) and config.get("threads", {}).get("enabled", True) else [],
+        "thread_counts": await runtime.threads.counts(persona_id)
+        if getattr(runtime, "threads", None) and config.get("threads", {}).get("enabled", True) else {},
         "server_time": now(),
     }
 
@@ -70,34 +75,39 @@ async def export_data(runtime, persona_id: str) -> dict[str, Any]:
     plan_rows = await runtime.store.all("SELECT * FROM plans WHERE persona_id=?", (persona_id,))
     plan_ids = {row["id"] for row in plan_rows}
     tables = {"plans": plan_rows}
-    for table in ("blocks", "items", "plan_revisions", "runs", "planning_runs", "day_states", "experiences", "day_types", "session_pools", "mutations"):
+    for table in ("blocks", "items", "plan_revisions", "runs", "planning_runs", "day_states", "experiences",
+                  "day_types", "session_pools", "mutations", "threads", "thread_logs", "thread_responses"):
         rows = await runtime.store.all(f"SELECT * FROM {table}")
         if table in {"blocks", "items", "plan_revisions", "runs", "mutations"}:
             rows = [row for row in rows if row.get("plan_id") in plan_ids]
         else:
             rows = [row for row in rows if row.get("persona_id") == persona_id]
         tables[table] = rows
-    return {"schema_version": 1, "plugin_id": "kira_rhythm_Date", "persona_id": persona_id,
+    thread_ids = {row["id"] for row in tables.get("threads", [])}
+    tables["thread_logs"] = [row for row in tables.get("thread_logs", []) if row.get("thread_id") in thread_ids]
+    return {"schema_version": 2, "plugin_id": "kira_rhythm_Date", "persona_id": persona_id,
             "config": await runtime.store.get_config(persona_id),
             "templates": await runtime.store.get_setting(f"templates:{persona_id}", []),
             "tables": tables, "exported_at": now()}
 
 
 async def import_preview(runtime, persona_id: str, data: dict[str, Any]) -> dict[str, Any]:
-    if (not isinstance(data, dict) or data.get("schema_version") != 1 or
+    if (not isinstance(data, dict) or data.get("schema_version") not in {1, 2} or
             data.get("plugin_id") != "kira_rhythm_Date" or not isinstance(data.get("tables"), dict)):
-        raise KRDError("invalid_import", "Expected a KRD schema v1 export")
+        raise KRDError("invalid_import", "Expected a KRD schema v1 or v2 export")
     if len(dumps(data)) > 20_000_000:
         raise KRDError("invalid_import", "Import file exceeds 20 MB")
     tables = data["tables"]
     limits = {"plans": 366, "blocks": 5000, "items": 50000, "day_types": 500,
-              "day_states": 5000, "experiences": 50000}
+              "day_states": 5000, "experiences": 50000, "threads": 5000,
+              "thread_logs": 50000, "thread_responses": 5000}
     for table, maximum in limits.items():
         rows = tables.get(table, [])
         if not isinstance(rows, list) or len(rows) > maximum:
             raise KRDError("invalid_import", f"Invalid or oversized {table} collection")
     plans = tables["plans"]
-    return {"persona_id": persona_id, "plans": len(plans), "day_types": len(tables["day_types"]),
+    return {"persona_id": persona_id, "plans": len(plans), "day_types": len(tables.get("day_types", [])),
+            "threads": len(tables.get("threads", [])),
             "include_config": bool(data.get("config")),
             "warnings": ["Runs are not replayed. Historical plans are archived; ambiguous active states are cancelled."]}
 
@@ -117,8 +127,14 @@ async def import_commit(runtime, persona_id: str, data: dict[str, Any]) -> dict[
     plan_ids = {old: new_id("pln") for old in source_plan_ids}
     block_ids = {old: new_id("blk") for old in source_block_ids}
     item_ids = {old: new_id("itm") for old in source_item_ids}
+    thread_rows = tables.get("threads", []) if isinstance(tables.get("threads", []), list) else []
+    log_rows = tables.get("thread_logs", []) if isinstance(tables.get("thread_logs", []), list) else []
+    source_thread_ids = [str(row.get("id", "")) for row in thread_rows]
+    if not all(source_thread_ids) or len(source_thread_ids) != len(set(source_thread_ids)):
+        raise KRDError("invalid_import", "Import contains missing or duplicate thread IDs")
+    thread_ids = {old: new_id("thr") for old in source_thread_ids}
     imported_items = set()
-    imported = skipped = 0
+    imported = skipped = imported_threads = 0
     timestamp = now()
     today = await runtime.plans.current_date(persona_id)
     blocks_by_plan: dict[str, list[dict]] = {}
@@ -133,8 +149,31 @@ async def import_commit(runtime, persona_id: str, data: dict[str, Any]) -> dict[
             imported_config.pop("schema_version", None)
             imported_config.pop("per_persona", None)
             await runtime.store.update_config(persona_id, imported_config, await runtime.store.config_revision(persona_id))
-        for entry in tables["day_types"]:
+        for entry in tables.get("day_types", []):
             await runtime.store.save_day_type(persona_id, entry)
+        for row in thread_rows:
+            identifier = thread_ids[str(row["id"])]
+            kind = str(row.get("kind", "goal"))
+            status = str(row.get("status", "open"))
+            if kind not in THREAD_KINDS or status not in THREAD_STATUSES:
+                raise KRDError("invalid_import", "Imported thread kind or status is invalid")
+            try:
+                priority = int(row.get("priority", 1))
+            except (TypeError, ValueError) as exc:
+                raise KRDError("invalid_import", "Imported thread priority is invalid") from exc
+            if not 0 <= priority <= 3:
+                raise KRDError("invalid_import", "Imported thread priority is outside 0..3")
+            due_at = ThreadService._parse_due(row.get("due_at", ""))
+            await db.execute(
+                "INSERT INTO threads(id,persona_id,kind,title,dossier,status,priority,next_step,due_at,"
+                "last_touched,created_at,updated_at,source,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (identifier, persona_id, kind, str(row.get("title", ""))[:120],
+                 str(row.get("dossier", ""))[:2000], status,
+                 priority, str(row.get("next_step", ""))[:200],
+                 due_at, float(row.get("last_touched", timestamp)),
+                 float(row.get("created_at", timestamp)), float(row.get("updated_at", timestamp)),
+                 str(row.get("source", "import"))[:40], "import", "import"))
+            imported_threads += 1
         for row in plans:
             day = parse_date(str(row.get("date", ""))).isoformat()
             if await runtime.plans.get_plan_by_date(persona_id, day):
@@ -177,27 +216,40 @@ async def import_commit(runtime, persona_id: str, data: dict[str, Any]) -> dict[
                         state = "cancelled"
                     elif state in {"queued", "running"}:
                         state = "scheduled"
+                    old_thread = str(item.get("thread_id", ""))
                     await db.execute(
-                        "INSERT INTO items(id,plan_id,block_id,series_id,title,intent,instruction,position,schedule_json,scheduled_at,target,interaction,category,execution_probability,state,revision,reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)",
+                        "INSERT INTO items(id,plan_id,block_id,series_id,title,intent,instruction,position,schedule_json,"
+                        "scheduled_at,target,interaction,category,thread_id,execution_probability,state,revision,reason,"
+                        "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?)",
                         (item_id, plan_id, block_id, new_id("ser") if item.get("series_id") else "",
                          str(item.get("title", "未命名生活小项"))[:160], str(item.get("intent", ""))[:1000],
                          str(item.get("instruction", ""))[:6000], int(item.get("position", 0)), dumps(schedule), scheduled_at,
                          str(item.get("target", "")), str(item.get("interaction", "auto")), str(item.get("category", ""))[:60],
-                         float(item.get("execution_probability", 1)), state, str(item.get("reason", ""))[:1000], timestamp, timestamp))
+                         thread_ids.get(old_thread, ""), float(item.get("execution_probability", 1)), state,
+                         str(item.get("reason", ""))[:1000], timestamp, timestamp))
                     imported_items.add(old_item_id)
             await db.execute(
                 "INSERT INTO plan_revisions(plan_id,revision,snapshot_json,diff_json,actor,reason,created_at) VALUES(?,?,?,?,?,?,?)",
                 (plan_id, 1, dumps({"plan": {"id": plan_id, "date": day, "revision": 1}, "imported": True}),
                  "[]", "user", "Imported from KRD backup", timestamp))
             imported += 1
-        for state in tables["day_states"]:
+        for row in log_rows:
+            mapped_thread = thread_ids.get(str(row.get("thread_id", "")))
+            if not mapped_thread:
+                continue
+            await db.execute(
+                "INSERT INTO thread_logs(id,thread_id,persona_id,at,note,item_id,kind,actor) VALUES(?,?,?,?,?,?,?,?)",
+                (new_id("log"), mapped_thread, persona_id, float(row.get("at", timestamp)),
+                 str(row.get("note", ""))[:500], item_ids.get(str(row.get("item_id", "")), ""),
+                 str(row.get("kind", "touch"))[:20], "import"))
+        for state in tables.get("day_states", []):
             day = parse_date(str(state.get("date", ""))).isoformat()
             await db.execute(
                 "INSERT OR IGNORE INTO day_states(persona_id,date,current_appearance,current_mood,current_location,current_activity,current_note,revision,source,updated_at) VALUES(?,?,?,?,?,?,?,1,'import',?)",
                 (persona_id, day, str(state.get("current_appearance", ""))[:2000], str(state.get("current_mood", ""))[:2000],
                  str(state.get("current_location", ""))[:2000], str(state.get("current_activity", ""))[:2000],
                  str(state.get("current_note", ""))[:2000], timestamp))
-        for experience in tables["experiences"]:
+        for experience in tables.get("experiences", []):
             old_item = str(experience.get("item_id", ""))
             await db.execute(
                 "INSERT INTO experiences(id,persona_id,date,item_id,kind,content,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -211,12 +263,13 @@ async def import_commit(runtime, persona_id: str, data: dict[str, Any]) -> dict[
             await runtime.store.put_setting(f"templates:{persona_id}", templates)
     runtime.scheduler.wake()
     await runtime.broadcast("data_changed", {"persona_id": persona_id, "source": "import"})
-    return {"imported_plans": imported, "skipped_existing": skipped}
+    return {"imported_plans": imported, "skipped_existing": skipped, "imported_threads": imported_threads}
 
 
 async def diagnostics(runtime) -> dict[str, Any]:
     counts = {}
-    for table in ("plans", "items", "runs", "planning_runs", "day_states", "experiences", "assets"):
+    for table in ("plans", "items", "runs", "planning_runs", "day_states", "experiences", "assets",
+                  "threads", "thread_logs", "thread_responses"):
         row = await runtime.store.one(f"SELECT COUNT(*) AS count FROM {table}")
         counts[table] = row["count"]
     return {"scheduler": {"running": runtime.scheduler.running, "next_due": await runtime.scheduler.next_due()},

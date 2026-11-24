@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 
 from krd.models import KRDError
@@ -30,7 +32,7 @@ async def make_plan(runtime: FakeRuntime, day: str, count: int = 3):
 async def test_user_delete_item_is_soft_and_audited(tmp_path):
     runtime = FakeRuntime(tmp_path)
     await runtime.store.initialize()
-    day = "2026-11-18"
+    day = (date.today() + timedelta(days=1)).isoformat()
     try:
         result = await make_plan(runtime, day, 3)
         item = result["plan"]["blocks"][0]["items"][0]
@@ -50,7 +52,7 @@ async def test_user_delete_item_is_soft_and_audited(tmp_path):
 async def test_bot_delete_item_respects_minimum_and_rolls_back(tmp_path):
     runtime = FakeRuntime(tmp_path)
     await runtime.store.initialize()
-    day = "2026-11-18"
+    day = (date.today() + timedelta(days=1)).isoformat()
     try:
         result = await make_plan(runtime, day, 3)
         items = result["plan"]["blocks"][0]["items"]
@@ -70,7 +72,7 @@ async def test_bot_delete_item_respects_minimum_and_rolls_back(tmp_path):
 async def test_user_delete_block_hides_pending_but_keeps_history(tmp_path):
     runtime = FakeRuntime(tmp_path)
     await runtime.store.initialize()
-    day = "2026-11-18"
+    day = (date.today() + timedelta(days=1)).isoformat()
     try:
         result = await make_plan(runtime, day, 3)
         block = result["plan"]["blocks"][0]
@@ -88,7 +90,7 @@ async def test_user_delete_block_hides_pending_but_keeps_history(tmp_path):
 async def test_user_delete_day_can_be_replanned_without_unique_conflict(tmp_path):
     runtime = FakeRuntime(tmp_path)
     await runtime.store.initialize()
-    day = "2026-11-18"
+    day = (date.today() + timedelta(days=1)).isoformat()
     try:
         first = await make_plan(runtime, day, 2)
         deleted = await runtime.plans.delete_day("persona-a", day, reason="删除整天")

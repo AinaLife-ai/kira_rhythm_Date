@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS items (
     title TEXT NOT NULL, intent TEXT NOT NULL DEFAULT '', instruction TEXT NOT NULL DEFAULT '',
     position INTEGER NOT NULL DEFAULT 0, schedule_json TEXT NOT NULL, scheduled_at REAL NOT NULL,
     target TEXT NOT NULL, interaction TEXT NOT NULL DEFAULT 'auto', category TEXT NOT NULL DEFAULT '',
+    thread_id TEXT NOT NULL DEFAULT '',
     execution_probability REAL NOT NULL DEFAULT 1.0, state TEXT NOT NULL DEFAULT 'scheduled',
     revision INTEGER NOT NULL DEFAULT 1, reason TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, updated_at REAL NOT NULL,
     FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE CASCADE,
@@ -61,9 +62,34 @@ CREATE INDEX IF NOT EXISTS runs_item ON runs(item_id, status, claimed_at);
 CREATE TABLE IF NOT EXISTS planning_runs (
     id TEXT PRIMARY KEY, trigger_id TEXT UNIQUE NOT NULL, persona_id TEXT NOT NULL, kind TEXT NOT NULL,
     target_date TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+    required_thread_ids_json TEXT NOT NULL DEFAULT '[]', response_status TEXT NOT NULL DEFAULT '',
     reason TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, finished_at REAL, error TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS planning_persona ON planning_runs(persona_id, status, created_at);
+CREATE TABLE IF NOT EXISTS threads (
+    id TEXT PRIMARY KEY, persona_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'goal', title TEXT NOT NULL, dossier TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open', priority INTEGER NOT NULL DEFAULT 1,
+    next_step TEXT NOT NULL DEFAULT '', due_at TEXT NOT NULL DEFAULT '',
+    last_touched REAL NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+    source TEXT NOT NULL DEFAULT 'bot', created_by TEXT NOT NULL DEFAULT 'bot', updated_by TEXT NOT NULL DEFAULT 'bot'
+);
+CREATE INDEX IF NOT EXISTS threads_persona_status ON threads(persona_id, status, due_at, last_touched);
+CREATE INDEX IF NOT EXISTS threads_persona_updated ON threads(persona_id, updated_at);
+CREATE TABLE IF NOT EXISTS thread_logs (
+    id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, persona_id TEXT NOT NULL, at REAL NOT NULL,
+    note TEXT NOT NULL, item_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'touch',
+    actor TEXT NOT NULL DEFAULT 'bot',
+    FOREIGN KEY(thread_id) REFERENCES threads(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS thread_logs_thread ON thread_logs(thread_id, at DESC);
+CREATE TABLE IF NOT EXISTS thread_responses (
+    id TEXT PRIMARY KEY, run_id TEXT NOT NULL, persona_id TEXT NOT NULL, thread_id TEXT NOT NULL,
+    response TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, updated_at REAL NOT NULL,
+    UNIQUE(run_id, thread_id)
+);
+CREATE INDEX IF NOT EXISTS thread_responses_run ON thread_responses(run_id);
+CREATE INDEX IF NOT EXISTS thread_responses_persona ON thread_responses(persona_id, created_at);
 CREATE TABLE IF NOT EXISTS day_states (
     persona_id TEXT NOT NULL, date TEXT NOT NULL, current_appearance TEXT NOT NULL DEFAULT '',
     current_mood TEXT NOT NULL DEFAULT '', current_location TEXT NOT NULL DEFAULT '',
@@ -132,8 +158,8 @@ class Store:
         await self.db.execute("PRAGMA foreign_keys=ON")
         await self.db.execute("PRAGMA busy_timeout=10000")
         await self.db.executescript(SCHEMA)
+        await self._migrate()
         async with self.transaction() as db:
-            await db.execute("PRAGMA user_version=1")
             await db.execute(
                 "INSERT OR IGNORE INTO settings(key,value_json,revision,updated_at) VALUES('global',?,1,?)",
                 (dumps(normalized({})), now()),
@@ -142,6 +168,21 @@ class Store:
         self.read_db.row_factory = aiosqlite.Row
         await self.read_db.execute("PRAGMA query_only=ON")
         await self.read_db.execute("PRAGMA busy_timeout=10000")
+
+    async def _migrate(self) -> None:
+        """Additive schema upgrades for existing installs. Never rewrites user data."""
+        columns = (
+            ("items", "thread_id", "TEXT NOT NULL DEFAULT ''"),
+            ("planning_runs", "required_thread_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("planning_runs", "response_status", "TEXT NOT NULL DEFAULT ''"),
+        )
+        async with self.transaction() as db:
+            for table, column, ddl in columns:
+                cursor = await db.execute(f"PRAGMA table_info({table})")
+                existing = {row[1] for row in await cursor.fetchall()}
+                if column not in existing:
+                    await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            await db.execute("PRAGMA user_version=2")
 
     async def close(self) -> None:
         if self.read_db is not None:
@@ -332,6 +373,10 @@ class Store:
             await db.execute(
                 "DELETE FROM runs WHERE persona_id=? AND status NOT IN ('prepared','queued','running') "
                 "AND COALESCE(finalized_at,responded_at,claimed_at)<?", (persona_id, cutoff))
+            await db.execute(
+                "DELETE FROM thread_responses WHERE persona_id=? AND run_id IN ("
+                "SELECT id FROM planning_runs WHERE persona_id=? AND created_at<?)",
+                (persona_id, persona_id, cutoff))
             await db.execute(
                 "DELETE FROM planning_runs WHERE persona_id=? AND status IN ('completed','failed','no_change') "
                 "AND COALESCE(finished_at,created_at)<?", (persona_id, cutoff))

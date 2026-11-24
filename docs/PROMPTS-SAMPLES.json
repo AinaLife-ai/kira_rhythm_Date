@@ -1,4 +1,6 @@
 {
+  "_note": "Historical v1.2.18 sample. Current defaults and Threads/context fields are documented in PROMPTS.zh-CN.md.",
+  "_generated_for": "1.2.18",
   "notice_chain_text": "[生活节律｜系统触发]\n",
   "static_tool_guide": "[KRD 生活节律]\n你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看日程或万年历（农历、节气、法定假期）。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。已有 Plan 是修订，不重复新建。",
   "default_planning_prompt": "现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。\n你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。\n已有计划时，这是一次重新审视的机会，不要机械重复；无变化也可以保持。提交前检查每日数量、必需时段、禁止执行与安静投递规则。",

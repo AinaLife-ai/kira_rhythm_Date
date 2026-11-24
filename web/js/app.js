@@ -1,13 +1,13 @@
-import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.2.18'
-import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.2.18'
-import { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor } from './views.js?v=1.2.18'
-import { planTemplates, themeTemplates } from './templates.js?v=1.2.18'
-import { PetCompanion } from './pet.js?v=1.2.18'
+import { get, post, put, patch, upload, socket, ready } from './api.js?v=1.3.0.2'
+import { state, loadBootstrap, loadPlan, saveConfig, notify, fmt } from './store.js?v=1.3.0.2'
+import { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch } from './views.js?v=1.3.0.2'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.0.2'
+import { PetCompanion } from './pet.js?v=1.3.0.2'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const typeOfSeconds = (value) => !Number.isInteger(value)
 const MIN_REFRESH_SPIN_MS = 420
-const ASSET_VERSION = '1.2.18'
+const ASSET_VERSION = '1.3.0'
 const assetBase = window.PluginPageContext?.assetBase || '/static/plugin/kira_rhythm_Date/assets'
 const dateShift = (date, days) => {
   const value = new Date(`${date}T12:00:00Z`)
@@ -16,7 +16,7 @@ const dateShift = (date, days) => {
 }
 
 const app = Vue.createApp({
-  components: { UiIcon, TodayView, CalendarView, ChangesView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, PetCompanion },
+  components: { UiIcon, TodayView, CalendarView, ChangesView, ThreadsView, TemplatesView, SettingsView, ItemEditor, DayStateEditor, DayTypeEditor, TemplateEditor, ThreadEditor, ThreadTouch, PetCompanion },
   data() {
     return {
       state,
@@ -31,10 +31,37 @@ const app = Vue.createApp({
         { id: 'today', label: '此刻', icon: 'home' },
         { id: 'calendar', label: '日历', icon: 'calendar' },
         { id: 'changes', label: '变化', icon: 'changes' },
+        { id: 'threads', label: '目标', icon: 'pin' },
         { id: 'templates', label: '模板', icon: 'templates' },
         { id: 'settings', label: '设置', icon: 'settings' },
       ],
       diffs: [],
+      threads: [],
+      threadFilter: 'open',
+      threadKind: '',
+      threadFilters: [
+        { id: 'open', label: '进行中' },
+        { id: 'paused', label: '已暂停' },
+        { id: 'done', label: '已完成' },
+        { id: 'dropped', label: '已放弃' },
+        { id: 'deleted', label: '已删除' },
+        { id: 'all', label: '全部' },
+      ],
+      threadKinds: [
+        { id: 'goal', label: '长期目标' },
+        { id: 'promise', label: '约定 / 承诺' },
+        { id: 'project', label: '手头项目' },
+        { id: 'habit', label: '习惯' },
+        { id: 'open_loop', label: '未完成小事' },
+        { id: 'mystery', label: '长期悬念' },
+      ],
+      threadStatuses: [
+        { id: 'open', label: '进行中' },
+        { id: 'paused', label: '已暂停' },
+        { id: 'done', label: '已完成' },
+        { id: 'dropped', label: '已放弃' },
+        { id: 'deleted', label: '已删除' },
+      ],
       diffPlanId: '',
       recentPlans: [],
       monthPlans: [],
@@ -157,7 +184,7 @@ const app = Vue.createApp({
       return { idle: this.assetUrl(`pets/${char}_idle.webp`), sit: this.assetUrl(`pets/${char}_sit.webp`), read: this.assetUrl(`pets/${char}_read.webp`), eat: this.assetUrl(`pets/${char}_eat.webp`), drink: this.assetUrl(`pets/${char}_drink.webp`), sleep: this.assetUrl(`pets/${char}_sleep.webp`), phone: this.assetUrl(`pets/${char}_phone.webp`), look: this.assetUrl(`pets/${char}_look.webp`), stretch: this.assetUrl(`pets/${char}_stretch.webp`), dance: this.assetUrl(`pets/${char}_dance.webp`), crouch: this.assetUrl(`pets/${char}_crouch.webp`) }
     },
     currentView() {
-      const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
+      const name = { today: 'TodayView', calendar: 'CalendarView', changes: 'ChangesView', threads: 'ThreadsView', templates: 'TemplatesView', settings: 'SettingsView' }[state.view] || 'TodayView'
       return this.$options.components[name]
     },
     selectedDate: { get() { return state.selectedDate }, set(value) { state.selectedDate = value } },
@@ -373,6 +400,7 @@ const app = Vue.createApp({
       const epoch = ++this.viewEpoch
       try {
         if (view === 'changes') await Promise.all([this.loadRecentPlans(), this.loadRuns(), this.loadDiff()])
+        if (view === 'threads') await this.loadThreads()
         if (view === 'settings') this.prepareSettings()
         if (view === 'calendar') await this.loadMonth()
         if (view === 'templates') await this.loadCustomTemplates()
@@ -395,13 +423,16 @@ const app = Vue.createApp({
         this.diffPlanId = state.selectedPlan?.id || ''
         this.prepareSettings()
         state.editor = null
+        state.threadEditor = null
+        state.threadTouch = null
         state.dayStateEditor = false
         state.dayTypeEditor = null
       }
       const jobs = []
-      if (state.view === 'today') jobs.push(this.loadDiff())
-      if (state.view === 'calendar') jobs.push(this.loadMonth())
+      if (state.view === 'today') jobs.push(this.loadDiff(), this.loadThreads())
+      if (state.view === 'calendar') jobs.push(this.loadMonth(), this.loadThreads())
       if (state.view === 'changes') jobs.push(this.loadRecentPlans(), this.loadRuns(), this.loadDiff())
+      if (state.view === 'threads') jobs.push(this.loadThreads())
       if (state.view === 'templates') jobs.push(this.loadCustomTemplates())
       await Promise.all(jobs)
       if (entry) {
@@ -501,6 +532,114 @@ const app = Vue.createApp({
       if (!day) return ''
       const text = this.forecastCellText(day)
       return day.precipitation_probability ? `${text} · 降水 ${day.precipitation_probability}%` : text
+    },
+    async loadThreads() {
+      const persona = state.selectedPersona
+      const filter = this.threadFilter
+      const kind = this.threadKind
+      const status = filter === 'all' ? '' : filter
+      const query = new URLSearchParams({ persona, limit: '200' })
+      if (status) query.set('status', status)
+      if (kind) query.set('kind', kind)
+      const threads = await get(`/threads?${query.toString()}`)
+      if (persona === state.selectedPersona && filter === this.threadFilter && kind === this.threadKind) {
+        this.threads = threads
+      }
+    },
+    setThreadFilter(id) {
+      this.threadFilter = id
+      this.loadThreads().catch((error) => notify(error.message, 'error'))
+    },
+    newThread() {
+      state.threadEditor = { thread: null }
+    },
+    async openThread(thread) {
+      const persona = state.selectedPersona
+      try {
+        const detail = await get(`/threads/${encodeURIComponent(thread.id)}?persona=${encodeURIComponent(persona)}`)
+        if (persona !== state.selectedPersona) return
+        state.threadEditor = { thread: detail }
+      } catch (error) { notify(error.message, 'error') }
+    },
+    closeThreadEditor() { state.threadEditor = null },
+    async saveThread(form) {
+      try {
+        const payload = {
+          kind: form.kind, title: form.title, dossier: form.dossier, status: form.status,
+          priority: Number(form.priority), next_step: form.next_step, due_at: form.due_at,
+          note: form.note,
+        }
+        if (form.id) await patch(`/threads/${encodeURIComponent(form.id)}?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
+        else await post(`/threads?persona=${encodeURIComponent(state.selectedPersona)}`, payload)
+        state.threadEditor = null
+        await this.loadThreads()
+        notify(form.id ? '目标/约定已更新' : '目标/约定已创建')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    async deleteThread(thread) {
+      if (!await this.askConfirm({
+        title: '删除目标 / 约定',
+        message: `删除「${thread.title}」？
+
+删除后不再出现在规划与聊天上下文，打卡记录仍保留在数据库。`,
+        confirmText: '删除', danger: true,
+      })) return
+      try {
+        await requestDelete(`/threads/${encodeURIComponent(thread.id || thread)}?persona=${encodeURIComponent(state.selectedPersona)}`)
+        state.threadEditor = null
+        state.threadTouch = null
+        await this.loadThreads()
+        notify('目标/约定已删除')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    async closeThreadStatus(thread, status) {
+      if (!await this.askConfirm({
+        title: status === 'done' ? '标记完成' : '放弃目标',
+        message: `确认把「${thread.title}」标记为${status === 'done' ? '完成' : '放弃'}？`,
+        confirmText: status === 'done' ? '完成' : '放弃', danger: status !== 'done',
+      })) return
+      try {
+        await patch(`/threads/${encodeURIComponent(thread.id)}?persona=${encodeURIComponent(state.selectedPersona)}`, {
+          status, note: status === 'done' ? 'WebUI 标记完成' : 'WebUI 放弃',
+        })
+        await this.loadThreads()
+        notify(status === 'done' ? '已标记完成' : '已放弃')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    openThreadTouch(thread) { state.threadTouch = { thread } },
+    closeThreadTouch() { state.threadTouch = null },
+    async saveThreadTouch(form) {
+      const thread = state.threadTouch?.thread
+      if (!thread) return
+      try {
+        await post(`/threads/${encodeURIComponent(thread.id)}/touch?persona=${encodeURIComponent(state.selectedPersona)}`, {
+          note: form.note, next_step: form.next_step,
+        })
+        state.threadTouch = null
+        state.threadEditor = null
+        await this.loadThreads()
+        notify('打卡已记录')
+      } catch (error) { notify(error.message, 'error') }
+    },
+    threadTitle(identifier) {
+      const value = String(identifier || '')
+      const pool = [...(this.data.threads || []), ...(this.threads || [])]
+      const found = pool.find((entry) => entry.id === value || value.startsWith(entry.id) || entry.id.startsWith(value))
+      return found?.title || '目标/约定'
+    },
+    threadKindLabel(value) {
+      return this.threadKinds.find((entry) => entry.id === value)?.label || value
+    },
+    threadStatusLabel(value) {
+      return this.threadStatuses.find((entry) => entry.id === value)?.label || value
+    },
+    threadDueLabel(thread) {
+      if (!thread.due) return '无截止'
+      const days = thread.due_in_days
+      if (days == null) return thread.due
+      if (thread.overdue) return `已过期 ${Math.abs(days || 0)} 天 · ${thread.due}`
+      if (days === 0) return `今天到期 · ${thread.due}`
+      return `${days} 天后 · ${thread.due}`
     },
     async loadRecentPlans() {
       const persona = state.selectedPersona
@@ -1029,6 +1168,10 @@ const app = Vue.createApp({
         execution_pool: { sessions: [], strategy: 'pure_random' },
         planning_review: {},
         weather: { mode: 'off', provider: 'open_meteo', chat_current: true, chat_forecast: false, locations: {}, virtual: {} },
+        threads: { enabled: true, chat_enabled: true, planning_limit: 8, chat_limit: 5, full_dossier_in_planning: 5,
+          dossier_chars: 2000, excerpt_chars: 300, next_step_chars: 200, log_chars: 500, logs_in_planning: 3,
+          execution_excerpt_chars: 300, execution_logs: 2, require_response: true, response_mode: 'reject',
+          response_limit: 8, force_touch: false, auto_touch: false, stale_days: 5, chat_chars: 600 },
         appearance: { theme: 'random', effects: 'auto' },
       }
       for (const [key, defaults] of Object.entries(nested)) {
@@ -1045,6 +1188,13 @@ const app = Vue.createApp({
       this.draft.inject_day_state ??= true
       this.draft.inject_agenda ??= true
       this.draft.agenda_max_chars ??= 2400
+      this.draft.history_digest_days ??= 4
+      this.draft.history_include_instruction ??= true
+      this.draft.history_instruction_chars ??= 200
+      this.draft.recent_outcomes_days ??= 2
+      this.draft.unfinished_days ??= 3
+      this.draft.future_plan_days ??= 2
+      this.draft.memory_hygiene ??= 'summary'
       if (!themeTemplates.some((entry) => entry.id === this.draft.appearance.theme)) this.draft.appearance.theme = 'random'
       const review = this.draft.planning_review
       if (typeOfSeconds(review.interval_seconds)) review.interval_seconds = Math.round(Number(review.interval_minutes) * 60)
@@ -1135,7 +1285,7 @@ const app = Vue.createApp({
         const preview = await post(`/import/preview?persona=${encodeURIComponent(state.selectedPersona)}`, data)
         if (!await this.askConfirm({
           title: '导入数据',
-          message: `将导入 ${preview.plans} 个计划；运行不会重放。继续？`,
+          message: `将导入 ${preview.plans} 个计划${preview.threads ? `、${preview.threads} 条目标/约定` : ''}；运行不会重放。继续？`,
           confirmText: '继续导入',
         })) return
         const result = await post(`/import/commit?persona=${encodeURIComponent(state.selectedPersona)}`, data)
@@ -1180,7 +1330,7 @@ const app = Vue.createApp({
 })
 
 // Keep the delete helper out of the component's public API surface.
-import { del as requestDelete } from './api.js?v=1.2.18'
+import { del as requestDelete } from './api.js?v=1.3.0.2'
 
 app.component('UiIcon', UiIcon)
 app.config.errorHandler = (err, vm, info) => { window.__krdVueError = String(err?.stack || err) + '\n' + info + '\nvm=' + (vm?.$options?.name || vm?.$?.type?.__name || vm?.$?.type?.name || 'unknown'); console.error(err, info, vm) }

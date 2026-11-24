@@ -212,6 +212,61 @@ class ApiMixin:
         await self._notify("day_types_changed", persona_id)
         return result
 
+    @register.api(method="GET", path="/v1/threads")
+    async def api_threads(self, status: str = "", kind: str = "", limit: int = 50, persona: str = ""):
+        persona_id = await self._persona(persona)
+        return await self._call(self.runtime.threads.list, persona_id, status=status, kind=kind, limit=limit)
+
+    @register.api(method="GET", path="/v1/threads/{thread_id}")
+    async def api_thread(self, thread_id: str, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def load():
+            result = await self.runtime.threads.get(persona_id, thread_id)
+            if result is None:
+                raise KRDError("thread_not_found", "Thread not found")
+            return result
+        return await self._call(load)
+
+    @register.api(method="POST", path="/v1/threads")
+    async def api_add_thread(self, payload: dict, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def save():
+            result = await self.runtime.threads.add(persona_id, payload, actor="user")
+            await self._notify("thread_changed", persona_id, thread_id=result["id"])
+            return result
+        return await self._call(save)
+
+    @register.api(method="PATCH", path="/v1/threads/{thread_id}")
+    async def api_update_thread(self, thread_id: str, payload: dict, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def save():
+            result = await self.runtime.threads.update(persona_id, thread_id, payload, actor="user",
+                                                       note=str(payload.get("note", "")))
+            await self._notify("thread_changed", persona_id, thread_id=result["id"])
+            return result
+        return await self._call(save)
+
+    @register.api(method="POST", path="/v1/threads/{thread_id}/touch")
+    async def api_touch_thread(self, thread_id: str, payload: dict | None = None, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def save():
+            data = payload or {}
+            result = await self.runtime.threads.touch(
+                persona_id, thread_id, str(data.get("note", "")),
+                next_step=data.get("next_step"), item_id=data.get("item_id", ""), actor="user")
+            await self._notify("thread_changed", persona_id, thread_id=result["id"])
+            return result
+        return await self._call(save)
+
+    @register.api(method="DELETE", path="/v1/threads/{thread_id}")
+    async def api_delete_thread(self, thread_id: str, persona: str = ""):
+        persona_id = await self._persona(persona)
+        async def remove():
+            result = await self.runtime.threads.delete(persona_id, thread_id, actor="user")
+            await self._notify("thread_changed", persona_id, thread_id=result["id"])
+            return result
+        return await self._call(remove)
+
     @register.api(method="GET", path="/v1/sessions")
     async def api_sessions(self, kind: str = "execution", persona: str = ""):
         persona_id = await self._persona(persona)

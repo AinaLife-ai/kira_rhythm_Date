@@ -13,7 +13,7 @@ from .store import Store, dumps, loads
 from .timeutils import compiled_windows, parse_date, sample_window, timezone, to_utc, window_utc
 
 PLAN_FIELDS = ("title", "overview", "planned_appearance", "planned_mood")
-ITEM_FIELDS = ("title", "intent", "instruction", "schedule", "target", "interaction", "category", "execution_probability")
+ITEM_FIELDS = ("title", "intent", "instruction", "schedule", "target", "interaction", "category", "execution_probability", "thread_id")
 
 
 def item_json(row: dict[str, Any]) -> dict[str, Any]:
@@ -29,6 +29,7 @@ class PlanService:
         self.rng = random.Random()
         self.on_change = None
         self.calendar = None
+        self.threads = None
 
     def _changed(self) -> None:
         # A new earlier item must interrupt the scheduler's current wait. The
@@ -244,6 +245,14 @@ class PlanService:
                     raise KRDError("probability_disabled", "Probabilistic schedules are disabled")
                 if not 0 <= probability <= 1 or (actor == "bot" and probability < config["min_probability"]):
                     raise KRDError("probability_below_minimum", "Probability is outside the permitted range")
+                thread_id = str(raw_item.get("thread_id", "") or "").strip()[:128]
+                if thread_id and self.threads is not None:
+                    # Existing items may legitimately keep a link to a thread
+                    # that has since been completed/dropped. Only a *new* link
+                    # requires an open thread; otherwise an unrelated plan edit
+                    # would be blocked forever by the closed thread.
+                    if not (previous and previous.get("thread_id") == thread_id):
+                        thread_id = await self.threads.resolve_link(persona_id, thread_id)
                 interaction = raw_item.get("interaction", "auto")
                 if interaction not in {"auto", "must_message", "silent"}:
                     raise KRDError("invalid_interaction", "Unknown interaction mode")
@@ -272,6 +281,7 @@ class PlanService:
                         "schedule": copy.deepcopy(schedule), "scheduled_at": timestamp,
                         "target": target, "interaction": interaction,
                         "category": str(raw_item.get("category", ""))[:60],
+                        "thread_id": thread_id,
                         "execution_probability": probability,
                         "reason": str(raw_item.get("reason", ""))[:1000],
                         "state": raw_item.get("state", "scheduled"),
@@ -445,11 +455,11 @@ class PlanService:
                         raise KRDError("invalid_item_state", "New items must start as scheduled or cancelled")
                     item_revision = previous["revision"] + 1 if previous else 1
                     await db.execute(
-                        "INSERT INTO items(id,plan_id,block_id,series_id,title,intent,instruction,position,schedule_json,scheduled_at,target,interaction,category,execution_probability,state,revision,reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
-                        "ON CONFLICT(id) DO UPDATE SET block_id=excluded.block_id,series_id=excluded.series_id,title=excluded.title,intent=excluded.intent,instruction=excluded.instruction,position=excluded.position,schedule_json=excluded.schedule_json,scheduled_at=excluded.scheduled_at,target=excluded.target,interaction=excluded.interaction,category=excluded.category,execution_probability=excluded.execution_probability,state=excluded.state,revision=excluded.revision,reason=excluded.reason,updated_at=excluded.updated_at",
+                        "INSERT INTO items(id,plan_id,block_id,series_id,title,intent,instruction,position,schedule_json,scheduled_at,target,interaction,category,thread_id,execution_probability,state,revision,reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                        "ON CONFLICT(id) DO UPDATE SET block_id=excluded.block_id,series_id=excluded.series_id,title=excluded.title,intent=excluded.intent,instruction=excluded.instruction,position=excluded.position,schedule_json=excluded.schedule_json,scheduled_at=excluded.scheduled_at,target=excluded.target,interaction=excluded.interaction,category=excluded.category,thread_id=excluded.thread_id,execution_probability=excluded.execution_probability,state=excluded.state,revision=excluded.revision,reason=excluded.reason,updated_at=excluded.updated_at",
                         (item["id"], plan_id, block["id"], item["series_id"], item["title"], item["intent"], item["instruction"],
                          item["position"], dumps(item["schedule"]), item["scheduled_at"], item["target"], item["interaction"],
-                         item["category"], item["execution_probability"], item.get("state", "scheduled"), item_revision,
+                         item["category"], item["thread_id"], item["execution_probability"], item.get("state", "scheduled"), item_revision,
                          item["reason"], previous["created_at"] if previous else timestamp, timestamp))
             after = {"blocks": merged}
             diff = self._diff(before_items, self._flatten(merged))
@@ -664,7 +674,7 @@ class PlanService:
                     found = True
                     if item["state"] in {"queued", "running"}:
                         raise KRDError("item_running", "Cannot edit a running item")
-                    for key in ("title", "intent", "instruction", "target", "interaction", "category", "execution_probability", "schedule", "state"):
+                    for key in ("title", "intent", "instruction", "target", "interaction", "category", "execution_probability", "schedule", "state", "thread_id"):
                         if key in patch:
                             item[key] = patch[key]
                     item["reason"] = reason or patch.get("reason", "")

@@ -8,11 +8,11 @@ from .timeutils import timezone
 # Fields that are machine timestamps in storage but should be readable to an LLM.
 _TIME_KEYS = {
     "scheduled_at", "created_at", "updated_at", "claimed_at", "finished_at",
-    "started_at", "expires_at", "timestamp", "run_at",
+    "started_at", "expires_at", "timestamp", "run_at", "at", "last_touched",
 }
 # Only schedule-affecting timestamps need second-level display. Audit timestamps
 # stay minute-level to keep model context compact.
-_SECONDS_KEYS = {"scheduled_at", "expires_at", "run_at"}
+_SECONDS_KEYS = {"scheduled_at", "expires_at", "run_at", "at", "last_touched"}
 
 
 def readable_time(timestamp: Any, tz_name: str, include_seconds: bool = False) -> str:

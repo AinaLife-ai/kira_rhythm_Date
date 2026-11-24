@@ -5,6 +5,9 @@ import math
 import pytest
 import pytest_asyncio
 
+from krd.config import (DEFAULT_EXECUTION_PROMPT, DEFAULT_PLANNING_PROMPT, DEFAULT_REVIEW_PROMPT,
+                        LEGACY_EXECUTION_PROMPT, LEGACY_PLANNING_PROMPT, LEGACY_REVIEW_PROMPT,
+                        PRIOR_EXECUTION_PROMPT, PRIOR_REVIEW_PROMPT, normalized)
 from krd.models import KRDError
 from krd.store import Store
 
@@ -37,6 +40,9 @@ async def store(tmp_path):
     {"appearance": {"avatar_adapter_order": {}}},
     {"inject_agenda": "yes"},
     {"agenda_max_chars": 200},
+    {"threads": {"planning_limit": None}},
+    {"threads": {"planning_limit": 0}},
+    {"threads": {"planning_limit": 100}},
 ])
 @pytest.mark.asyncio
 async def test_invalid_nested_config_is_typed_and_not_persisted(store, patch):
@@ -76,3 +82,31 @@ async def test_seconds_are_accepted_for_clock_and_windows(store):
     }, 0)
     assert config["planning_time"] == "23:00:37"
     assert config["quiet_delivery_windows"][0]["end"] == "07:00:10"
+
+
+def test_legacy_default_prompts_upgrade_without_touching_custom_text():
+    migrated = normalized({
+        "planning_prompt": LEGACY_PLANNING_PROMPT,
+        "execution_prompt": LEGACY_EXECUTION_PROMPT,
+        "planning_review": {"prompt": LEGACY_REVIEW_PROMPT},
+        "history_char_budget": 12000,
+    })
+    assert migrated["planning_prompt"] == DEFAULT_PLANNING_PROMPT
+    assert migrated["execution_prompt"] == DEFAULT_EXECUTION_PROMPT
+    assert migrated["planning_review"]["prompt"] == DEFAULT_REVIEW_PROMPT
+    assert migrated["history_char_budget"] == 16000
+    assert migrated["threads"]["chat_limit"] == 5
+    assert migrated["threads"]["full_dossier_in_planning"] == 5
+    clamped = normalized({"threads": {"planning_limit": 5, "response_limit": 8}})
+    assert clamped["threads"]["planning_limit"] == 8
+
+    prior = normalized({
+        "execution_prompt": PRIOR_EXECUTION_PROMPT,
+        "planning_review": {"prompt": PRIOR_REVIEW_PROMPT},
+    })
+    assert prior["execution_prompt"] == DEFAULT_EXECUTION_PROMPT
+    assert prior["planning_review"]["prompt"] == DEFAULT_REVIEW_PROMPT
+
+    custom = normalized({"planning_prompt": "我的自定义规划提示词。", "history_char_budget": 9000})
+    assert custom["planning_prompt"] == "我的自定义规划提示词。"
+    assert custom["history_char_budget"] == 9000

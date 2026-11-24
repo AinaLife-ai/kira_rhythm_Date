@@ -11,6 +11,7 @@ from krd.plans import PlanService
 from krd.policy import SessionPolicy
 from krd.scheduler import Scheduler
 from krd.store import Store
+from krd.threads import ThreadService
 
 
 class FakePersonaManager:
@@ -58,7 +59,9 @@ class FakeRuntime:
         self.store = Store(root / "test.db")
         self.policy = SessionPolicy(self.store, self.ctx)
         self.plans = PlanService(self.store, self.policy)
-        self.context_builder = ContextBuilder(self.store, self.plans)
+        self.threads = ThreadService(self.store, self.policy)
+        self.plans.threads = self.threads
+        self.context_builder = ContextBuilder(self.store, self.plans, threads=self.threads)
         self.scheduler = Scheduler(self)
         self.plans.on_change = self.scheduler.wake
         self.notices = []

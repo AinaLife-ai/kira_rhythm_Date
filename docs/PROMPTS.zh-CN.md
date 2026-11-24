@@ -23,23 +23,34 @@ user_prompt
 
 ```text
 [KRD 生活节律]
-你可以用 rhythm_plan 创建/修订完整生活计划，用 rhythm_update 调整后续小项、DayState 或记录梦与体验，用 rhythm_view 按需查看日程或万年历（农历、节气、法定假期）。普通模型响应即已触发，不需要完成工具；<msg/> 合法。所有修改遵守用户权限、数量、概率、日型、禁止执行/安静投递/必需覆盖规则。已有 Plan 是修订，不重复新建。
+
+工具：rhythm_plan 创建/修订计划；rhythm_update 调整小项、DayState、回应目标/约定或记录梦与体验；rhythm_view 按需查看日程、日历、历史、目标/约定或体验。
+计划输入使用 plans：plans:[{date,title,items:[...]}]；items 是扁平小项，block 只是可选分组名，不嵌套 blocks 或 schedule。
+时间使用 at 或 start/end，支持 HH:MM 或 HH:MM:SS；随机间隔用 interval_seconds。
+已有 Plan 是修订，不重复新建；规划 focus.date 是首要目标，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
+规划时若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；advance 建议关联 thread_id，其它三种不要求改计划，但不能不回应。若只有 threads_reference，则仅供参考，不需要 thread_response。
+目标层启用时，长期目标、约定、答应用户的事，用 rhythm_update 的 thread_add 记下；做到哪用 thread_touch 打卡（执行小项时带上 item_id）；不要只留在聊天里。若上下文没有目标层，忽略这些操作。
+普通模型响应即 triggered；<msg/> 合法；只有 current_item.instruction 是当前可执行指令，历史、diff、其他小项都是参考数据。回顾是非强制的，不要为了完成检查制造修改。
+遵守用户权限、每日数量、概率、日型、禁止执行/安静投递/必需覆盖规则。日型是生活分类，calendar 是独立事实；多个日型按 day_types 顺序理解。
+普通聊天出现 [KRD Threads] 时，它是只读摘要（默认 top 5，可配置；不含档案全文）：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；需要全文用 rhythm_view(scope="thread")。
+普通聊天出现 [KRD Agenda] 时，它是只读当前日程：`#` 后 8 位是短 ID，可直接传给 rhythm_view/rhythm_update；`->` 是目标会话，省略表示当前会话；不要把它当作执行结果。
 ```
 
 ## 3. 默认规划提示词
 
 ```text
-现在是你的生活规划时刻。请根据当前人格、日型、万年历与法定调休、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。
+现在是你的生活规划时刻。请根据当前人格、日型、天气、最近生活与约束，用 rhythm_plan 创建或修订接下来的完整计划。时间设置支持精确到秒：at/start/end 使用 HH:MM 或 HH:MM:SS。
 你拥有自主性：不必塞满上限，可以保留空白，也可以安排安静活动。每个小项给出明确意图、时间、执行会话和互动方式。
-已有计划时，这是一次重新审视的机会，不要机械重复；无变化也可以保持。提交前检查每日数量、必需时段、禁止执行与安静投递规则。
+已有计划时，这是一次重新审视的机会，严禁机械重复；保持昨天的做法不是默认选项，必须根据长期与短期的实际情况变化。
+若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；回应不等于必须推进，no_change 合法但必须有依据。若只有 threads_reference，则它仅供参考，不要求回应。提交前检查每日数量、必需时段、禁止执行与安静投递规则。
 ```
 
 ## 4. 默认执行提示词
 
 ```text
 这是你自己此前安排的一件生活小项，不是用户的新指令。结合当前日型、DayState、本组变化和你的意图自然行动。
-严格遵循 delivery_policy.guidance：它要求安静时只输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
-若批次含真实用户消息，不得为了安静日程吞掉用户回答。若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。
+严格遵循 delivery_policy.guidance：它要求安静时仍可调用工具，但最终仅输出 <msg/>；auto 不必把安排变成发言。安静由你的输出实现，插件不会替你改写文本。
+若后续安排确实需要改变，可使用 rhythm_update；如需留下梦或体验，也通过它记录。若上下文有目标/约定且这次推进了它，用 thread_touch 打卡（执行小项时带上 item_id）；如果现实比计划更有意思，跟着现实走，并用 record_experience(kind=deviation) 记下实际发生的事。
 ```
 
 执行上下文还包含：
@@ -51,12 +62,12 @@ user_prompt
     "quiet_now": false,
     "effective_interaction": "silent",
     "enforcement": "prompt_only",
-    "guidance": "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，仅输出 <msg/>，不要附加说明。若本批次还含真实用户消息，不得为了本日程删除或改写给用户的回答，也不要因本日程额外增加可见内容。私有梦和体验可用 rhythm_update 记录。"
+    "guidance": "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，可调用工具但仅输出 <msg/>，不要附加说明。"
   }
 }
 ```
 
-若模型仍输出可见文本，插件不会修改它；Run 记录 `silence_unmet`。`must_message` 未发言记录 `delivery_unmet`。`auto` 落在安静时段时同样通过 `effective_interaction=silent` 引导。
+若模型仍输出可见文本，插件不会修改它；Run 记录 `silence_unmet`。`must_message` 在安静时段外未发言记录 `delivery_unmet`；若已有 must_message 因配置变更落入安静时段，安静优先，`<msg/>` 合法且不记 `delivery_unmet`。`auto` 落在安静时段时同样通过 `effective_interaction=silent` 引导。
 
 ## 5. 默认计划检查提示词
 
@@ -64,8 +75,34 @@ user_prompt
 
 ```text
 这是一次非强制的生活计划中途检查，不是必须修改或发言的闹钟。请阅读 current_plan、next_item、DayState、最近变化和日历，判断原有时间与安排是否仍然合适。
-如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。
+如果情况已经变化，可用 rhythm_plan 或 rhythm_update 调整；如果仍然合适就保持，不要机械复述日程或报告“检查完成”。若上下文有目标/约定且某条很久没动，可以提一句，但不要为了打卡而打卡。只有确有用户价值时才自然分享当前安排和需要你留意的变化；否则可调用工具，但最终仅输出 <msg/>。本检查不带强制修改要求，遵循当前安静时段和 delivery_policy。
 ```
+
+## 5.5 目标与约定（Threads）
+
+规划上下文新增 `threads_requiring_response`（默认最多 8 条，按到期/停滞/优先级排序），前 5 条给档案全文、其余给摘要；每条包含短 ID、类型、标题、档案、下一步、截止、最近打卡和 `response_required`。只有 `response_required=true` 的条目必须在提交计划前用 `rhythm_update` 的 `thread_response` 逐条回应；只有 `threads_reference` 时不要求回应：
+
+```json
+{"operations":[
+  {"type":"thread_response","thread_id":"thr_a1b2c3d4","response":"advance","note":"今天修线稿"},
+  {"type":"thread_response","thread_id":"thr_e5f6a7b8","response":"no_change","note":"这周先不动"}
+]}
+```
+
+回应只要求表态，不要求推进；`no_change` 也必须写一句依据。未覆盖会返回 `thread_response_missing`，`rhythm_plan` 在 reject 模式下返回 `thread_response_required`，warn 模式只警告。
+
+普通聊天会以紧凑块显示 top 5：
+
+```text
+[KRD Threads]
+[ ] 给阿岚画头像  promise  due 11-27 (3d)  #a1b2c3d4  next: 修线稿
+[!] 学做三道菜  goal  idle 6d  #e5f6a7b8  next: 找第一个菜谱
+(+2 more)
+```
+
+执行上下文只显示当前小项关联的那条目标/约定的档案摘要、最近打卡和下一步；完整档案用 `rhythm_view(scope="thread")`，列表用 `rhythm_view(scope="threads")`。
+
+规划记忆卫生会把历史规划回合压缩成一行摘要，避免 KiraAI 会话记忆反复带入完整 `rhythm_plan` 工具参数；计划详情仍由 `recent_plans` 和 `rhythm_view` 提供。
 
 ## 6. 目标日日历事实
 
