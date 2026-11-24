@@ -660,7 +660,7 @@ class ThreadService:
         except KRDError:
             return None
         row = await self._row(persona_id, identifier)
-        if row is None or row.get("status") not in {"open", "paused"}:
+        if row is None:
             return None
         logs = await self._logs([identifier], limits["execution_logs"])
         row["logs"] = logs.get(identifier, [])

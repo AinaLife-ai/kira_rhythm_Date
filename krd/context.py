@@ -539,6 +539,9 @@ class ContextBuilder:
         execution_instruction = base_config["execution_prompt"]
         if not base_config.get("threads", {}).get("enabled", True):
             execution_instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略 thread_touch / thread_add 等目标操作。"
+        item_thread = await self._item_thread(persona_id, item.get("thread_id", ""), effective)
+        if item_thread and item_thread.get("status") not in {"open", "paused"}:
+            execution_instruction += "\n[KRD 目标层] 当前小项关联的目标已结束；它只作历史参考，不要用 thread_touch 追加打卡。"
         payload = {
             "instruction": execution_instruction,
             "delivery_policy": {"scheduled_interaction": item["interaction"], "quiet_now": quiet_now,
@@ -550,7 +553,7 @@ class ContextBuilder:
             "daily_limits": self._limits(effective, plan),
             "day_state": state, "weather": await self._weather(persona_id, plan["date"], "item"),
             "day_so_far": await self._day_so_far(persona_id, plan),
-            "thread": await self._item_thread(persona_id, item.get("thread_id", ""), effective),
+            "thread": item_thread,
             "plan": {key: plan[key] for key in ("date", "title", "overview", "planned_appearance", "planned_mood", "revision")},
             "current_item": {
                 **{key: item[key] for key in ("title", "intent", "instruction", "target", "interaction",
@@ -901,7 +904,7 @@ class ContextBuilder:
                 if len(text()) <= limit:
                     return text()
         for key in ("recent_pattern", "weather", "recent_changes", "today_changes", "future_plans",
-                    "unfinished", "recent_outcomes", "recent_diff", "siblings", "day_so_far",
+                    "unfinished", "recent_outcomes", "recent_diff", "siblings",
                     "thread_untouched", "unanswered_threads"):
             if key in payload:
                 payload.pop(key, None)

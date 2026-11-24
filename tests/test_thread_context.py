@@ -306,3 +306,18 @@ async def test_planning_does_not_force_reply_to_user_metadata(runtime):
     body = json.loads(prompt.split("\n", 1)[1])
     assert "必须先正常回答用户" not in body["instruction"]
     assert "必须正常回答用户" not in body["instruction"]
+
+@pytest.mark.asyncio
+async def test_finished_thread_stays_as_history_in_item_prompt(runtime):
+    thread = await runtime.threads.add("persona-a", {
+        "kind": "goal", "title": "已经完成的目标", "dossier": "完成后仍可回看"})
+    result = await add_plan(runtime, day(2), "今天", thread["id"])
+    item = next(item for item in result["plan"]["blocks"][0]["items"] if item["title"].endswith("小项"))
+    await runtime.threads.close("persona-a", thread["id"], "done", "完成")
+    prompt = await runtime.context_builder.item_prompt({
+        "persona_id": "persona-a", "kind": "item", "item_id": item["id"], "run_id": "x"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert body["thread"]["status"] == "done"
+    assert "已完成" in body["thread"]["dossier"] or body["thread"]["dossier"]
+    assert "目标已结束" in body["instruction"]
+    assert "不要用 thread_touch" in body["instruction"]

@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.0'
-import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.3.0'
+import { fmt } from './store.js?v=1.3.0.1'
+import { buildPetChatter, buildPetInteraction } from './pet-talk.js?v=1.3.0.1'
 
 const VOICE = {
   tomato: {
