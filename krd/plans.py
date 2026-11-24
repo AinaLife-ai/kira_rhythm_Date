@@ -500,10 +500,15 @@ class PlanService:
         # validation or database error rolls back all days instead of leaving a half plan.
         async with self.store.transaction():
             for payload in payloads:
+                if not isinstance(payload, dict):
+                    raise KRDError("invalid_plan", "Each plan must be an object")
+                try:
+                    expected_revision = int(payload.get("expected_revision", payload.get("revision", 0)))
+                except (TypeError, ValueError) as exc:
+                    raise KRDError("invalid_revision", "expected_revision must be an integer") from exc
                 results.append(await self.apply_plan(
                     persona_id, payload, actor=actor, mode=payload.get("mode", mode),
-                    reason=payload.get("reason", reason),
-                    expected_revision=int(payload.get("expected_revision", payload.get("revision", 0)))))
+                    reason=payload.get("reason", reason), expected_revision=expected_revision))
         self._changed()
         return results
 

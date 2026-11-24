@@ -24,6 +24,36 @@ def host_tz(runtime):
         return None
 
 
+def _required(operation: dict, key: str, code: str, message: str) -> str:
+    value = str(operation.get(key) or "").strip()
+    if not value:
+        raise KRDError(code, message, field=key)
+    return value
+
+
+def _item_patch(operation: dict) -> dict:
+    patch = operation.get("patch")
+    if patch is None or (isinstance(patch, dict) and not patch):
+        patch = {key: value for key, value in operation.items() if key not in {"type", "item_id"}}
+    if not isinstance(patch, dict):
+        raise KRDError("invalid_patch", "update_item patch must be an object", field="patch")
+    patch = dict(patch)
+    if "probability" in patch and "execution_probability" not in patch:
+        patch["execution_probability"] = patch.pop("probability")
+    if "schedule" not in patch:
+        if "at" in patch:
+            patch["schedule"] = {"type": "exact", "at": patch.pop("at")}
+        elif "start" in patch or "end" in patch:
+            if "start" not in patch or "end" not in patch:
+                raise KRDError("invalid_time", "update_item start and end must be provided together")
+            schedule = {"type": "window", "start": patch.pop("start"), "end": patch.pop("end")}
+            for key in ("window_mode", "occurrences", "interval_minutes", "interval_seconds"):
+                if key in patch:
+                    schedule[key] = patch.pop(key)
+            patch["schedule"] = schedule
+    return patch
+
+
 async def rhythm_plan(event, plan: dict | None = None, plans: list[dict] | None = None,
                       mode: str = "revise", reason: str = "", **kwargs) -> str:
     try:
@@ -139,8 +169,9 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                         persona_id, day, str(operation.get("content", "")), kind=operation.get("kind", "note"),
                         item_id=operation.get("item_id", ""))
                 elif kind == "update_item":
-                    patch = operation.get("patch") or {key: value for key, value in operation.items() if key not in {"type", "item_id"}}
-                    result = await runtime.plans.update_item(persona_id, operation["item_id"], patch, actor="bot", reason=reason)
+                    item_id = _required(operation, "item_id", "item_required", "item_id is required for update_item")
+                    patch = _item_patch(operation)
+                    result = await runtime.plans.update_item(persona_id, item_id, patch, actor="bot", reason=reason)
                     changed_plan_ids.add(result["plan"]["id"])
                 elif kind == "append_item":
                     plan_id = str(operation.get("plan_id") or "").strip()
@@ -161,28 +192,40 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                                 "target", "interaction", "probability", "execution_probability",
                                 "category", "thread_id")
                         raw_item = {key: operation[key] for key in keys if key in operation}
+                    if not raw_item:
+                        raise KRDError("item_required", "append_item needs item or flat item fields")
+                    if not any(key in raw_item for key in ("schedule", "at", "start", "end")):
+                        raise KRDError("invalid_time", "append_item needs at or start+end", field="schedule")
                     result = await runtime.plans.append_item(
                         persona_id, plan_id, block_title, raw_item, actor="bot", reason=reason)
                 elif kind == "delete_item":
-                    result = await runtime.plans.delete_item(persona_id, operation["item_id"], actor="bot", reason=reason)
+                    item_id = _required(operation, "item_id", "item_required", "item_id is required for delete_item")
+                    result = await runtime.plans.delete_item(persona_id, item_id, actor="bot", reason=reason)
                     deleted_plan_ids.add(result["plan"]["id"])
                 elif kind == "delete_block":
-                    result = await runtime.plans.delete_block(persona_id, operation["block_id"], actor="bot", reason=reason)
+                    block_id = _required(operation, "block_id", "block_required", "block_id is required for delete_block")
+                    result = await runtime.plans.delete_block(persona_id, block_id, actor="bot", reason=reason)
                     deleted_plan_ids.add(result["plan"]["id"])
                 elif kind == "thread_add":
                     result = await runtime.threads.add(persona_id, operation, actor="bot")
                 elif kind == "thread_touch":
+                    thread_id = _required(operation, "thread_id", "thread_required", "thread_id is required for thread_touch")
                     result = await runtime.threads.touch(
-                        persona_id, operation["thread_id"], str(operation.get("note", "")),
+                        persona_id, thread_id, str(operation.get("note", "")),
                         next_step=operation.get("next_step"), item_id=operation.get("item_id", ""), actor="bot")
                 elif kind == "thread_update":
-                    patch = operation.get("patch") or {
-                        key: value for key, value in operation.items() if key not in {"type", "thread_id", "note"}}
+                    thread_id = _required(operation, "thread_id", "thread_required", "thread_id is required for thread_update")
+                    patch = operation.get("patch")
+                    if patch is None or (isinstance(patch, dict) and not patch):
+                        patch = {key: value for key, value in operation.items() if key not in {"type", "thread_id", "note"}}
+                    if not isinstance(patch, dict):
+                        raise KRDError("invalid_patch", "thread_update patch must be an object", field="patch")
                     result = await runtime.threads.update(
-                        persona_id, operation["thread_id"], patch, actor="bot", note=str(operation.get("note", "")))
+                        persona_id, thread_id, patch, actor="bot", note=str(operation.get("note", "")))
                 elif kind == "thread_close":
+                    thread_id = _required(operation, "thread_id", "thread_required", "thread_id is required for thread_close")
                     result = await runtime.threads.close(
-                        persona_id, operation["thread_id"], str(operation.get("status", "done")),
+                        persona_id, thread_id, str(operation.get("status", "done")),
                         str(operation.get("note", "")), actor="bot", run_id=run_id)
                 elif kind == "thread_response":
                     thread_responses.append(operation)
@@ -225,7 +268,10 @@ async def rhythm_view(event, scope: str = "current", date: str = "", start: str 
         persona_id = await runtime.active_persona_id()
         plans_service = runtime.plans
         today = date or await plans_service.current_date(persona_id)
-        limit = max(1, min(100, int(limit)))
+        try:
+            limit = max(1, min(100, int(limit)))
+        except (TypeError, ValueError) as exc:
+            raise KRDError("invalid_limit", "limit must be an integer") from exc
         if scope == "calendar":
             end = end or date or today
             start = start or end
