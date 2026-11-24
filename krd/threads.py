@@ -74,7 +74,7 @@ class ThreadService:
                 return parsed.strftime(pattern)
             except ValueError:
                 continue
-        raise KRDError("invalid_due_at", "due_at must be YYYY-MM-DD or YYYY-MM-DD HH:MM")
+        raise KRDError("invalid_due_at", "due_at must be YYYY-MM-DD, YYYY-MM-DD HH:MM, or YYYY-MM-DD HH:MM:SS")
 
     @staticmethod
     def _limits(config: dict[str, Any]) -> dict[str, int]:
@@ -322,6 +322,9 @@ class ThreadService:
     async def touch(self, persona_id: str, reference: str, note: str, *,
                     next_step: str | None = None, item_id: str = "", actor: str = "bot") -> dict[str, Any]:
         identifier = await self.resolve(persona_id, reference)
+        row = await self.store.one("SELECT status FROM threads WHERE id=? AND persona_id=?", (identifier, persona_id))
+        if not row or row["status"] not in {"open", "paused"}:
+            raise KRDError("thread_not_open", "Only an open or paused thread can be checked in")
         config = await self.store.get_config(persona_id)
         limits = self._limits(config)
         text = _one_line(note, limits["log_chars"])
@@ -475,8 +478,11 @@ class ThreadService:
             if not note:
                 raise KRDError("thread_response_note_required", "Each response requires a short reason")
             row = await self.store.one("SELECT status FROM threads WHERE id=?", (identifier,))
-            if not row or row["status"] != "open":
-                raise KRDError("thread_not_open", "Only open threads can be answered")
+            if not row:
+                raise KRDError("thread_not_found", "Thread not found")
+            if row["status"] != "open":
+                # A thread closed in the same turn no longer needs a response.
+                continue
             await self._record_one(run_id, persona_id, identifier, response, note)
             recorded.append({"thread_id": identifier, "short_id": short_thread_id(identifier),
                              "response": response, "note": note})

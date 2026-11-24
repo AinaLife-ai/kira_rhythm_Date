@@ -1059,7 +1059,7 @@ kira_rhythm_Date/
 - `thread_logs`：每次打卡的 `at/note/item_id/kind/actor`
 - `thread_responses`：某次规划回合对某条 Threads 的表态，`UNIQUE(run_id, thread_id)`
 
-`dossier` 是档案正文（默认 ≤2000 字），`next_step` 是日常展示用的一句话，`due_at` 可空或 `YYYY-MM-DD[ HH:MM]`。Thread 不绑定会话；和谁/在哪写在档案里，执行会话仍由具体 item 的 `target` 决定。
+`dossier` 是档案正文（默认 ≤2000 字），`next_step` 是日常展示用的一句话，`due_at` 可空或 `YYYY-MM-DD[ HH:MM[:SS]]`。Thread 不绑定会话；和谁/在哪写在档案里，执行会话仍由具体 item 的 `target` 决定。
 
 ### 20.3 规划时强制回应
 

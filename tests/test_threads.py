@@ -166,6 +166,27 @@ async def test_thread_checkin_helpers(runtime):
 
 
 @pytest.mark.asyncio
+async def test_due_at_supports_seconds(runtime):
+    due = f"{day(2)} 18:30:45"
+    thread = await runtime.threads.add("persona-a", {
+        "kind": "promise", "title": "秒级约定", "dossier": "x", "due_at": due})
+    assert thread["due_at"] == due and thread["due"] == due
+    block = await runtime.threads.chat_block("persona-a")
+    assert "18:30:45" in block
+    updated = await runtime.threads.update("persona-a", thread["id"], {"due_at": f"{day(3)} 09:05:07"})
+    assert updated["due_at"].endswith("09:05:07")
+
+
+@pytest.mark.asyncio
+async def test_closed_thread_cannot_be_checked_in(runtime):
+    thread = await runtime.threads.add("persona-a", {"kind": "goal", "title": "已完成"})
+    await runtime.threads.close("persona-a", thread["id"], "done", "完成")
+    with pytest.raises(KRDError) as exc:
+        await runtime.threads.touch("persona-a", thread["id"], "再补一句")
+    assert exc.value.code == "thread_not_open"
+
+
+@pytest.mark.asyncio
 async def test_thread_validation(runtime):
     with pytest.raises(KRDError) as exc:
         await runtime.threads.add("persona-a", {"kind": "unknown", "title": "x"})

@@ -310,7 +310,7 @@ export const ThreadsView = {
           </div>
           <div class="thread-actions">
             <button class="soft-button" @click="$root.openThread(thread)">查看 / 编辑</button>
-            <button class="soft-button" @click="$root.openThreadTouch(thread)">打卡</button>
+            <button v-if="['open', 'paused'].includes(thread.status)" class="soft-button" @click="$root.openThreadTouch(thread)">打卡</button>
             <button v-if="thread.status === 'open'" class="text-button" @click="$root.closeThreadStatus(thread, 'done')">完成</button>
           </div>
         </article>
@@ -354,14 +354,14 @@ export const ThreadEditor = {
       <label class="wide-field"><span>标题</span><input v-model="form.title" maxlength="120" placeholder="例如：给阿岚画头像"></label>
       <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" maxlength="2000" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 5 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
       <label><span>下一步</span><input v-model="form.next_step" maxlength="200" placeholder="一句话，例如：修线稿"></label>
-      <label><span>截止</span><input v-model="form.due_at" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM"></label>
+      <label><span>截止</span><input v-model="form.due_at" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS"></label>
       <label><span>优先级</span><select v-model.number="form.priority"><option :value="0">0 · 低</option><option :value="1">1 · 普通</option><option :value="2">2 · 重要</option><option :value="3">3 · 很急</option></select></label>
       <label><span>状态变更备注</span><input v-model="form.note" maxlength="500" placeholder="完成/放弃/暂停时留一句原因"></label>
     </div>
     <div v-if="logs.length" class="thread-log-list"><h3>打卡记录</h3><div v-for="log in logs" :key="log.at + log.note" class="thread-log"><time>{{ $root.fmt.date(log.at) }}</time><p>{{ log.note }}</p><span v-if="log.item_id">来自小项</span></div></div>
     <div class="modal-actions">
-      <button v-if="!isNew" class="text-button danger" @click="$root.deleteThread(form)">删除</button>
-      <button v-if="!isNew" class="soft-button" @click="$root.openThreadTouch(form)">打卡</button>
+      <button v-if="!isNew && form.status !== 'deleted'" class="text-button danger" @click="$root.deleteThread(form)">删除</button>
+      <button v-if="!isNew && ['open', 'paused'].includes(form.status)" class="soft-button" @click="$root.openThreadTouch(form)">打卡</button>
       <button class="soft-button" @click="$root.closeThreadEditor()">取消</button>
       <button class="primary" @click="$root.saveThread(form)">保存</button>
     </div>

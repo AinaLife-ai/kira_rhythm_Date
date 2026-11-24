@@ -36,6 +36,7 @@ const app = Vue.createApp({
         { id: 'settings', label: '设置', icon: 'settings' },
       ],
       diffs: [],
+      threads: [],
       threadFilter: 'open',
       threadKind: '',
       threadFilters: [
