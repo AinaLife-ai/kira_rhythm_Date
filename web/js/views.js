@@ -568,7 +568,7 @@ export const SettingsView = {
           <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天默认给 top 5 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
           <div class="form-grid">
             <label><span>更早的摘要天数</span><small>最近 3 天之后，再往前给几天摘要；默认 4 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.history_digest_days"></label>
-            <label><span>历史上限字符数</span><small>规划上下文预算；超出时按摘要、历史、完整计划、档案依次降级，不会切断 JSON；最后最小对象仍保留必回应契约与当前项。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
+            <label><span>历史上限字符数</span><small>规划上下文预算；超出时按摘要、历史、完整计划、档案依次降级，不会切断 JSON；最后最小对象仍保留必回应契约、当前小项/当前计划/约束等关键字段。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
             <label><span>历史小项说明最多字符</span><small>最近 3 天完整计划里每项 instruction 的上限；默认 200。</small><input type="number" min="0" max="2000" step="20" v-model.number="$root.draft.history_instruction_chars"></label>
             <label><span>最近实际结果天数</span><small>把最近几天真正发生了什么给 bot；默认 2 天。</small><input type="number" min="0" max="14" v-model.number="$root.draft.recent_outcomes_days"></label>
             <label><span>未完成事项回看天数</span><small>最近几天 missed/cancelled 的小项；默认 3 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.unfinished_days"></label>

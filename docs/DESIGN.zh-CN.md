@@ -1079,7 +1079,7 @@ KiraAI 会话记忆会把 assistant 的 `tool_calls`（含完整 plans JSON）�
 
 ### 20.6 上下文预算
 
-规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。最小对象仍保留 `threads_requiring_response`/`response_contract`，item 回合还保留 `current_item`/`delivery_policy`；其余用 `rhythm_view` 取。默认 `history_char_budget=16000`。
+规划上下文超预算时按结构化字段降级：先摘要、再未完成/未来/结果、再完整计划、再档案；最后才返回带 `truncated` 的最小对象。禁止直接切断 JSON 字符串。最小对象仍保留 `threads_requiring_response`/`response_contract`，以及 `current_item`/`current_plan`/`next_item`/`delivery_policy`/`plan`/`daily_limits`/`constraints`/`calendar`/`thread`/`day_so_far` 等关键字段；其余用 `rhythm_view` 取。默认 `history_char_budget=16000`。
 
 ### 20.7 迁移
 
