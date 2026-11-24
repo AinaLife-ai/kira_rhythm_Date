@@ -585,7 +585,7 @@ body { background:#08090c; }
 .main-area:before { display:none; }
 .sidebar { position:absolute; top:auto; left:0; right:0; bottom:0; z-index:70; width:auto; height:82px; padding:7px 9px 20px; display:block; background:linear-gradient(180deg,rgba(6,8,12,.9),rgba(5,6,9,.99)) !important; border:0; border-top:1px solid rgba(255,255,255,.14); box-shadow:0 -16px 35px rgba(0,0,0,.32); }
 .brand,.sidebar-foot { display:none; }
-.main-nav { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:3px; height:100%; max-width:720px; margin:0 auto; }
+.main-nav { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:3px; height:100%; max-width:720px; margin:0 auto; }
 .main-nav button { max-width:94px; justify-self:center; width:100%; }
 .main-nav button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:100%; min-height:0; padding:4px 2px; border:0; border-radius:12px; background:transparent; color:rgba(255,255,255,.46); clip-path:none; }
 .main-nav button:hover,.main-nav button.active { background:rgba(255,255,255,.1); color:#fff; }
