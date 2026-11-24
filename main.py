@@ -74,7 +74,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_plan",
-        description="创建或修订生活计划；已有 Plan 是修订。使用 plans:[{date,title,items:[...]}]；items 为扁平小项，block 可选，时间用 at 或 start/end，不要嵌套 schedule，目标层启用时可用 thread_id 关联目标/约定。用户指定日期时优先该日；规划 focus.date 是首要目标。at/start/end 支持 HH:MM 或 HH:MM:SS，interval_seconds 支持秒。上下文包含 threads_requiring_response 时必须先逐条回应；只有 threads_reference 时不要求回应。reject 模式下未覆盖会返回 thread_response_required，warn 模式只警告。修订已有计划时，plans[].expected_revision 使用 current_plan.revision，否则返回 revision_conflict。",
+        description="创建/修订生活计划。plans:[{date,title,items:[...]}]；items 扁平，block 可选，时间 at 或 start/end（HH:MM[:SS]），不嵌套 schedule；用户指定日期/规划 focus.date 优先。修订已有计划时 plans[].expected_revision=current_plan.revision。上下文有 threads_requiring_response 时必须先逐条回应，只有 threads_reference 时不要求；reject 缺回应会拒绝，warn 只警告。",
         params={"type": "object", "properties": {
             "plans": {"type": "array", "items": PLAN_SCHEMA, "minItems": 1, "maxItems": 31},
             "mode": {"type": "string", "enum": ["create", "create_missing", "revise", "merge", "replace"], "default": "revise"},
@@ -86,7 +86,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_update",
-        description="主动调整后续日程、DayState，回应目标/约定，或记录确有后续价值的梦与体验。operations[].type 支持 day_state、record_experience、update_item、append_item、delete_item、delete_block、thread_add、thread_touch、thread_update、thread_close、thread_response；整天删除仅限用户，bot 不可 delete_day。删除若低于最小项数/必需时段会返回错误，需同事务替换或重新规划。update_item 可用 item_id + patch 或平铺字段（title/intent/instruction/schedule/at/start/end/target/interaction/probability 等）。上下文包含 threads_requiring_response 时，thread_response 必须逐条回应：advance/defer/waiting/no_change + 一句原因；只有 threads_reference 时不要求回应；未覆盖会返回 thread_response_missing。目标/约定启用时，thread_add 可带 dossier（档案正文）；thread_update 可改 dossier/next_step/due_at/priority/status；thread_touch 追加打卡记录（执行小项时带 item_id）；thread_close 完成或放弃。修改时间时 schedule.at/start/end 支持 HH:MM 或 HH:MM:SS。append_item 可用 plan_id 或 date 定位计划，block/block_title 指定分组，item 可嵌套也可直接平铺小项字段（title/intent/instruction/at/start/end/schedule/target/interaction/probability 等）。计划输入使用扁平 items[]，不要使用 blocks 包装。",
+        description="调整日程/DayState/目标/体验。operations[] type: day_state, record_experience, update_item, append_item, delete_item, delete_block, thread_add/touch/update/close/response；delete_day 仅用户，删除仍受数量/必需时段校验。update_item 用 item_id + patch 或平铺字段（title/intent/instruction/schedule/at/start/end/target/interaction/probability 等）；append_item 用 plan_id 或 date、block/block_title、item 或平铺字段（同 update_item）；时间 at 或 start/end（HH:MM[:SS]）。thread_response 仅在上下文有 threads_requiring_response 时逐条回应 advance/defer/waiting/no_change + 依据；threads_reference 不要求。目标层启用时 thread_add 可带 dossier/next_step，thread_update 可改 dossier/next_step/due_at/priority/status；thread_touch 执行小项带 item_id。",
         params={"type": "object", "properties": {"operations": {"type": "array", "items": {"type": "object"}}, "reason": {"type": "string"}}, "required": ["operations"]},
     )
     async def rhythm_update(self, event, **kwargs):

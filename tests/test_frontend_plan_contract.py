@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web" / "js"
@@ -57,3 +58,30 @@ def test_bottom_nav_uses_six_columns_without_wrapping():
     assert "$root.draft.threads.empty_min" in views
     assert "$root.draft.threads.empty_max" in views
     assert "要求至少 {{ $root.draft.threads.empty_min }} 条（严格）" in views
+
+def test_tool_prompts_are_compact_and_keep_contract_tokens():
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    runtime = (ROOT / "krd" / "runtime.py").read_text(encoding="utf-8")
+    descriptions = {}
+    for name in ("rhythm_plan", "rhythm_update", "rhythm_view"):
+        match = re.search(r'name="' + name + r'",\s*\n\s*description="(.*?)",\n\s*params=', main, re.S)
+        assert match, name
+        descriptions[name] = match.group(1)
+    guide_match = re.search(r'STATIC_TOOL_GUIDE = """(.*?)"""\.strip\(\)', runtime, re.S)
+    assert guide_match
+    guide = guide_match.group(1)
+
+    assert len(descriptions["rhythm_plan"]) <= 320
+    assert len(descriptions["rhythm_update"]) <= 700
+    assert len(guide) <= 680
+
+    for token in ("expected_revision", "current_plan.revision", "threads_requiring_response",
+                  "threads_reference", "at", "start/end", "items"):
+        assert token in descriptions["rhythm_plan"] or token in guide, token
+    for token in ("append_item", "plan_id", "date", "block", "thread_response",
+                  "thread_add", "thread_touch", "update_item", "item_id"):
+        assert token in descriptions["rhythm_update"], token
+    for token in ("expected_revision", "current_plan.revision", "threads_requiring_response",
+                  "threads_reference", "current_item.instruction", "<msg/>",
+                  "[KRD Threads]", "[KRD Agenda]"):
+        assert token in guide, token

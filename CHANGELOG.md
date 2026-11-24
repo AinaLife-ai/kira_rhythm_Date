@@ -6,6 +6,7 @@
 - `rhythm_update(append_item)` 支持 `plan_id` 或 `date` 定位计划、`block`/`block_title` 指定分组，也支持嵌套 `item` 或平铺小项字段；不再出现 `internal_error 'plan_id'` 或 `invalid_time got None` 循环。
 - `append_item` 使用 `block` 时会真正写入指定分组，不再落入“生活片段”。
 - 前端缓存键随 1.3.2 升至 `v=1.3.2`。
+- 精简工具描述与静态工具指南：保留 expected_revision、threads 条件、append_item/update_item 平铺字段、时间格式和当前小项/回顾规则，降低常驻提示词 token。
 
 ## 1.3.1 · 2026-11-24
 ### 界面
