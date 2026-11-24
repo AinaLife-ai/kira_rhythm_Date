@@ -84,10 +84,10 @@ class ThreadService:
             "next_step_chars": int(threads.get("next_step_chars", 200)),
             "log_chars": int(threads.get("log_chars", 500)),
             "planning_limit": int(threads.get("planning_limit", 8)),
-            "full_dossier_in_planning": int(threads.get("full_dossier_in_planning", 3)),
+            "full_dossier_in_planning": int(threads.get("full_dossier_in_planning", 5)),
             "excerpt_chars": int(threads.get("excerpt_chars", 300)),
             "logs_in_planning": int(threads.get("logs_in_planning", 3)),
-            "chat_limit": int(threads.get("chat_limit", 3)),
+            "chat_limit": int(threads.get("chat_limit", 5)),
             "execution_excerpt_chars": int(threads.get("execution_excerpt_chars", 300)),
             "execution_logs": int(threads.get("execution_logs", 2)),
         }
@@ -536,7 +536,7 @@ class ThreadService:
         settings = config.get("threads", {})
         if not settings.get("enabled", True) or not settings.get("chat_enabled", True):
             return ""
-        limit = max(1, min(8, int(settings.get("chat_limit", 3))))
+        limit = max(1, min(8, int(settings.get("chat_limit", 5))))
         rows = await self.store.all(
             "SELECT * FROM threads WHERE persona_id=? AND status IN ('open','paused') "
             "ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END, priority DESC, due_at='', due_at, last_touched ASC LIMIT ?",

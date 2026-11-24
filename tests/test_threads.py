@@ -129,18 +129,31 @@ async def test_thread_link_only_open_and_plan_item_persists(runtime):
 
 @pytest.mark.asyncio
 async def test_planning_payload_shows_top_dossiers_and_excerpts(runtime):
-    for index in range(4):
+    for index in range(6):
         thread = await runtime.threads.add("persona-a", {
             "kind": "goal", "title": f"目标 {index}", "dossier": f"档案{index}" * 200,
-            "next_step": f"下一步 {index}", "priority": 3 - index})
+            "next_step": f"下一步 {index}", "priority": max(0, 3 - index)})
         if index == 0:
             await runtime.threads.touch("persona-a", thread["id"], "第一步完成")
     payload = await runtime.threads.planning_payload("persona-a")
     assert payload["required"] is True
-    assert len(payload["threads"]) == 4
-    assert all(len(row["dossier"]) > 300 for row in payload["threads"][:3])
-    assert len(payload["threads"][3]["dossier"]) <= 301
+    assert len(payload["threads"]) == 6
+    assert all(len(row["dossier"]) > 300 for row in payload["threads"][:5])
+    assert len(payload["threads"][5]["dossier"]) <= 301
     assert payload["threads"][0]["logs"][0]["note"] == "第一步完成"
+
+
+@pytest.mark.asyncio
+async def test_chat_block_defaults_to_top_five(runtime):
+    for index in range(7):
+        await runtime.threads.add("persona-a", {
+            "kind": "goal", "title": f"目标 {index}", "next_step": f"下一步 {index}",
+            "priority": max(0, 3 - index)})
+    block = await runtime.threads.chat_block("persona-a")
+    lines = block.splitlines()
+    assert lines[0] == "[KRD Threads]"
+    assert len([line for line in lines[1:] if line.startswith("[")]) == 5
+    assert lines[-1] == "(+2 more)"
 
 
 @pytest.mark.asyncio

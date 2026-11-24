@@ -352,7 +352,7 @@ export const ThreadEditor = {
       <label><span>类型</span><select v-model="form.kind"><option v-for="kind in $root.threadKinds" :key="kind.id" :value="kind.id">{{ kind.label }}</option></select></label>
       <label><span>状态</span><select v-model="form.status"><option v-for="status in statusOptions" :key="status.id" :value="status.id">{{ status.label }}</option></select></label>
       <label class="wide-field"><span>标题</span><input v-model="form.title" maxlength="120" placeholder="例如：给阿岚画头像"></label>
-      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" maxlength="2000" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 3 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
+      <label class="wide-field"><span>档案</span><textarea rows="8" v-model="form.dossier" maxlength="2000" placeholder="背景、约定细节、相关人、边界、历史摘要……"></textarea><small>规划时优先展示前 5 条的档案全文；其余给摘要。完整档案随时可在 rhythm_view 里查。</small></label>
       <label><span>下一步</span><input v-model="form.next_step" maxlength="200" placeholder="一句话，例如：修线稿"></label>
       <label><span>截止</span><input v-model="form.due_at" placeholder="YYYY-MM-DD 或 YYYY-MM-DD HH:MM"></label>
       <label><span>优先级</span><select v-model.number="form.priority"><option :value="0">0 · 低</option><option :value="1">1 · 普通</option><option :value="2">2 · 重要</option><option :value="3">3 · 很急</option></select></label>
@@ -558,7 +558,7 @@ export const SettingsView = {
         <label class="full-field"><span>全部小项结束后的规划会话</span><select v-model="$root.draft.all_triggered_target_mode"><option value="planning_pool">规划起始池（默认）</option><option value="last_session">最后一个实际完成的会话</option></select><small class="field-hint">推荐保持规划池。只有希望 bot 在刚完成对话的地方继续规划时，才选择“最后实际完成的会话”。</small></label>
         <div class="settings-subsection">
           <h3>给 bot 的上下文</h3>
-          <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天给 top 3 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
+          <p class="field-hint">规划时给最近 3 天完整计划和更早 4 天摘要；执行时给当天已发生的事；普通聊天给 top 5 目标。历史越长、档案越全，token 越高；不确定就保持默认。</p>
           <div class="form-grid">
             <label><span>更早的摘要天数</span><small>最近 3 天之后，再往前给几天摘要；默认 4 天。</small><input type="number" min="0" max="30" v-model.number="$root.draft.history_digest_days"></label>
             <label><span>历史上限字符数</span><small>规划上下文的硬预算；超出时先降级历史，不会切断 JSON。默认 16000。</small><input type="number" min="500" max="100000" step="500" v-model.number="$root.draft.history_char_budget"></label>
@@ -580,7 +580,7 @@ export const SettingsView = {
           <h3>开关</h3>
           <div class="switch-grid">
             <label class="switch-row"><span>启用目标与约定<small>关闭后不再写入、展示或要求回应。</small></span><input type="checkbox" v-model="$root.draft.threads.enabled"></label>
-            <label class="switch-row"><span>普通聊天显示 [KRD Threads]<small>只显示 top 3 的标题/截止/下一步，不显示档案全文。默认开；上面的“普通聊天附带当前生活状态”关闭时无效。</small></span><input type="checkbox" v-model="$root.draft.threads.chat_enabled"></label>
+            <label class="switch-row"><span>普通聊天显示 [KRD Threads]<small>只显示 top 5 的标题/截止/下一步，不显示档案全文。默认开；上面的“普通聊天附带当前生活状态”关闭时无效。</small></span><input type="checkbox" v-model="$root.draft.threads.chat_enabled"></label>
             <label class="switch-row"><span>规划时强制回应<small>规划回合必须先逐条回应目标/约定；缺回应时 rhythm_plan 会被拒绝。只要求表态，不要求推进。默认开。</small></span><input type="checkbox" v-model="$root.draft.threads.require_response"></label>
             <label class="switch-row"><span>执行后强制打卡<small>执行完关联小项后必须写一句进展，否则标记未打卡。默认关：执行回合不一定调用工具，强制容易变成形式主义。</small></span><input type="checkbox" v-model="$root.draft.threads.force_touch"></label>
             <label class="switch-row"><span>自动打卡<small>小项触发后自动写一条“执行了 X”。默认关：信息量低，让 bot 自己写“做到哪”更有用。</small></span><input type="checkbox" v-model="$root.draft.threads.auto_touch"></label>
@@ -589,11 +589,11 @@ export const SettingsView = {
         </div>
         <div class="settings-subsection">
           <h3>规划时展示多少</h3>
-          <p class="field-hint">前几条给档案全文，其余给摘要；执行时只显示当前小项关联的那条；聊天只显示 top 3。完整档案始终可以用 rhythm_view(scope="thread") 查。</p>
+          <p class="field-hint">前几条给档案全文，其余给摘要；执行时只显示当前小项关联的那条；聊天只显示 top 5。完整档案始终可以用 rhythm_view(scope="thread") 查。</p>
           <div class="form-grid">
             <label><span>规划最多回应几条</span><small>按到期、停滞、优先级排序；默认 8 条。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.response_limit"></label>
             <label><span>规划展示条数</span><small>默认 8 条；超出的只计数，不强制回应。</small><input type="number" min="1" max="50" v-model.number="$root.draft.threads.planning_limit"></label>
-            <label><span>其中档案全文条数</span><small>默认 3 条；其余给摘要。</small><input type="number" min="0" max="20" v-model.number="$root.draft.threads.full_dossier_in_planning"></label>
+            <label><span>其中档案全文条数</span><small>默认 5 条；其余给摘要。</small><input type="number" min="0" max="20" v-model.number="$root.draft.threads.full_dossier_in_planning"></label>
             <label><span>档案摘要字数</span><small>没有全文的条目给多少字；默认 300。</small><input type="number" min="50" max="2000" step="50" v-model.number="$root.draft.threads.excerpt_chars"></label>
             <label><span>规划时展示打卡条数</span><small>每条目标最近几次打卡；默认 3 条。</small><input type="number" min="0" max="10" v-model.number="$root.draft.threads.logs_in_planning"></label>
             <label><span>档案总字数上限</span><small>单条档案最多多少字；默认 2000。</small><input type="number" min="100" max="8000" step="100" v-model.number="$root.draft.threads.dossier_chars"></label>
@@ -604,7 +604,7 @@ export const SettingsView = {
           <div class="form-grid">
             <label><span>执行时档案摘要字数</span><small>只给关联小项的那条；默认 300。</small><input type="number" min="50" max="2000" step="50" v-model.number="$root.draft.threads.execution_excerpt_chars"></label>
             <label><span>执行时打卡条数</span><small>默认 2 条。</small><input type="number" min="0" max="10" v-model.number="$root.draft.threads.execution_logs"></label>
-            <label><span>聊天展示条数</span><small>普通聊天 top N；默认 3。</small><input type="number" min="1" max="8" v-model.number="$root.draft.threads.chat_limit"></label>
+            <label><span>聊天展示条数</span><small>普通聊天 top N；默认 5。</small><input type="number" min="1" max="8" v-model.number="$root.draft.threads.chat_limit"></label>
             <label><span>聊天块字符上限</span><small>默认 600；超出时减少条目。</small><input type="number" min="100" max="2000" step="50" v-model.number="$root.draft.threads.chat_chars"></label>
             <label><span>停滞提醒天数</span><small>多少天没动在聊天里标为需要留意；默认 5 天。只提示，不拒绝。</small><input type="number" min="1" max="365" v-model.number="$root.draft.threads.stale_days"></label>
             <label><span>打卡正文字数</span><small>单次打卡最多多少字；默认 500。</small><input type="number" min="20" max="2000" step="20" v-model.number="$root.draft.threads.log_chars"></label>

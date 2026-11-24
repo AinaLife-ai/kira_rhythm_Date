@@ -1158,7 +1158,7 @@ const app = Vue.createApp({
         execution_pool: { sessions: [], strategy: 'pure_random' },
         planning_review: {},
         weather: { mode: 'off', provider: 'open_meteo', chat_current: true, chat_forecast: false, locations: {}, virtual: {} },
-        threads: { enabled: true, chat_enabled: true, planning_limit: 8, chat_limit: 3, full_dossier_in_planning: 3,
+        threads: { enabled: true, chat_enabled: true, planning_limit: 8, chat_limit: 5, full_dossier_in_planning: 5,
           dossier_chars: 2000, excerpt_chars: 300, next_step_chars: 200, log_chars: 500, logs_in_planning: 3,
           execution_excerpt_chars: 300, execution_logs: 2, require_response: true, response_mode: 'reject',
           response_limit: 8, force_touch: false, auto_touch: false, stale_days: 5, chat_chars: 600 },

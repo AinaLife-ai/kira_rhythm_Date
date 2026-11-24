@@ -91,6 +91,8 @@ def test_legacy_default_prompts_upgrade_without_touching_custom_text():
     assert migrated["execution_prompt"] == DEFAULT_EXECUTION_PROMPT
     assert migrated["planning_review"]["prompt"] == DEFAULT_REVIEW_PROMPT
     assert migrated["history_char_budget"] == 16000
+    assert migrated["threads"]["chat_limit"] == 5
+    assert migrated["threads"]["full_dossier_in_planning"] == 5
 
     custom = normalized({"planning_prompt": "我的自定义规划提示词。", "history_char_budget": 9000})
     assert custom["planning_prompt"] == "我的自定义规划提示词。"
