@@ -370,3 +370,12 @@ async def test_empty_thread_layer_require_blocks_until_thread_add(runtime):
     assert added_again["ok"]
     accepted = json.loads(await tools.rhythm_plan(ev, plans=[plan]))
     assert accepted["ok"]
+
+@pytest.mark.asyncio
+async def test_planning_context_instructs_expected_revision(runtime):
+    await add_plan(runtime, day(2), "已有计划")
+    prompt = await runtime.context_builder.planning_prompt({
+        "persona_id": "persona-a", "kind": "planning", "date": day(2), "run_id": "missing-run"})
+    body = json.loads(prompt.split("\n", 1)[1])
+    assert "expected_revision=1" in body["instruction"]
+    assert body["current_plan"]["revision"] == 1

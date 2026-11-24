@@ -143,9 +143,26 @@ async def rhythm_update(event, operations: list[dict], reason: str = "", **kwarg
                     result = await runtime.plans.update_item(persona_id, operation["item_id"], patch, actor="bot", reason=reason)
                     changed_plan_ids.add(result["plan"]["id"])
                 elif kind == "append_item":
+                    plan_id = str(operation.get("plan_id") or "").strip()
+                    if not plan_id:
+                        day = str(operation.get("date") or "").strip()
+                        if not day:
+                            raise KRDError("plan_required", "append_item needs plan_id or date")
+                        plan = await runtime.plans.get_plan_by_date(persona_id, day)
+                        if plan is None:
+                            raise KRDError("plan_not_found", f"No plan on {day}", date=day,
+                                           hint="append_item 需要已有计划；先创建或选定日期。")
+                        plan_id = plan["id"]
+                    block_title = str(operation.get("block_title") or operation.get("block") or "生活片段")
+                    raw_item = operation.get("item")
+                    if not isinstance(raw_item, dict) or not raw_item:
+                        keys = ("title", "intent", "instruction", "schedule", "at", "start", "end",
+                                "occurrences", "window_mode", "interval_minutes", "interval_seconds",
+                                "target", "interaction", "probability", "execution_probability",
+                                "category", "thread_id")
+                        raw_item = {key: operation[key] for key in keys if key in operation}
                     result = await runtime.plans.append_item(
-                        persona_id, operation["plan_id"], operation.get("block_title", "生活片段"),
-                        operation.get("item") or {}, actor="bot", reason=reason)
+                        persona_id, plan_id, block_title, raw_item, actor="bot", reason=reason)
                 elif kind == "delete_item":
                     result = await runtime.plans.delete_item(persona_id, operation["item_id"], actor="bot", reason=reason)
                     deleted_plan_ids.add(result["plan"]["id"])

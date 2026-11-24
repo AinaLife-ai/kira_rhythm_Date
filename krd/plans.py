@@ -345,7 +345,8 @@ class PlanService:
         deleted_existing = bool(existing_any and existing_any["state"] == "deleted")
         base = existing_any if deleted_existing else existing
         if existing and expected_revision != existing["revision"]:
-            raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"])
+            raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing["revision"],
+                           hint=f"修订已有计划时传 plans[].expected_revision={existing['revision']}；不要用 revision 字段。")
         if deleted_existing and expected_revision not in {0, existing_any["revision"]}:
             raise KRDError("revision_conflict", "Plan was changed concurrently", current_revision=existing_any["revision"])
         if not existing and not deleted_existing and expected_revision:
@@ -501,7 +502,8 @@ class PlanService:
             for payload in payloads:
                 results.append(await self.apply_plan(
                     persona_id, payload, actor=actor, mode=payload.get("mode", mode),
-                    reason=payload.get("reason", reason), expected_revision=int(payload.get("expected_revision", 0))))
+                    reason=payload.get("reason", reason),
+                    expected_revision=int(payload.get("expected_revision", payload.get("revision", 0)))))
         self._changed()
         return results
 

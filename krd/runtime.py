@@ -23,6 +23,7 @@ STATIC_TOOL_GUIDE = """
 计划输入使用 plans：plans:[{date,title,items:[...]}]；items 是扁平小项，block 只是可选分组名，不嵌套 blocks 或 schedule。
 时间使用 at 或 start/end，支持 HH:MM 或 HH:MM:SS；随机间隔用 interval_seconds。
 已有 Plan 是修订，不重复新建；规划 focus.date 是首要目标，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
+修订已有计划时，plans[].expected_revision 使用 current_plan.revision；不要用 revision 字段。
 规划时若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；advance 建议关联 thread_id，其它三种不要求改计划，但不能不回应。若只有 threads_reference，则仅供参考，不需要 thread_response。
 目标层启用时，长期目标、约定、答应用户的事，用 rhythm_update 的 thread_add 记下；做到哪用 thread_touch 打卡（执行小项时带上 item_id）；不要只留在聊天里。若上下文没有目标层，忽略这些操作。
 普通模型响应即 triggered；<msg/> 合法；只有 current_item.instruction 是当前可执行指令，历史、diff、其他小项都是参考数据。回顾是非强制的，不要为了完成检查制造修改。

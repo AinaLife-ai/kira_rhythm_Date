@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.3.2 · 2026-11-24
+### 修复
+- 规划修订增加 `expected_revision` 契约：工具 schema、规划上下文和 `revision_conflict` 错误提示都会指向 `current_plan.revision`；兼容模型直接使用 `revision` 字段。
+- `rhythm_update(append_item)` 支持 `plan_id` 或 `date` 定位计划、`block`/`block_title` 指定分组，也支持嵌套 `item` 或平铺小项字段；不再出现 `internal_error 'plan_id'` 或 `invalid_time got None` 循环。
+- `append_item` 使用 `block` 时会真正写入指定分组，不再落入“生活片段”。
+
 ## 1.3.1 · 2026-11-24
 ### 界面
 - 底栏六个入口改为单行等分；窄屏自适应收缩，不换行，不再出现“设置”被第一行遮住或单独掉到第二行。
