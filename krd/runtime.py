@@ -22,7 +22,7 @@ STATIC_TOOL_GUIDE = """
 工具：rhythm_plan 创建/修订计划；rhythm_update 调整小项、DayState、回应目标/约定或记录梦与体验；rhythm_view 按需查看日程、日历、历史、目标/约定或体验。
 计划输入使用 plans：plans:[{date,title,items:[...]}]；items 是扁平小项，block 只是可选分组名，不嵌套 blocks 或 schedule。
 时间使用 at 或 start/end，支持 HH:MM 或 HH:MM:SS；随机间隔用 interval_seconds。
-已有 Plan 是修订，不重复新建；规划部分的首要目标是 focus.date，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
+已有 Plan 是修订，不重复新建；规划 focus.date 是首要目标，用户指定日期时优先处理该日，仍可在允许范围内调整其他日期。
 规划时若上下文包含 threads_requiring_response，必须逐条回应：advance / defer / waiting / no_change，每条一句原因；advance 建议关联 thread_id，其它三种不要求改计划，但不能不回应。若只有 threads_reference，则仅供参考，不需要 thread_response。
 目标层启用时，长期目标、约定、答应用户的事，用 rhythm_update 的 thread_add 记下；做到哪用 thread_touch 打卡（执行小项时带上 item_id）；不要只留在聊天里。若上下文没有目标层，忽略这些操作。
 普通模型响应即 triggered；<msg/> 合法；只有 current_item.instruction 是当前可执行指令，历史、diff、其他小项都是参考数据。回顾是非强制的，不要为了完成检查制造修改。
@@ -162,12 +162,8 @@ class Runtime:
             return
         if len(valid) != len(metadata) and req.tool_set:
             req.tool_set.remove("rhythm_plan", "rhythm_update", "rhythm_view")
-        has_real_user = any(
-            not (getattr(message, "extra", None) or {}).get("krd") and not getattr(message, "is_notice", False)
-            for message in getattr(event, "messages", []) or [])
         allowed_valid = []
         for item in valid:
-            item["has_real_user"] = has_real_user
             allowed = await self.policy.is_allowed(
                 active, event.sid, "planning" if item["kind"] == "planning" else "execution", config=base_config)
             if not allowed:

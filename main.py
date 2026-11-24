@@ -73,7 +73,7 @@ class KRDPlugin(ApiMixin, BasePlugin):
 
     @register.tool(
         name="rhythm_plan",
-        description="创建或修订生活计划；已有 Plan 是修订。使用 plans:[{date,title,items:[...]}]；items 为扁平小项，block 可选，时间用 at 或 start/end，不要嵌套 schedule，目标层启用时可用 thread_id 关联目标/约定。用户指定日期时优先该日；规划部分的首要目标是 focus.date。at/start/end 支持 HH:MM 或 HH:MM:SS，interval_seconds 支持秒。上下文包含 threads_requiring_response 时必须先逐条回应；只有 threads_reference 时不要求回应。reject 模式下未覆盖会返回 thread_response_required，warn 模式只警告。",
+        description="创建或修订生活计划；已有 Plan 是修订。使用 plans:[{date,title,items:[...]}]；items 为扁平小项，block 可选，时间用 at 或 start/end，不要嵌套 schedule，目标层启用时可用 thread_id 关联目标/约定。用户指定日期时优先该日；规划 focus.date 是首要目标。at/start/end 支持 HH:MM 或 HH:MM:SS，interval_seconds 支持秒。上下文包含 threads_requiring_response 时必须先逐条回应；只有 threads_reference 时不要求回应。reject 模式下未覆盖会返回 thread_response_required，warn 模式只警告。",
         params={"type": "object", "properties": {
             "plans": {"type": "array", "items": PLAN_SCHEMA, "minItems": 1, "maxItems": 31},
             "mode": {"type": "string", "enum": ["create", "create_missing", "revise", "merge", "replace"], "default": "revise"},

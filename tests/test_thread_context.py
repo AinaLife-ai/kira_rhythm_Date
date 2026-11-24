@@ -297,13 +297,3 @@ async def test_disabled_thread_layer_removes_contract_from_planning(runtime):
     assert "threads_requiring_response" not in body
     assert "threads_reference" not in body
     assert "未启用目标/约定" in body["instruction"]
-
-
-@pytest.mark.asyncio
-async def test_mixed_user_planning_context_scopes_priorities(runtime):
-    prompt = await runtime.context_builder.planning_prompt({
-        "persona_id": "persona-a", "kind": "planning", "date": day(2),
-        "run_id": "missing-run", "has_real_user": True})
-    body = json.loads(prompt.split("\n", 1)[1])
-    assert "混合批次" in body["instruction"]
-    assert "规划部分的首要目标" in body["focus"]["instruction"]

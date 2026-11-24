@@ -391,13 +391,11 @@ class ContextBuilder:
                 instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略 threads_requiring_response / threads_reference 与 thread_* 操作。"
             else:
                 instruction += "\n[KRD 目标层] 本次没有必须回应的目标；若上下文出现 threads_reference，仅作参考，不需要 thread_response。"
-        if metadata.get("has_real_user"):
-            instruction += "\n[KRD 混合批次] 本批次还含真实用户消息：必须先正常回答用户；规划是同一回合的附加任务，不得吞掉、删除或改写用户回答。"
         pattern = await self._recent_pattern(persona_id, target_date, max(1, full_days or digest_days or 3))
         payload = {
             "instruction": instruction + (("\n" + self._weather_rule()) if weather else ""),
             "focus": {"date": target_date,
-                      "instruction": f"这次规划部分的首要目标是 {target_date}。先为这一天创建或修订；仍可在配置允许的范围内处理其他日期，但不要无理由跳过这一天。",
+                      "instruction": f"这次规划的首要目标是 {target_date}。先为这一天创建或修订；仍可在配置允许的范围内处理其他日期，但不要无理由跳过这一天。",
                       **({"reason": metadata["reason"]} if metadata.get("reason") else {})},
             "day_types": self._day_types_text(matches),
             "day_type_prompt": await self._day_type_prompt(persona_id, matches, "planning"),
@@ -459,11 +457,8 @@ class ContextBuilder:
         plan = await self.plans.get_plan_by_date(persona_id, target_date)
         recent_changes = await self.plans.recent_changes(persona_id, target_date, 3, meaningful_only=True)
         if not plan:
-            instruction = "仅在确有必要时创建计划；不要因为一次检查而无条件新建。"
-            if metadata.get("has_real_user"):
-                instruction += " 本批次还含真实用户消息：必须正常回答用户，不得吞掉或改写用户回答。"
             context = {"status": "plan_missing", "recent_changes": self._compact_changes(recent_changes),
-                       "instruction": instruction}
+                       "instruction": "仅在确有必要时创建计划；不要因为一次检查而无条件新建。"}
             return "[KRD review context · request only]\n" + self._bounded(context, 1200)
         base_config = await self.store.get_config(persona_id)
         matches = await self._active_day_types(persona_id, target_date)
@@ -486,8 +481,6 @@ class ContextBuilder:
         review_instruction = effective["planning_review"]["prompt"]
         if not base_config.get("threads", {}).get("enabled", True):
             review_instruction += "\n[KRD 目标层] 本次未启用目标/约定；忽略目标/约定相关提示。"
-        if metadata.get("has_real_user"):
-            review_instruction += "\n[KRD 混合批次] 本批次还含真实用户消息：必须正常回答用户；回顾是同一回合的附加任务，不得吞掉或改写用户回答。"
         payload = {
             "instruction": review_instruction + (("\n" + self._weather_rule()) if weather else ""),
             "day_types": self._day_types_text(matches),
@@ -503,10 +496,8 @@ class ContextBuilder:
             "threads": await self._review_threads(persona_id, effective),
             "unanswered_threads": await self._unanswered_threads(persona_id, effective),
             "delivery_policy": {"quiet_now": quiet_now, "enforcement": "prompt_only",
-                                "guidance": ("本批次还含真实用户消息：必须正常回答用户；回顾是附加任务，只在确有调整价值时补充。"
-                                             if metadata.get("has_real_user") else
-                                             "当前为安静时段时仅输出 <msg/>。" if quiet_now else
-                                             "只在确有调整价值时自然分享；否则输出 <msg/>。")}
+                                "guidance": "当前为安静时段时仅输出 <msg/>。" if quiet_now else
+                                            "只在确有调整价值时自然分享；否则输出 <msg/>。"}
         }
         host_tz = self.host_timezone_name()
         if host_tz is None or host_tz != tz_name:
@@ -533,21 +524,13 @@ class ContextBuilder:
         state = await self.plans.day_state(persona_id, plan["date"])
         quiet_now = in_active_windows(
             effective["quiet_delivery_windows"], time.time(), self.plans.policy.timezone_name(effective))
-        # must_message is an explicit delivery promise. If a later config
-        # change puts it inside a quiet window, do not silently turn it into a
-        # silent item; keep the stronger explicit interaction and surface the
-        # quiet flag in the context. New must_message items are still rejected
-        # at scheduling time by PlanService.
-        silence_requested = item["interaction"] == "silent" or (quiet_now and item["interaction"] == "auto")
-        has_real_user = bool(metadata.get("has_real_user"))
+        silence_requested = item["interaction"] == "silent" or quiet_now
         if silence_requested:
             guidance = "本次 effective_interaction=silent。安静完全由你的输出实现：只处理本日程时，仅输出 <msg/>，不要附加说明。"
         elif item["interaction"] == "must_message":
             guidance = "本次 effective_interaction=must_message。请产生有实际内容的可见回复，不要只输出 <msg/>。"
         else:
             guidance = "本次 effective_interaction=auto。可自然行动，也可保持安静；不要把机械确认当作发言。"
-        if has_real_user:
-            guidance += " 本批次还含真实用户消息：必须正常回答用户，不得为了本日程吞掉、删除或改写给用户的回答；本日程的安静要求只约束你自己的这条日程。"
         recent = await self.plans.revisions(plan["id"], effective["diff_revisions"], persona_id)
         recent = [{"revision": row.get("revision"), "diff": row.get("diff", [])} for row in recent]
         for row in recent:

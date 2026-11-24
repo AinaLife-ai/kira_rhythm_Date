@@ -51,10 +51,6 @@ async def test_mixed_user_response_is_never_rewritten(runtime):
     original = response.text_response
     await runtime.on_llm_response(event, response)
     assert response.text_response == original
-    receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (event.messages[0].extra["krd"]["run_id"],))
-    stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (event.messages[0].extra["krd"]["item_id"],))
-    assert receipt["error"] == ""
-    assert stored["state"] == "triggered"
 
 
 @pytest.mark.asyncio
@@ -75,19 +71,7 @@ async def test_auto_quiet_guidance_and_actual_silent_result(runtime):
     assert receipt["error"] == "" and stored["state"] == "triggered_silent"
 
 @pytest.mark.asyncio
-async def test_mixed_batch_guidance_protects_real_user_reply(runtime):
-    plan = await create_due_plan(runtime, interaction="silent", count=1)
-    item = plan["blocks"][0]["items"][0]
-    await runtime.scheduler.claim_item(item["id"])
-    event = runtime.ctx.event_bus.events[-1]
-    metadata = runtime.context_builder.metadata(event)[0]
-    metadata["has_real_user"] = True
-    prompt = await runtime.context_builder.item_prompt(metadata)
-    assert "真实用户消息" in prompt
-    assert "不得为了本日程" in prompt
-
-@pytest.mark.asyncio
-async def test_must_message_survives_later_quiet_window(runtime):
+async def test_quiet_window_lets_existing_must_message_stay_silent(runtime):
     plan = await create_due_plan(runtime, interaction="must_message", count=1)
     item = plan["blocks"][0]["items"][0]
     await runtime.store.update_config(
@@ -95,11 +79,11 @@ async def test_must_message_survives_later_quiet_window(runtime):
     run = await runtime.scheduler.claim_item(item["id"])
     event = runtime.ctx.event_bus.events[-1]
     prompt = await runtime.context_builder.item_prompt(runtime.context_builder.metadata(event)[0])
-    assert '"effective_interaction":"must_message"' in prompt
     assert '"scheduled_interaction":"must_message"' in prompt
-    response = SimpleNamespace(text_response="按约好的说一声", tool_calls=[], status="success")
+    assert '"effective_interaction":"silent"' in prompt
+    response = SimpleNamespace(text_response="<msg/>", tool_calls=[], status="success")
     await runtime.on_llm_response(event, response)
     receipt = await runtime.store.one("SELECT error FROM runs WHERE id=?", (run["id"],))
     stored = await runtime.store.one("SELECT state FROM items WHERE id=?", (item["id"],))
     assert receipt["error"] == ""
-    assert stored["state"] == "triggered"
+    assert stored["state"] == "triggered_silent"

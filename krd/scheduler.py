@@ -443,12 +443,6 @@ class Scheduler:
             else:
                 await self.store.execute("UPDATE planning_runs SET status='running' WHERE id=? AND status IN ('prepared','queued')", (metadata["run_id"],))
 
-    @staticmethod
-    def has_real_user(event) -> bool:
-        return any(
-            not (getattr(message, "extra", None) or {}).get("krd") and not getattr(message, "is_notice", False)
-            for message in getattr(event, "messages", []) or [])
-
     async def _thread_active(self, thread_id: str) -> bool:
         if not thread_id:
             return False
@@ -492,17 +486,13 @@ class Scheduler:
                             effective = config
                     quiet_now = in_active_windows(
                         effective["quiet_delivery_windows"], time.time(), self.policy.timezone_name(effective))
-                    # In a mixed batch a visible answer to the real user is
-                    # mandatory; the item's silence only constrains its own
-                    # share of the reply.
-                    silence_requested = (item["interaction"] == "silent" or
-                                         (quiet_now and item["interaction"] == "auto")) and not self.has_real_user(event)
+                    silence_requested = item["interaction"] == "silent" or quiet_now
                     # Never rewrite model output. Record what actually happened and
                     # expose prompt non-compliance as diagnostics instead of hiding it.
                     state = "triggered_silent" if silent else "triggered"
                     if silence_requested and not text_silent:
                         error = "silence_unmet"
-                    elif item["interaction"] == "must_message" and text_silent:
+                    elif item["interaction"] == "must_message" and text_silent and not quiet_now:
                         error = "delivery_unmet"
                     else:
                         error = ""
