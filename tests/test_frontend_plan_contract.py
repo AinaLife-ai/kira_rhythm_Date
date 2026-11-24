@@ -56,3 +56,4 @@ def test_bottom_nav_uses_six_columns_without_wrapping():
     assert "$root.draft.threads.empty_mode" in views
     assert "$root.draft.threads.empty_min" in views
     assert "$root.draft.threads.empty_max" in views
+    assert "要求至少 {{ $root.draft.threads.empty_min }} 条（严格）" in views

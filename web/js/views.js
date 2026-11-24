@@ -1,5 +1,5 @@
-import { fmt } from './store.js?v=1.3.1.3'
-import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.3'
+import { fmt } from './store.js?v=1.3.1.4'
+import { planTemplates, themeTemplates } from './templates.js?v=1.3.1.4'
 
 const ICON_PATHS = {
   home: ['M3 11.5 12 4l9 7.5', 'M5.5 10.5V20h13v-9.5', 'M9.5 20v-6h5v6'],
@@ -600,7 +600,7 @@ export const SettingsView = {
             <select v-model="$root.draft.threads.empty_mode">
               <option value="allow">允许为空</option>
               <option value="nudge">提醒 bot 尝试建立（推荐，默认）</option>
-              <option value="require">要求至少建立一条（严格）</option>
+              <option value="require">要求至少 {{ $root.draft.threads.empty_min }} 条（严格）</option>
             </select>
           </label>
           <div class="form-grid">
