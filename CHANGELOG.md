@@ -1,5 +1,9 @@
 # 更新日志
 
+## 1.3.3 · 2026-11-24
+### 修复
+- 恢复 `rhythm_update` 工具描述与静态工具指南里的“梦/体验用 record_experience 记录”引导；1.3.2 压缩提示词时遗漏了这句，梦境模板和默认执行提示未受影响。
+
 ## 1.3.2 · 2026-11-24
 ### 修复
 - 规划修订增加 `expected_revision` 契约：工具 schema、规划上下文和 `revision_conflict` 错误提示都会指向 `current_plan.revision`；兼容模型直接使用 `revision` 字段。

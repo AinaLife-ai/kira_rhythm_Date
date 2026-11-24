@@ -79,8 +79,9 @@ def test_tool_prompts_are_compact_and_keep_contract_tokens():
                   "threads_reference", "at", "start/end", "items"):
         assert token in descriptions["rhythm_plan"] or token in guide, token
     for token in ("append_item", "plan_id", "date", "block", "thread_response",
-                  "thread_add", "thread_touch", "update_item", "item_id"):
+                  "thread_add", "thread_touch", "update_item", "item_id", "梦"):
         assert token in descriptions["rhythm_update"], token
+    assert "record_experience" in guide and "梦" in guide
     for token in ("expected_revision", "current_plan.revision", "threads_requiring_response",
                   "threads_reference", "current_item.instruction", "<msg/>",
                   "[KRD Threads]", "[KRD Agenda]"):
