@@ -163,6 +163,37 @@ class PlanService:
         plans = self._assemble_plans(rows, blocks, items)
         return plans if include_deleted else [self._visible_plan(plan) for plan in plans]
 
+    @staticmethod
+    def _resolve_plan_item_id(reference: str, existing_items: dict[str, dict[str, Any]]) -> str:
+        """Resolve a full id or a short id within the plan being revised.
+
+        The planning context exposes 8-character short ids. Matching is scoped
+        to this plan so an id from another plan cannot be silently rewritten.
+        """
+        value = str(reference or "").strip().lstrip("#")
+        if not value:
+            return ""
+        if value in existing_items:
+            return value
+        # Full ids remain valid for API clients that create items explicitly;
+        # apply_plan still rejects an id owned by another plan.
+        if value.startswith("itm_") and len(value) > 20:
+            return value
+        if len(value) < 4:
+            raise KRDError("invalid_item_id", "Short item id must be at least 4 characters",
+                           reference=value)
+        prefix = value if value.startswith("itm_") else f"itm_{value}"
+        matches = [identifier for identifier in existing_items if identifier.startswith(prefix)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise KRDError(
+                "ambiguous_item", "Short item id matches more than one item in this plan",
+                reference=value, candidates=matches[:5])
+        raise KRDError(
+            "unknown_item_id", "Item id is not part of this plan", reference=value,
+            hint="Use current_plan.blocks[].items[].id, or omit id when creating a new item.")
+
     async def _prepare_items(self, persona_id: str, payload: dict[str, Any], actor: str,
                              config_override: dict[str, Any] | None = None,
                              existing_items: dict[str, dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -218,9 +249,11 @@ class PlanService:
                     raise KRDError("invalid_schedule", "schedule must be an object")
                 if not schedule:
                     raise KRDError("invalid_time", "Item needs at or start+end", field="schedule")
-                supplied_id = str(raw_item.get("id") or "")
+                supplied_id = str(raw_item.get("id") or "").strip()
                 if len(supplied_id) > 128:
                     raise KRDError("invalid_item", "Item ID is too long")
+                if supplied_id and previous_by_id:
+                    supplied_id = self._resolve_plan_item_id(supplied_id, previous_by_id)
                 previous = previous_by_id.get(supplied_id)
                 schedule_unchanged = bool(previous and schedule == previous.get("schedule"))
                 kind = schedule.get("type", "exact")

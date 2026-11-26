@@ -538,3 +538,85 @@ async def test_session_catalog_ignores_access_and_pool_filters(runtime, monkeypa
     assert [item["sid"] for item in options] == ["qq:gm:20002"]
     catalog = await runtime.policy.session_catalog("persona-a")
     assert [item["sid"] for item in catalog] == ["qq:dm:10001", "qq:gm:20002"]
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_reuses_short_item_ids_and_keeps_sampling(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    payload = {
+        "date": tomorrow(), "title": "幂等测试", "overview": "保持原样",
+        "planned_appearance": "外套", "planned_mood": "平静",
+        "items": [
+            {"block": "傍晚", "title": "散步", "start": "18:00", "end": "19:00",
+             "target": "qq:dm:10001", "interaction": "auto"},
+            {"block": "夜里", "title": "整理", "at": "22:20",
+             "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }
+    first = json.loads(await rhythm_plan(event, plans=[payload], reason="初次规划"))
+    assert first["ok"], first
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    items = [item for block in plan["blocks"] for item in block["items"]]
+    walk = next(item for item in items if item["title"] == "散步")
+    other = next(item for item in items if item["title"] == "整理")
+    sampled = walk["scheduled_at"]
+
+    revised_payload = copy.deepcopy(payload)
+    revised_payload["expected_revision"] = plan["revision"]
+    revised_payload["items"][0]["id"] = f"#{walk['id'].split('_', 1)[-1][:8]}"
+    revised_payload["items"][1]["id"] = other["id"].split("_", 1)[-1][:8]
+    revised = json.loads(await rhythm_plan(event, plans=[revised_payload], reason="保持原计划"))
+    assert revised["ok"], revised
+    assert revised["days"][0].get("diff", []) == []
+
+    current = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    current_items = [item for block in current["blocks"] for item in block["items"]]
+    walk_now = next(item for item in current_items if item["title"] == "散步")
+    assert walk_now["id"] == walk["id"]
+    assert walk_now["scheduled_at"] == sampled
+    assert current["revision"] == plan["revision"] + 1
+
+    bad_payload = copy.deepcopy(payload)
+    bad_payload["expected_revision"] = current["revision"]
+    bad_payload["items"][0]["id"] = "deadbeef"
+    bad = json.loads(await rhythm_plan(event, plans=[bad_payload], reason="坏 id"))
+    assert bad["error"]["code"] == "unknown_item_id"
+
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_rejects_ambiguous_short_item_id(runtime):
+    from krd.tools import rhythm_plan
+    payload = one_item_payload()
+    payload["blocks"][0]["items"][0]["id"] = "itm_abcd01"
+    payload["blocks"][0]["items"].append({
+        "id": "itm_abcd02", "title": "第二个", "schedule": {"type": "exact", "at": "18:00"},
+        "target": "qq:dm:10001", "interaction": "auto",
+    })
+    await runtime.plans.apply_plan("persona-a", payload, actor="user", expected_revision=0)
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_plan(event, plans=[{
+        "date": tomorrow(), "expected_revision": 1,
+        "items": [
+            {"id": "abcd", "block": "组", "title": "小项", "at": "09:00",
+             "target": "qq:dm:10001", "interaction": "auto"},
+            {"id": "itm_abcd02", "block": "组", "title": "第二个", "at": "18:00",
+             "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }]))
+    assert result["error"]["code"] == "ambiguous_item"
+
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_without_block_keeps_life_fragment_fallback(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    result = json.loads(await rhythm_plan(event, plans=[{
+        "date": tomorrow(),
+        "items": [
+            {"title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+            {"title": "B", "at": "10:00", "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }]))
+    assert result["ok"], result
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    assert [block["title"] for block in plan["blocks"]] == ["生活片段"]

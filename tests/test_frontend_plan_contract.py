@@ -140,3 +140,20 @@ def test_session_access_picker_uses_unfiltered_catalog():
     assert "missing: session.missing" in views
     assert "（当前）" in views
     assert "all_sessions" in fixture
+
+
+def test_plan_item_id_and_block_prompt_contract():
+    main = (ROOT / "main.py").read_text(encoding="utf-8")
+    runtime = (ROOT / "krd" / "runtime.py").read_text(encoding="utf-8")
+    assert '"block": {"type": "string", "description": "可选分组名；同一组的小项使用相同名称。"}' in main
+    assert "省略时归入" not in main
+    assert '"id": {"type": "string"' in main
+    assert "8 位" in main and "短 ID" in main
+
+    description = re.search(
+        r'name="rhythm_plan",\s*\n\s*description="(.*?)",\n\s*params=', main, re.S).group(1)
+    guide = re.search(r'STATIC_TOOL_GUIDE = """(.*?)"""\.strip\(\)', runtime, re.S).group(1)
+    for text in (description, guide):
+        assert "block 为分组名（同名归组）" in text
+        assert "items[].id" in text
+        assert "生活片段" not in text
