@@ -510,3 +510,31 @@ async def test_plan_item_without_time_is_typed_error(runtime):
     with pytest.raises(KRDError) as error:
         await runtime.plans.apply_plan("persona-a", payload, actor="user", expected_revision=0)
     assert error.value.code == "invalid_time"
+
+@pytest.mark.asyncio
+async def test_session_catalog_ignores_access_and_pool_filters(runtime, monkeypatch):
+    sessions = [
+        SimpleNamespace(sid="qq:dm:10001", session_title="允许的会话", adapter_name="qq"),
+        SimpleNamespace(sid="qq:gm:20002", session_title="被排除的会话", adapter_name="qq"),
+    ]
+
+    async def get_sessions(include_content=False, kind=None):
+        return sessions
+
+    monkeypatch.setattr(runtime.ctx.session_mgr, "get_sessions", get_sessions)
+    await runtime.store.update_config("persona-a", {
+        "session_access": {"mode": "allow_list", "sessions": ["qq:dm:10001"]},
+    }, 0)
+    options = await runtime.policy.session_options("persona-a", "execution")
+    assert [item["sid"] for item in options] == ["qq:dm:10001"]
+    catalog = await runtime.policy.session_catalog("persona-a")
+    assert [item["sid"] for item in catalog] == ["qq:dm:10001", "qq:gm:20002"]
+
+    await runtime.store.update_config("persona-a", {
+        "session_access": {"mode": "deny_list", "sessions": []},
+        "execution_pool": {"sessions": [{"sid": "qq:gm:20002"}], "strategy": "pure_random"},
+    }, 1)
+    options = await runtime.policy.session_options("persona-a", "execution")
+    assert [item["sid"] for item in options] == ["qq:gm:20002"]
+    catalog = await runtime.policy.session_catalog("persona-a")
+    assert [item["sid"] for item in catalog] == ["qq:dm:10001", "qq:gm:20002"]

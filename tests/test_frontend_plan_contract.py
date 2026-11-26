@@ -125,3 +125,18 @@ def test_plan_brief_shows_revision_reason():
     assert "plan-brief-reason" in views and ".plan-brief-reason" in css
     assert '<plan-brief v-if="$root.selectedPlan"' in views
     assert "revision_reason" in fixture and "revision_actor" in fixture and "planning_reason" in fixture
+
+
+def test_session_access_picker_uses_unfiltered_catalog():
+    app = (WEB / "app.js").read_text(encoding="utf-8")
+    views = (WEB / "views.js").read_text(encoding="utf-8")
+    policy = (ROOT / "krd" / "policy.py").read_text(encoding="utf-8")
+    webapi = (ROOT / "krd" / "webapi.py").read_text(encoding="utf-8")
+    fixture = (ROOT / "tests" / "web_fixture.js").read_text(encoding="utf-8")
+
+    assert "session_catalog" in policy and "all_sessions" in webapi
+    assert "buildSessionCatalog" in app and "data.all_sessions" in app
+    assert "未加载的会话" in app
+    assert "missing: session.missing" in views
+    assert "（当前）" in views
+    assert "all_sessions" in fixture
