@@ -323,7 +323,7 @@ class PlanService:
                         "thread_id": thread_id,
                         "execution_probability": probability,
                         "reason": str(raw_item.get("reason", ""))[:1000],
-                        "state": raw_item.get("state", "scheduled"),
+                        "state": raw_item.get("state", previous["state"] if previous else "scheduled"),
                     }
                     block["items"].append(item)
             prepared.append(block)
@@ -446,10 +446,10 @@ class PlanService:
         plan_row = {
             "id": plan_id, "persona_id": persona_id, "date": day,
             "day_type_id": day_type_id,
-            "title": str(payload.get("title", "这一天"))[:160],
-            "overview": str(payload.get("overview", ""))[:3000],
-            "planned_appearance": str(payload.get("planned_appearance", ""))[:1000],
-            "planned_mood": str(payload.get("planned_mood", ""))[:1000],
+            "title": str(payload.get("title", base["title"] if base else "这一天"))[:160],
+            "overview": str(payload.get("overview", base["overview"] if base else ""))[:3000],
+            "planned_appearance": str(payload.get("planned_appearance", base["planned_appearance"] if base else ""))[:1000],
+            "planned_mood": str(payload.get("planned_mood", base["planned_mood"] if base else ""))[:1000],
             "state": state, "revision": revision,
         }
         async with self.store.transaction() as db:

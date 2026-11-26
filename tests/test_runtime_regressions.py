@@ -620,3 +620,65 @@ async def test_rhythm_plan_without_block_keeps_life_fragment_fallback(runtime):
     assert result["ok"], result
     plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
     assert [block["title"] for block in plan["blocks"]] == ["生活片段"]
+
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_revise_preserves_plan_meta_when_omitted(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    payload = {
+        "date": tomorrow(), "title": "原标题", "overview": "原概述",
+        "planned_appearance": "原服装", "planned_mood": "原心情",
+        "items": [
+            {"block": "上午", "title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+            {"block": "傍晚", "title": "B", "at": "18:00", "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }
+    first = json.loads(await rhythm_plan(event, plans=[payload]))
+    assert first["ok"], first
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    revised = json.loads(await rhythm_plan(event, plans=[{
+        "date": tomorrow(), "expected_revision": plan["revision"],
+        "items": [
+            {"block": "上午", "title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+            {"block": "傍晚", "title": "B", "at": "18:00", "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }]))
+    assert revised["ok"], revised
+    current = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    assert current["title"] == "原标题"
+    assert current["overview"] == "原概述"
+    assert current["planned_appearance"] == "原服装"
+    assert current["planned_mood"] == "原心情"
+
+
+
+@pytest.mark.asyncio
+async def test_rhythm_plan_reuses_triggered_item_without_state_error(runtime):
+    from krd.tools import rhythm_plan
+    event = SimpleNamespace(_krd_runtime=runtime, messages=[])
+    payload = {
+        "date": tomorrow(),
+        "items": [
+            {"block": "上午", "title": "A", "at": "09:00", "target": "qq:dm:10001", "interaction": "auto"},
+            {"block": "傍晚", "title": "B", "at": "18:00", "target": "qq:dm:10001", "interaction": "auto"},
+        ],
+    }
+    first = json.loads(await rhythm_plan(event, plans=[payload]))
+    assert first["ok"], first
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    item = next(item for block in plan["blocks"] for item in block["items"] if item["title"] == "A")
+    await runtime.store.execute("UPDATE items SET state='triggered' WHERE id=?", (item["id"],))
+    plan = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    revised_payload = copy.deepcopy(payload)
+    revised_payload["expected_revision"] = plan["revision"]
+    revised_payload["items"][0]["id"] = item["id"].split("_", 1)[-1][:8]
+    revised_payload["items"][1]["id"] = next(
+        entry["id"] for block in plan["blocks"] for entry in block["items"] if entry["title"] == "B"
+    ).split("_", 1)[-1][:8]
+    result = json.loads(await rhythm_plan(event, plans=[revised_payload], reason="保持"))
+    assert result["ok"], result
+    current = await runtime.plans.get_plan_by_date("persona-a", tomorrow())
+    current_item = next(entry for block in current["blocks"] for entry in block["items"] if entry["title"] == "A")
+    assert current_item["id"] == item["id"]
+    assert current_item["state"] == "triggered"
